@@ -1,0 +1,6 @@
+/pyfm/tests/data
+__pycache__
+__pycache__/*
+.pytest_cache/
+.idea/
+*.egg-info
