@@ -2,7 +2,7 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-from python_scripts import ConfigBase, utils
+from pyfm import ConfigBase, utils
 
 
 @dataclass
@@ -19,14 +19,15 @@ class LoadH5Config:
             Dictionary values are hdf5 file paths to access corresponding data. If given
                 a list of paths, the first valid path will be used.
     """
+
     name: str
     datasets: t.Dict[str, t.List[str]]
 
     def __init__(self, **kwargs):
-        self.name = kwargs['name']
+        self.name = kwargs["name"]
         self.datasets = {}
-        for k,v in kwargs['datasets'].items():
-            if isinstance(v,str):
+        for k, v in kwargs["datasets"].items():
+            if isinstance(v, str):
                 self.datasets[k] = [v]
             else:
                 assert isinstance(v, t.List)
@@ -51,6 +52,7 @@ class LoadArrayConfig:
             where start-stop = length of array for the given dimension,
             (note: stop is inclusive).
     """
+
     order: t.List
     labels: t.Dict[str, t.Union[str, t.List]]
 
@@ -61,10 +63,9 @@ class LoadArrayConfig:
 @dataclass
 class DataioConfig(ConfigBase):
     filestem: str
-    array_params: t.Optional[
-        t.Union[LoadArrayConfig,
-                t.Dict[str, LoadArrayConfig]]
-    ] = None
+    array_params: t.Optional[t.Union[LoadArrayConfig, t.Dict[str, LoadArrayConfig]]] = (
+        None
+    )
     replacements: t.Optional[t.Dict[str, t.Union[str, t.List[str]]]] = None
     regex: t.Optional[t.Dict[str, str]] = None
     h5_params: t.Optional[LoadH5Config] = None
@@ -89,39 +90,38 @@ class DataioConfig(ConfigBase):
     def create(cls, **kwargs):
         """Returns an instance of DataioConfig from `params` dictionary.
 
-                Parameters
-                ----------
-                kwargs
-                    keys should correspond to class parameters (above).
-                    `h5_params` and `array_params`, if provided,
-                    should have dictionaries that can be passed to `create` static methods
-                    in H5Params and ArrayParams, respectively.
-                """
-
+        Parameters
+        ----------
+        kwargs
+            keys should correspond to class parameters (above).
+            `h5_params` and `array_params`, if provided,
+            should have dictionaries that can be passed to `create` static methods
+            in H5Params and ArrayParams, respectively.
+        """
 
         obj_vars = kwargs.copy()
-        h5_params = obj_vars.pop('h5_params', {})
-        array_params = obj_vars.pop('array_params', {})
+        h5_params = obj_vars.pop("h5_params", {})
+        array_params = obj_vars.pop("array_params", {})
         if h5_params:
-            obj_vars['h5_params'] = LoadH5Config(**h5_params)
+            obj_vars["h5_params"] = LoadH5Config(**h5_params)
 
-            obj_vars['array_params'] = {}
+            obj_vars["array_params"] = {}
             for k, v in array_params.items():
-                obj_vars['array_params'][k] = LoadArrayConfig(**v)
+                obj_vars["array_params"][k] = LoadArrayConfig(**v)
         elif array_params:
-            obj_vars['array_params'] = LoadArrayConfig(**array_params)
+            obj_vars["array_params"] = LoadArrayConfig(**array_params)
 
         return DataioConfig(**obj_vars)
 
+
 def get_config_factory(config_label: str):
-    configs = {
-        "dataio": DataioConfig.create
-    }
+    configs = {"dataio": DataioConfig.create}
 
     if config_label in configs:
         return configs[config_label]
     else:
         raise ValueError(f"No config implementation for `{config_label}`.")
 
+
 def get_dataio_config(params: t.Dict) -> DataioConfig:
-    return get_config_factory('dataio')(**params)
+    return get_config_factory("dataio")(**params)

@@ -7,11 +7,11 @@ from dataclasses import fields
 import pandas as pd
 from pydantic.dataclasses import dataclass
 
-from python_scripts import Gamma, utils
-from python_scripts.nanny import TaskBase
-from python_scripts.nanny.config import OutfileList
-from python_scripts.nanny.tasks.hadrons import SubmitHadronsConfig, templates
-from python_scripts.nanny.tasks.hadrons.lmi import LMITask
+from pyfm import Gamma, utils
+from pyfm.nanny import TaskBase
+from pyfm.nanny.config import OutfileList
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig, templates
+from pyfm.nanny.tasks.hadrons.lmi import LMITask
 
 
 # ============TestResid Task Configuration===========

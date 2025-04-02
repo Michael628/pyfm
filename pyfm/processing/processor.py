@@ -8,11 +8,11 @@ import gvar.dataset as ds
 import numpy as np
 import pandas as pd
 
-import python_scripts as ps
-from python_scripts import utils
-from python_scripts.a2a import contract as a2a
-from python_scripts.nanny import config
-from python_scripts.processing import dataio
+import pyfm as ps
+from pyfm import utils
+from pyfm.a2a import contract as a2a
+from pyfm.nanny import config
+from pyfm.processing import dataio
 
 ACTION_ORDER = [
     "build_high",

@@ -6,31 +6,28 @@ import os
 import re
 import subprocess
 
-from python_scripts import utils
+from pyfm import utils
 import typing as t
-from python_scripts.nanny import (
-    config,
-    todo_utils,
-    tasks
-)
+from pyfm.nanny import config, todo_utils, tasks
+
 
 ######################################################################
 def job_still_queued(param, job_id):
     """Get the status of the queued job"""
     # This code is locale dependent
 
-    scheduler = param['submit']['scheduler']
+    scheduler = param["submit"]["scheduler"]
 
-    user = os.environ['USER']
-    if scheduler == 'LSF':
+    user = os.environ["USER"]
+    if scheduler == "LSF":
         cmd = " ".join(["bjobs", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == 'PBS':
+    elif scheduler == "PBS":
         cmd = " ".join(["qstat", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == 'SLURM':
+    elif scheduler == "SLURM":
         cmd = " ".join(["squeue", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == 'INTERACTIVE':
+    elif scheduler == "INTERACTIVE":
         cmd = " ".join(["squeue", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == 'Cobalt':
+    elif scheduler == "Cobalt":
         cmd = " ".join(["qstat", "-fu", user, "|", "grep -w", job_id])
     else:
         print("Don't recognize scheduler", scheduler)
@@ -51,27 +48,27 @@ def job_still_queued(param, job_id):
 
     if len(reply) > 0:
         a = reply.decode().split()
-        if scheduler == 'LSF':
+        if scheduler == "LSF":
             # The start time
-            if a[2] == 'PEND':
-                time = 'TBA'
+            if a[2] == "PEND":
+                time = "TBA"
             else:
                 time = a[5] + " " + a[6] + " " + a[7]
             field = "start"
             jobstat = a[2]
-        elif scheduler == 'PBS':
+        elif scheduler == "PBS":
             time = a[8]
             field = "queue"
             jobstat = a[9]
-        elif scheduler == 'SLURM':
+        elif scheduler == "SLURM":
             time = a[5]
             field = "run"
             jobstat = a[4]
-        elif scheduler == 'INTERACTIVE':
+        elif scheduler == "INTERACTIVE":
             time = a[5]
             field = "run"
             jobstat = a[4]
-        elif scheduler == 'Cobalt':
+        elif scheduler == "Cobalt":
             time = a[5]
             field = "run"
             jobstat = a[8]
@@ -115,33 +112,32 @@ def tar_input_path(stream, s06Cfg, prec_tsrc):
 
 ######################################################################
 def check_path(param, job_key, cfgno, complain, file_key=None):
-    """Complete the file path and check that it exists and has the correct size
-    """
+    """Complete the file path and check that it exists and has the correct size"""
 
     # Substute variables coded in file path
     if file_key is not None:
         filepaths = []
     else:
         filepaths = [
-            os.path.join(param['files']['home'], fv)
-            for fk, fv in param['files'][job_key].items()
-            if fk != 'good_size'
+            os.path.join(param["files"]["home"], fv)
+            for fk, fv in param["files"][job_key].items()
+            if fk != "good_size"
         ]
 
     good = True
 
     for filepath in filepaths:
-        for v in param['run_params'].keys():
-            filepath = re.sub(v, param['run_params'][v], filepath)
+        for v in param["run_params"].keys():
+            filepath = re.sub(v, param["run_params"][v], filepath)
 
-        series, cfg = cfgno.split('.')
-        filepath = re.sub('SERIES', series, filepath)
-        filepath = re.sub('CFG', cfg, filepath)
+        series, cfg = cfgno.split(".")
+        filepath = re.sub("SERIES", series, filepath)
+        filepath = re.sub("CFG", cfg, filepath)
 
         try:
             file_size = os.path.getsize(filepath)
 
-            if file_size < param['files'][job_key]['good_size']:
+            if file_size < param["files"][job_key]["good_size"]:
                 good = False
                 if complain:
                     print("File", filepath, "not found or not of correct size")
@@ -157,18 +153,18 @@ def check_path(param, job_key, cfgno, complain, file_key=None):
 def good_links(param, cfgno):
     """Check that the ILDG links look OK"""
 
-    return check_path(param, 'fnlinks', cfgno, True)
+    return check_path(param, "fnlinks", cfgno, True)
 
 
 ######################################################################
 def good_eigs(param, cfgno):
     """Check that the eigenvector file looks OK"""
 
-    good = check_path(param, 'eigs', cfgno, False, 'eig')
+    good = check_path(param, "eigs", cfgno, False, "eig")
 
     if not good:
         # Check file in subdir
-        good = check_path(param, 'eigsdir', cfgno, True, 'eigdir')
+        good = check_path(param, "eigsdir", cfgno, True, "eigdir")
 
     return good
 
@@ -177,13 +173,13 @@ def good_eigs(param, cfgno):
 def good_lma(param, cfgno):
     """Check that the LMA output looks OK"""
 
-    lma = param['files']['lma']
-    good = check_path(param, 'lma', cfgno, True, 'ama')
-    good = good and check_path(param, 'lma', cfgno, True, 'ranLL')
+    lma = param["files"]["lma"]
+    good = check_path(param, "lma", cfgno, True, "ama")
+    good = good and check_path(param, "lma", cfgno, True, "ranLL")
 
-    if not good and 'ama_alt' in lma.keys():
-        good = check_path(param, 'lma', cfgno, True, 'ama_alt')
-        good = good and check_path(param, 'lma', cfgno, True, 'ranLL_alt')
+    if not good and "ama_alt" in lma.keys():
+        good = check_path(param, "lma", cfgno, True, "ama_alt")
+        good = good and check_path(param, "lma", cfgno, True, "ranLL_alt")
 
     return good
 
@@ -192,15 +188,16 @@ def good_lma(param, cfgno):
 def good_a2a_local(param, cfgno):
     """Check that the A2A output looks OK"""
 
-    return check_path(param, 'a2a_local', cfgno, True)
+    return check_path(param, "a2a_local", cfgno, True)
 
 
 ######################################################################
 def good_meson(tasks, cfgno, param) -> bool:
     """Check that the A2A output looks OK"""
 
-    check_path(param, 'a2a_onelink', cfgno, True)
+    check_path(param, "a2a_onelink", cfgno, True)
     return
+
 
 ######################################################################
 
@@ -208,7 +205,7 @@ def good_meson(tasks, cfgno, param) -> bool:
 def good_contract_py(param, cfgno):
     """Check that the contrraction output looks OK"""
 
-    return check_path(param, 'contract_py', cfgno, True)
+    return check_path(param, "contract_py", cfgno, True)
 
 
 ######################################################################
@@ -252,7 +249,6 @@ def next_finished(param, todo_list, entry_list):
 
 ######################################################################
 def good_output(step: str, cfgno: str, param: t.Dict) -> bool:
-
     job_config = config.get_job_config(param, step)
 
     (series, cfg) = cfgno.split(".")
@@ -276,7 +272,7 @@ def check_jobs(YAML):
     param = utils.load_param(YAML)
 
     # Read the to-do file
-    todo_file = param['nanny']['todo_file']
+    todo_file = param["nanny"]["todo_file"]
     lock_file = todo_utils.lock_file_name(todo_file)
 
     # First, just get a list of entries
@@ -329,7 +325,6 @@ def check_jobs(YAML):
 
 ############################################################
 def main():
-
     # Parameter file
 
     YAML = "params.yaml"
@@ -338,5 +333,5 @@ def main():
 
 
 ############################################################
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

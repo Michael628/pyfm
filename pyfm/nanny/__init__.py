@@ -2,18 +2,17 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-import python_scripts
+import pyfm
 
 
 @dataclass
 class TaskBase:
-
     @classmethod
-    def from_dict(cls, kwargs: t.Dict[str, t.Any]) -> 'TaskBase':
+    def from_dict(cls, kwargs: t.Dict[str, t.Any]) -> "TaskBase":
         return cls(**kwargs)
 
+
 @dataclass
-class SubmitConfig(python_scripts.ConfigBase):
+class SubmitConfig(pyfm.ConfigBase):
     ens: str
     time: int
-

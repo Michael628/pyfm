@@ -13,9 +13,9 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-from python_scripts.nanny import TaskBase
-from python_scripts.nanny.config import OutfileList
-from python_scripts.nanny.tasks.hadrons import SubmitHadronsConfig, templates
+from pyfm.nanny import TaskBase
+from pyfm.nanny.config import OutfileList
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig, templates
 
 
 @dataclass

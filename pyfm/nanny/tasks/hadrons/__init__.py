@@ -1,8 +1,8 @@
 import typing as t
 from dataclasses import field
 
-from python_scripts import config as c
-from python_scripts.nanny import SubmitConfig
+from pyfm import config as c
+from pyfm.nanny import SubmitConfig
 
 
 @c.dataclass_with_getters
@@ -10,7 +10,7 @@ class SubmitHadronsConfig(SubmitConfig):
     tstart: int = 0
     eigresid: float = 1e-8
     blocksize: int = 500
-    multifile: bool =  False
+    multifile: bool = False
     dt: t.Optional[int] = None
     eigs: t.Optional[int] = None
     sourceeigs: t.Optional[int] = None
@@ -22,8 +22,8 @@ class SubmitHadronsConfig(SubmitConfig):
     nstop: t.Optional[int] = None
     nk: t.Optional[int] = None
     nm: t.Optional[int] = None
-    _run_id: str = ''
-    _mass: t.Dict[str,float] = field(default_factory=dict)
+    _run_id: str = ""
+    _mass: t.Dict[str, float] = field(default_factory=dict)
     _overwrite_sources: bool = True
     seed: t.Optional[str] = None
     series: t.Optional[str] = None
@@ -32,7 +32,7 @@ class SubmitHadronsConfig(SubmitConfig):
     def __post_init__(self):
         if not self.mass:
             self.mass = {}
-        self._mass['zero'] = 0.0
+        self._mass["zero"] = 0.0
 
         if self.eigs:
             if not self.sourceeigs:
@@ -42,7 +42,6 @@ class SubmitHadronsConfig(SubmitConfig):
 
         if self.time and not self.tstop:
             self.tstop = self.time - 1
-
 
     @property
     def run_id(self):
@@ -54,21 +53,22 @@ class SubmitHadronsConfig(SubmitConfig):
 
     @mass.setter
     def mass(self, value: t.Dict[str, float]) -> t.Dict[str, float]:
-        assert isinstance(value,t.Dict)
+        assert isinstance(value, t.Dict)
         self._mass = value
-        self._mass['zero'] = 0.0
+        self._mass["zero"] = 0.0
 
     @property
     def tsource_range(self) -> t.List[int]:
-        return list(range(self.tstart,self.tstop+1,self.dt))
+        return list(range(self.tstart, self.tstop + 1, self.dt))
 
     @property
     def mass_out_label(self):
         res = {}
         for k, v in self.mass.items():
-            res[k] = str(v)[len('0.'):]
+            res[k] = str(v)[len("0.") :]
         return res
 
 
 def get_submit_factory() -> t.Callable[..., SubmitHadronsConfig]:
     return SubmitHadronsConfig.create
+

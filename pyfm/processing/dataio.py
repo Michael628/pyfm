@@ -10,9 +10,9 @@ import h5py
 import numpy as np
 import pandas as pd
 
-import python_scripts as ps
-from python_scripts import utils
-from python_scripts.processing import config, processor
+import pyfm as ps
+from pyfm import utils
+from pyfm.processing import config, processor
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
@@ -96,7 +96,6 @@ def h5_to_frame(
 
     df = []
     for k, v in h5_params.datasets.items():
-
         dataset_label = (x for x in v if x in file)
 
         try:
@@ -586,7 +585,7 @@ def main(**kwargs) -> t.Awaitable:
 
 if __name__ == "__main__":
     print("Assuming python interpreter is being run in interactive mode.")
-    print(("Result will be stored in `result` variable" " upon load file completion."))
+    print(("Result will be stored in `result` variable upon load file completion."))
     result = main()
     logging.info("Result of file load is now stored in `result` variable.")
 
