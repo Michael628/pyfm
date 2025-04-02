@@ -4,3 +4,7 @@ __pycache__/*
 .pytest_cache/
 .idea/
 *.egg-info
+.tags
+.tags_sorted_by_file
+.idea
+CMakeLists.txt
