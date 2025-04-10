@@ -23,15 +23,14 @@ class LoadH5Config:
     name: str
     datasets: t.Dict[str, t.List[str]]
 
-    def __init__(self, **kwargs):
-        self.name = kwargs["name"]
-        self.datasets = {}
-        for k, v in kwargs["datasets"].items():
+    @classmethod
+    def from_dict(cls, **kwargs):
+        params = utils.deep_copy_dict(kwargs)
+        for k, v in params["datasets"].items():
             if isinstance(v, str):
-                self.datasets[k] = [v]
-            else:
-                assert isinstance(v, t.List)
-                self.datasets[k] = v
+                params["datasets"][k] = [v]
+
+        return cls(**params)
 
 
 @dataclass
@@ -103,7 +102,7 @@ class DataioConfig(ConfigBase):
         h5_params = obj_vars.pop("h5_params", {})
         array_params = obj_vars.pop("array_params", {})
         if h5_params:
-            obj_vars["h5_params"] = LoadH5Config(**h5_params)
+            obj_vars["h5_params"] = LoadH5Config.from_dict(**h5_params)
 
             obj_vars["array_params"] = {}
             for k, v in array_params.items():

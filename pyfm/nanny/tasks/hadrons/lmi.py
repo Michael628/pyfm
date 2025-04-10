@@ -261,7 +261,11 @@ def input_params(
             )
         )
 
-    if tasks.high_modes:
+    if (
+        tasks.high_modes
+        and not tasks.high_modes.skip_cg
+        and tasks.high_modes.solver == "mpcg"
+    ):
         for mass_label in tasks.high_modes.mass:
             name = f"istag_mass_{mass_label}"
             mass = str(submit_config.mass[mass_label])

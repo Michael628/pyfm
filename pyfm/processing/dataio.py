@@ -386,6 +386,7 @@ def load(io_config: config.DataioConfig) -> t.Awaitable[pd.DataFrame]:
             return pd.read_hdf(filename)
         except (ValueError, NotImplementedError):
             assert io_config.h5_params is not None
+            assert isinstance(io_config.array_params, t.Dict)
 
             h5_params = {
                 "name": io_config.h5_params.name,
@@ -409,9 +410,9 @@ def load(io_config: config.DataioConfig) -> t.Awaitable[pd.DataFrame]:
 
             return h5_to_frame(file, data_to_frame, h5_params)
 
-    replacements: t.Dict = io_config.replacements
-    regex: t.Dict = io_config.regex
-    filestem: str = io_config.filestem
+    replacements = io_config.replacements
+    regex = io_config.regex
+    filestem = io_config.filestem
 
     if filestem.endswith(".p") or filestem.endswith(".npy"):
         file_loader = pickle_loader
