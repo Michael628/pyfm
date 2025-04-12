@@ -1,11 +1,9 @@
 import typing as t
 
 from pydantic.dataclasses import dataclass
-
 import pyfm
 
 
-@dataclass
 class TaskBase:
     @classmethod
     def from_dict(cls, kwargs: t.Dict[str, t.Any]) -> "TaskBase":

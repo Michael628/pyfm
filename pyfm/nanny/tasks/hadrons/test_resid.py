@@ -10,8 +10,8 @@ from pydantic.dataclasses import dataclass
 from pyfm import Gamma, utils
 from pyfm.nanny import TaskBase
 from pyfm.nanny.config import OutfileList
-from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig, templates
-from pyfm.nanny.tasks.hadrons.lmi import LMITask
+from pyfm.nanny.tasks.hadrons.components import hadmods
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 
 
 # ============TestResid Task Configuration===========
@@ -76,18 +76,18 @@ def input_params(
     )
 
     modules = [
-        templates.load_gauge("gauge", gauge_filepath),
-        templates.load_gauge("gauge_fat", gauge_fat_filepath),
-        templates.load_gauge("gauge_long", gauge_long_filepath),
-        templates.cast_gauge("gauge_fatf", "gauge_fat"),
-        templates.cast_gauge("gauge_longf", "gauge_long"),
+        hadmods.load_gauge("gauge", gauge_filepath),
+        hadmods.load_gauge("gauge_fat", gauge_fat_filepath),
+        hadmods.load_gauge("gauge_long", gauge_long_filepath),
+        hadmods.cast_gauge("gauge_fatf", "gauge_fat"),
+        hadmods.cast_gauge("gauge_longf", "gauge_long"),
     ]
 
     for mass_label in tasks.mass:
         name = f"stag_mass_{mass_label}"
         mass = str(submit_config.mass[mass_label])
         modules.append(
-            templates.action(
+            hadmods.action(
                 name=name, mass=mass, gauge_fat="gauge_fat", gauge_long="gauge_long"
             )
         )
@@ -97,7 +97,7 @@ def input_params(
             name = f"istag_mass_{mass_label}"
             mass = str(submit_config.mass[mass_label])
             modules.append(
-                templates.action_float(
+                hadmods.action_float(
                     name=name,
                     mass=mass,
                     gauge_fat="gauge_fatf",
@@ -114,7 +114,7 @@ def input_params(
         # Load or generate eigenvectors
         if tasks.epack.load:
             modules.append(
-                templates.epack_load(
+                hadmods.epack_load(
                     name="epack",
                     filestem=epack_path,
                     size=submit_conf_dict["eigs"],
@@ -122,9 +122,9 @@ def input_params(
                 )
             )
         else:
-            modules.append(templates.op("stag_op", "stag_mass_zero"))
+            modules.append(hadmods.op("stag_op", "stag_mass_zero"))
             modules.append(
-                templates.irl(
+                hadmods.irl(
                     name="epack",
                     op="stag_op_schur",
                     alpha=submit_conf_dict["alpha"],
@@ -144,7 +144,7 @@ def input_params(
                 continue
             mass = str(submit_config.mass[mass_label])
             modules.append(
-                templates.epack_modify(
+                hadmods.epack_modify(
                     name=f"evecs_mass_{mass_label}", eigen_pack="epack", mass=mass
                 )
             )
@@ -152,7 +152,7 @@ def input_params(
         if tasks.epack.save_evals:
             eval_path = outfile_config_list.eval.filestem.format(**submit_conf_dict)
             modules.append(
-                templates.eval_save(
+                hadmods.eval_save(
                     name="eval_save", eigen_pack="epack", output=eval_path
                 )
             )
@@ -165,11 +165,11 @@ def input_params(
         def m1_ge_m2(x):
             return x[-2] >= x[-1]
 
-        modules.append(templates.sink(name="sink", mom="0 0 0"))
+        modules.append(hadmods.sink(name="sink", mom="0 0 0"))
 
         for tsource in run_tsources:
             modules.append(
-                templates.noise_rw(
+                hadmods.noise_rw(
                     name=f"noise_t{tsource}",
                     nsrc=submit_conf_dict["noise"],
                     t0=tsource,
@@ -198,7 +198,7 @@ def input_params(
                     solver = f"stag_{slabel}_mass_{mlabel}"
 
                     modules.append(
-                        templates.quark_prop(
+                        hadmods.quark_prop(
                             name=quark,
                             source=source,
                             solver=solver,
@@ -227,7 +227,7 @@ def input_params(
                     )
 
                     modules.append(
-                        templates.prop_contract(
+                        hadmods.prop_contract(
                             name=f"corr_{slabel}_{glabel}_{mass_label}_t{tsource}",
                             source=quark1,
                             sink=quark2,
@@ -245,7 +245,7 @@ def input_params(
             for res in tasks.resid:
                 if tasks.high_modes.solver == "rb":
                     modules.append(
-                        templates.rb_cg(
+                        hadmods.rb_cg(
                             name=f"stag_ama_mass_{mass_label}",
                             action=f"stag_mass_{mass_label}",
                             residual=str(res),
@@ -253,7 +253,7 @@ def input_params(
                     )
                 else:
                     modules.append(
-                        templates.mixed_precision_cg(
+                        hadmods.mixed_precision_cg(
                             name=f"stag_ama_mass_{mass_label}",
                             outer_action=f"stag_mass_{mass_label}",
                             inner_action=f"istag_mass_{mass_label}",
@@ -263,7 +263,7 @@ def input_params(
 
             if "ranLL" in solver_labels:
                 modules.append(
-                    templates.lma_solver(
+                    hadmods.lma_solver(
                         name=f"stag_ranLL_mass_{mass_label}",
                         action=f"stag_mass_{mass_label}",
                         low_modes=f"evecs_mass_{mass_label}",

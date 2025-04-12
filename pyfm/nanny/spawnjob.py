@@ -15,8 +15,8 @@ from functools import reduce
 from dict2xml import dict2xml as dxml
 
 from pyfm.nanny.tasks.contract import SubmitContractConfig, ContractTask
-from pyfm.nanny.tasks.hadrons import templates, SubmitHadronsConfig
-
+from pyfm.nanny.tasks.hadrons.components import hadmods
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 
 # Nanny script for managing job queues
 # C. DeTar 7/11/2022
@@ -170,7 +170,7 @@ def make_inputs(param, step, cfgno_steps):
             else:
                 sched_file = ""
 
-            xml_dict = templates.xml_wrapper(
+            xml_dict = hadmods.xml_wrapper(
                 runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
             )
 

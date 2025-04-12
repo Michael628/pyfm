@@ -1,8 +1,10 @@
 import logging
 import sys
 import typing as t
+from pydantic.dataclasses import dataclass
 from dataclasses import fields
 from enum import Enum, auto
+from pyfm import utils
 
 
 class Gamma(Enum):
@@ -74,6 +76,30 @@ def setup_logging(logging_level: str):
 
 
 T = t.TypeVar("T", bound="ConfigBase")
+
+
+class ObserverInterface:
+    """Interface for observers that want to be notified of changes."""
+
+    def update(self, **kwargs) -> None:
+        """Update the observer with the new state of the subject."""
+        raise NotImplementedError
+
+
+class SubjectInterface:
+    """Interface for objects that can be observed."""
+
+    def register(self, observer: ObserverInterface) -> None:
+        """Register an observer to be notified of changes."""
+        raise NotImplementedError
+
+    def unregister(self, observer: ObserverInterface) -> None:
+        """Unregister an observer."""
+        raise NotImplementedError
+
+    def notify(self) -> None:
+        """Notify all registered observers of a change."""
+        raise NotImplementedError
 
 
 class ConfigBase:
@@ -151,3 +177,82 @@ class ConfigBase:
                 res[k] = v
 
         return res
+
+
+# ============Operator List===========
+@dataclass
+class OpList:
+    """Configuration for a list of gamma operations.
+
+    Attributes
+    ----------
+    op_list: list
+        Gamma operations to be performed, usually for meson fields or high mode solves.
+    """
+
+    @dataclass
+    class Op:
+        """Parameters for a gamma operation and associated masses."""
+
+        gamma: Gamma
+        mass: t.List[str]
+
+    op_list: t.List[Op]
+
+    @classmethod
+    def from_dict(cls, kwargs) -> "OpList":
+        """Creates a new instance of OpList from a dictionary.
+
+        Note
+        ----
+        Ignores input keys that do not match format.
+
+        Valid dictionary input formats:
+
+        kwargs = {
+            'gamma': ['op1','op2','op3'],
+            'mass': ['m1','m2']
+        }
+
+        or
+
+        kwargs = {
+            'op1': {
+            'mass': ['m1']
+            },
+            'op2': {
+            'mass': ['m2','m3']
+            }
+        }
+
+        """
+        if "mass" not in kwargs:
+            op_list = []
+            for key, val in kwargs.items():
+                if isinstance(val, dict) and "mass" in val:
+                    mass = val["mass"]
+                    if isinstance(mass, str):
+                        mass = [mass]
+                    gamma = Gamma[key.upper()]
+                    op_list.append(cls.Op(gamma=gamma, mass=mass))
+        else:
+            assert "gamma" in kwargs
+            assert "mass" in kwargs
+            gammas = kwargs["gamma"]
+            mass = kwargs["mass"]
+            if isinstance(mass, str):
+                mass = [mass]
+            if isinstance(gammas, str):
+                gammas = [gammas]
+            op_list = [cls.Op(gamma=Gamma[g.upper()], mass=mass) for g in gammas]
+
+        return cls(op_list=op_list)
+
+    @property
+    def mass(self):
+        res: t.Set = set()
+        for op in self.op_list:
+            for m in op.mass:
+                res.add(m)
+
+        return list(res)
