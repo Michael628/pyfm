@@ -6,6 +6,7 @@ from dataclasses import fields
 
 import pandas as pd
 from pydantic.dataclasses import dataclass
+from pydantic import Field
 
 from pyfm import Gamma, utils
 from pyfm.nanny import TaskBase
@@ -103,6 +104,7 @@ class LMITask(TaskBase):
     class HighModes(OpList):
         skip_cg: bool = False
         solver: str = "mpcg"
+        cg_residual: t.List[float] = Field(default=[1e-8])
 
     epack: t.Optional[EpackTask] = None
     meson: t.Optional[OpList] = None
@@ -378,7 +380,10 @@ def input_params(
         if tasks.epack:
             solver_labels.append("ranLL")
         if tasks.high_modes and not tasks.high_modes.skip_cg:
-            solver_labels.append("ama")
+            residuals = sorted(
+                (float(x) for x in tasks.high_modes.cg_residual), reverse=True
+            )
+            solver_labels += [f"ama_{r}" for r in residuals]
 
         high_path = outfile_config_list.high_modes.filestem
         for op in tasks.high_modes.operations:
@@ -446,33 +451,34 @@ def input_params(
                 )
 
         for mass_label in tasks.high_modes.mass:
-            if "ama" in solver_labels:
-                if tasks.high_modes.solver == "rb":
-                    modules.append(
-                        templates.rb_cg(
-                            name=f"stag_ama_mass_{mass_label}",
-                            action=f"stag_mass_{mass_label}",
-                            residual=submit_conf_dict["cg_residual"],
+            for sl in solver_labels:
+                if sl.startswith("ama"):
+                    resid = sl.split("_")[1]
+                    if tasks.high_modes.solver == "rb":
+                        modules.append(
+                            templates.rb_cg(
+                                name=f"stag_ama_mass_{mass_label}",
+                                action=f"stag_mass_{mass_label}",
+                                residual=resid,
+                            )
                         )
-                    )
+                    else:
+                        modules.append(
+                            templates.mixed_precision_cg(
+                                name=f"stag_ama_mass_{mass_label}",
+                                outer_action=f"stag_mass_{mass_label}",
+                                inner_action=f"istag_mass_{mass_label}",
+                                residual=resid,
+                            )
+                        )
                 else:
                     modules.append(
-                        templates.mixed_precision_cg(
-                            name=f"stag_ama_mass_{mass_label}",
-                            outer_action=f"stag_mass_{mass_label}",
-                            inner_action=f"istag_mass_{mass_label}",
-                            residual=submit_conf_dict["cg_residual"],
+                        templates.lma_solver(
+                            name=f"stag_ranLL_mass_{mass_label}",
+                            action=f"stag_mass_{mass_label}",
+                            low_modes=f"evecs_mass_{mass_label}",
                         )
                     )
-
-            if "ranLL" in solver_labels:
-                modules.append(
-                    templates.lma_solver(
-                        name=f"stag_ranLL_mass_{mass_label}",
-                        action=f"stag_mass_{mass_label}",
-                        low_modes=f"evecs_mass_{mass_label}",
-                    )
-                )
 
     module_info = [m["id"] for m in modules]
     schedule = build_schedule(module_info)
@@ -585,7 +591,10 @@ def processing_params(
         solver_labels.append("ranLL")
     if task_config.high_modes:
         if not task_config.high_modes.skip_cg:
-            solver_labels.append("ama")
+            residuals = sorted(
+                (float(x) for x in task_config.high_modes.cg_residual), reverse=True
+            )
+            solver_labels += [f"ama_{r}" for r in residuals]
 
         for op in task_config.high_modes.operations:
             gamma_label = op.gamma.name.lower()
