@@ -396,8 +396,10 @@ def input_params(
                 quark = f"quark_{slabel}_{glabel}_mass_{mlabel}_t{tsource}"
                 source = f"noise_t{tsource}"
                 solver = f"stag_{slabel}_mass_{mlabel}"
-                if slabel == "ama" and tasks.epack:
-                    guess = f"quark_ranLL_{glabel}_mass_{mlabel}_t{tsource}"
+
+                if guess_index := solver_labels.index(slabel):
+                    guess_index -= 1
+                    guess = f"quark_{solver_labels[guess_index]}_{glabel}_mass_{mlabel}_t{tsource}"
                 else:
                     guess = ""
 
@@ -452,12 +454,15 @@ def input_params(
 
         for mass_label in tasks.high_modes.mass:
             for sl in solver_labels:
+                name = f"stag_{sl}_mass_{mass_label}"
+
                 if sl.startswith("ama"):
                     resid = sl.split("_")[1]
+
                     if tasks.high_modes.solver == "rb":
                         modules.append(
                             templates.rb_cg(
-                                name=f"stag_ama_mass_{mass_label}",
+                                name=name,
                                 action=f"stag_mass_{mass_label}",
                                 residual=resid,
                             )
@@ -465,7 +470,7 @@ def input_params(
                     else:
                         modules.append(
                             templates.mixed_precision_cg(
-                                name=f"stag_ama_mass_{mass_label}",
+                                name=name,
                                 outer_action=f"stag_mass_{mass_label}",
                                 inner_action=f"istag_mass_{mass_label}",
                                 residual=resid,
@@ -474,7 +479,7 @@ def input_params(
                 else:
                     modules.append(
                         templates.lma_solver(
-                            name=f"stag_ranLL_mass_{mass_label}",
+                            name=name,
                             action=f"stag_mass_{mass_label}",
                             low_modes=f"evecs_mass_{mass_label}",
                         )
