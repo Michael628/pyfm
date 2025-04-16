@@ -66,7 +66,7 @@ def catalog_files(
     outfile_config = outfile_config_list.contract
     df = []
     outfile = outfile_config.filestem + outfile_config.ext
-    filekeys = utils.formatkeys(outfile)
+    filekeys = utils.format_keys(outfile)
     for diagram in task_config.diagrams:
         d_params = submit_config.diagram_params[diagram]
         d_params.set_filenames(outfile_config_list)
@@ -114,7 +114,7 @@ def processing_params(
     infile_stem = infile_stem.replace("{gamma_label}", "{diagram_label}")
     outfile = outfile_config_list.contract.filestem
     outfile = outfile.replace("{gamma_label}", "{diagram_label}")
-    filekeys = utils.formatkeys(infile_stem)
+    filekeys = utils.format_keys(infile_stem)
     proc_params = {"run": task_config.diagrams}
     outfile = outfile.replace("correlators", "dataframes")
     outfile = outfile.replace("_{series}", "")

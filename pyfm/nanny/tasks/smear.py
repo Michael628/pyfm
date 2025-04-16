@@ -86,7 +86,7 @@ def catalog_files(
     df = []
     for outfile_config in outfile_configs:
         outfile = outfile_config.filestem + outfile_config.ext
-        filekeys = utils.formatkeys(outfile)
+        filekeys = utils.format_keys(outfile)
         files = utils.process_files(
             outfile,
             processor=build_row,

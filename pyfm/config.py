@@ -1,4 +1,3 @@
-import typing as t
 from dataclasses import fields
 
 from pydantic.dataclasses import dataclass
@@ -15,17 +14,19 @@ def dataclass_with_getters(cls):
     # Apply the dataclass transformation
     cls = dataclass(cls)
 
-    private_fields = [field
-                      for field in fields(cls)
-                      if field.name.startswith('_') or '__' in field.name]
+    private_fields = [
+        field
+        for field in fields(cls)
+        if field.name.startswith("_") or "__" in field.name
+    ]
 
     # Add properties for each field
     for field in private_fields:
         private_name = field.name
 
-        dunder =  '__' in field.name
+        dunder = "__" in field.name
         if dunder:
-            public_name = field.name.split('__')[1]
+            public_name = field.name.split("__")[1]
         else:
             public_name = field.name.lstrip("_")
 
@@ -45,5 +46,3 @@ def dataclass_with_getters(cls):
                 setattr(cls, public_name, setter)
 
     return cls
-
-

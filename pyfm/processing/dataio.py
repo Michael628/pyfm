@@ -450,7 +450,7 @@ def write_data(
         - Writes the entire DataFrame to a single file using the specified `filestem` as the filename.
     - Creates the necessary directories for the output files if they do not already exist.
     """
-    repl_keys = utils.formatkeys(filestem)
+    repl_keys = utils.format_keys(filestem)
     if repl_keys:
         logging.debug(f"df columns: {df.columns}")
         logging.debug(f"df indices: {df.index.names}")

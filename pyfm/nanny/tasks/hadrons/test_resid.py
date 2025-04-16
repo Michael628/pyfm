@@ -315,7 +315,7 @@ def catalog_files(
     df = []
     for task_replacements, outfile_config in outfile_generator:
         outfile = outfile_config.filestem + outfile_config.ext
-        filekeys = utils.formatkeys(outfile)
+        filekeys = utils.format_keys(outfile)
         replacements.update(task_replacements)
         files = utils.process_files(
             outfile,
@@ -358,7 +358,7 @@ def processing_params(
 
     infile_stem = outfile_config_list.high_modes.filename
     outfile = outfile_config_list.high_modes.filestem
-    filekeys = utils.formatkeys(infile_stem)
+    filekeys = utils.format_keys(infile_stem)
     outfile = outfile.replace("correlators", "dataframes")
     outfile = outfile.replace("_{series}", "")
     outfile = outfile.replace("_t{tsource}", "")
