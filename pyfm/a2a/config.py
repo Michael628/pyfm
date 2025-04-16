@@ -61,6 +61,8 @@ class DiagramConfig(pyfm.ConfigBase):
             self._meson_params["shift_mass"] = True
             self._meson_params["oldmass"] = float(f"0.{self.meson_mass}")
             self._meson_params["newmass"] = float(f"0.{self.mass}")
+        else:
+            self.meson_mass = self.mass
 
     def set_filenames(self, outfile_config: OutfileList) -> None:
         """Uses 'outfile_config' argument to replace provided parameters with

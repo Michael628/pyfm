@@ -71,7 +71,7 @@ def catalog_files(
         d_params = submit_config.diagram_params[diagram]
         d_params.set_filenames(outfile_config_list)
         replacements["mass"] = d_params.mass
-        replacements["gamma"] = d_params.gamma_label
+        replacements["gamma_label"] = d_params.gamma_label
         files = utils.process_files(
             outfile,
             processor=build_row,
@@ -100,7 +100,7 @@ def bad_files(
     submit_config: SubmitContractConfig,
     outfile_config_list: OutfileList,
 ) -> t.List[str]:
-    df = catalog_files(submit_config, task_config, outfile_config_list)
+    df = catalog_files(task_config, submit_config, outfile_config_list)
 
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 
