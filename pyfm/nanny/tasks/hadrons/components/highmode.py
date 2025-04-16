@@ -2,7 +2,6 @@ import pandas as pd
 from dataclasses import fields
 from pydantic import Field
 from pydantic.dataclasses import dataclass
-from pyfm.nanny.config import OutfileList
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 from pyfm.nanny.tasks.hadrons.components import ComponentBase
@@ -206,7 +205,7 @@ class HighModeHadronsComponent(ComponentBase):
             raise ValueError(f"Unknown solve_strategy: {self.solve_strategy}")
 
     def get_file_catalog(
-        self, submit_config: SubmitHadronsConfig, outfile_config_list: OutfileList
+        self, submit_config: SubmitHadronsConfig
     ) -> pd.DataFrame:
         def generate_outfile_formatting():
             res = {"tsource": list(map(str, submit_config.tsource_range)), "dset": []}
@@ -218,7 +217,7 @@ class HighModeHadronsComponent(ComponentBase):
             for op in self.operations:
                 res["gamma_label"] = op.gamma.name.lower()
                 res["mass"] = [submit_config.mass_out_label[m] for m in op.mass]
-                yield res, outfile_config_list.high_modes
+                yield res,submit_config.files["high_modes"]
 
         outfile_generator = generate_outfile_formatting()
         replacements = submit_config.string_dict()
@@ -226,7 +225,7 @@ class HighModeHadronsComponent(ComponentBase):
         return utils.catalog_files(outfile_generator, replacements)
 
     def input_params(
-        self, submit_config: SubmitHadronsConfig, outfile_config_list: OutfileList
+        self, submit_config: SubmitHadronsConfig
     ) -> t.Dict:
         submit_conf_dict = submit_config.string_dict()
         modules = {}
@@ -243,7 +242,7 @@ class HighModeHadronsComponent(ComponentBase):
                 )
 
         if not submit_config.overwrite_sources:
-            cf = self.get_file_catalog(submit_config, outfile_config_list)
+            cf = self.get_file_catalog(submit_config)
             missing_files = cf[cf["exists"] == False]
             run_tsources = []
             for tsource in submit_config.tsource_range:
@@ -269,9 +268,9 @@ class HighModeHadronsComponent(ComponentBase):
         if not self.skip_cg:
             solver_labels.append("ama")
 
-        assert outfile_config_list.high_modes is not None
+        assert "high_modes" in submit_config.files
 
-        high_path = outfile_config_list.high_modes.filestem
+        high_path =submit_config.files["high_modes"].filestem
         high_partial = functools.partial(high_path.format, **submit_conf_dict)
 
         for op in self.operations:

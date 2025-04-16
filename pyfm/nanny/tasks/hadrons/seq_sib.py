@@ -12,7 +12,6 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-from pyfm.nanny.config import OutfileList
 from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
 from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
 
@@ -48,15 +47,12 @@ class SeqSIBTask(HadronsTaskBase):
     def input_params(
         self,
         submit_config: SubmitHadronsConfig,
-        outfile_config_list: OutfileList,
     ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
         modules = self.gauge_component.input_params(
-            submit_config, outfile_config_list
-        ) | self.highmode_component.input_params(submit_config, outfile_config_list)
+            submit_config
+        ) | self.highmode_component.input_params(submit_config)
         if self.eig_component is not None:
-            modules |= self.eig_component.input_params(
-                submit_config, outfile_config_list
-            )
+            modules |= self.eig_component.input_params(submit_config)
 
         # TODO: Get schedule in requisite order.
         # TODO: initialize highmode_component with proper strategy.
@@ -141,7 +137,6 @@ def build_schedule(module_names: t.List[str]) -> t.List[str]:
 def bad_files(
     task_config: HadronsTaskBase,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
     logging.warning(
         "Check completion succeeds automatically. No implementation of bad_files function in `hadrons_a2a_vectors.py`."

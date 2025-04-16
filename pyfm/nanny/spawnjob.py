@@ -149,14 +149,10 @@ def make_inputs(param, step, cfgno_steps):
 
         os.environ["ENS"] = submit_config.ens
 
-        outfile_config = config.get_outfile_config(param)
-
         input_file: str = job_config.get_infile(submit_config)
 
         # TODO: Move input file creation into runio module
-        input_params, schedule = config.input_params(
-            job_config, submit_config, outfile_config
-        )
+        input_params, schedule = config.input_params(job_config, submit_config)
 
         if job_config.job_type == "contract":
             input_string = yaml.dump(input_params)

@@ -4,7 +4,6 @@ from pydantic.dataclasses import dataclass
 
 from pyfm import Gamma, utils
 from pyfm.nanny.tasks.hadrons.components import ComponentBase
-from pyfm.nanny.config import OutfileList
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 
@@ -16,7 +15,6 @@ class GaugeHadronsComponent(ComponentBase):
     def input_params(
         self,
         submit_config: SubmitHadronsConfig,
-        outfile_config_list: OutfileList,
     ) -> t.Dict:
         submit_conf_dict = submit_config.string_dict()
         modules = {}
@@ -24,8 +22,7 @@ class GaugeHadronsComponent(ComponentBase):
             if self.free:
                 modules[name] = [hadmods.unit_gauge(name)]
             else:
-                gauge_outfile = getattr(outfile_config_list, name)
-                assert isinstance(gauge_outfile, OutfileList.Outfile)
+                gauge_outfile = submit_config.files[name]
                 gauge_filepath = gauge_outfile.filestem.format(**submit_conf_dict)
 
                 modules[name] = hadmods.load_gauge(name, gauge_filepath)

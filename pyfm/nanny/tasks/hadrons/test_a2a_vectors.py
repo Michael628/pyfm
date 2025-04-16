@@ -14,9 +14,9 @@ import typing as t
 from pydantic.dataclasses import dataclass
 
 from pyfm.nanny import TaskBase
-from pyfm.nanny.config import OutfileList
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
+
 
 @dataclass
 class TestTask(TaskBase):
@@ -27,13 +27,12 @@ class TestTask(TaskBase):
 def input_params(
     tasks: TestTask,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
     submit_conf_dict = submit_config.string_dict()
 
     modules = []
 
-    meson_path = outfile_config_list.meson_ll.filestem
+    meson_path = submit_config.files["meson_ll"].filestem
 
     nvecs = str(3 * submit_config.time)
 
@@ -70,7 +69,6 @@ def input_params(
 def bad_files(
     task_config: TaskBase,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
     logging.warning(
         "Check completion succeeds automatically. No implementation of bad_files function in `hadrons_a2a_vectors.py`."

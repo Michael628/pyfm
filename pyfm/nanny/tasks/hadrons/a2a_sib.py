@@ -15,9 +15,9 @@ import typing as t
 from pydantic.dataclasses import dataclass
 
 from pyfm.nanny import TaskBase
-from pyfm.nanny.config import OutfileList
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
+
 
 @dataclass
 class A2ASIBTask(TaskBase):
@@ -38,10 +38,10 @@ class A2ASIBTask(TaskBase):
 def input_params(
     tasks: A2ASIBTask,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
     submit_conf_dict = submit_config.string_dict()
 
+    outfile_dict = submit_config.files
     if tasks.free:
         modules = [
             hadmods.unit_gauge("gauge"),
@@ -51,13 +51,11 @@ def input_params(
             hadmods.cast_gauge("gauge_longf", "gauge_long"),
         ]
     else:
-        gauge_filepath = outfile_config_list.gauge_links.filestem.format(
+        gauge_filepath = outfile_dict["gauge_links"].filestem.format(**submit_conf_dict)
+        gauge_fat_filepath = outfile_dict["fat_links"].filestem.format(
             **submit_conf_dict
         )
-        gauge_fat_filepath = outfile_config_list.fat_links.filestem.format(
-            **submit_conf_dict
-        )
-        gauge_long_filepath = outfile_config_list.long_links.filestem.format(
+        gauge_long_filepath = outfile_dict["long_links"].filestem.format(
             **submit_conf_dict
         )
 
@@ -82,9 +80,9 @@ def input_params(
 
     if tasks.epack:
         assert not tasks.high_modes
-        meson_path = outfile_config_list.meson_ll.filestem
+        meson_path = outfile_dict["meson_ll"].filestem
         multifile = str(tasks.epack_multifile).lower()
-        epack_path = outfile_config_list.eig.filestem.format(**submit_conf_dict)
+        epack_path = outfile_dict["eig"].filestem.format(**submit_conf_dict)
 
         modules.append(
             hadmods.epack_load(
@@ -141,14 +139,14 @@ def input_params(
         module_set = set()
         if tasks.seq:
             meson_path = functools.partial(
-                outfile_config_list.meson_seq_hh.filestem.format, seq=tasks.seq_gamma
+                outfile_dict["meson_seq_hh"].filestem.format, seq=tasks.seq_gamma
             )
             vec_path = functools.partial(
-                outfile_config_list.a2a_vec_seq.filestem.format, seq=tasks.seq_gamma
+                outfile_dict["a2a_vec_seq"].filestem.format, seq=tasks.seq_gamma
             )
         else:
-            meson_path = functools.partial(outfile_config_list.meson_hh.filestem.format)
-            vec_path = functools.partial(outfile_config_list.a2a_vec.filestem.format)
+            meson_path = functools.partial(outfile_dict["meson_hh"].filestem.format)
+            vec_path = functools.partial(outfile_dict["a2a_vec"].filestem.format)
 
         for w_index, v_index in pairings:
             v_name = f"v{v_index}"
@@ -210,7 +208,6 @@ def input_params(
 def bad_files(
     task_config: TaskBase,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
     logging.warning(
         "Check completion succeeds automatically. No implementation of bad_files function in `hadrons_a2a_vectors.py`."

@@ -2,7 +2,6 @@ from pydantic.dataclasses import dataclass
 from pydantic import Field
 from pyfm.nanny.tasks.hadrons.components import ComponentBase
 import typing as t
-from pyfm.nanny.config import OutfileList
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 
@@ -22,16 +21,14 @@ class EigHadronsComponent(ComponentBase):
                 if m not in self.masses:
                     self.masses.append(m)
 
-    def input_params(
-        self, submit_config: SubmitHadronsConfig, outfile_config_list: OutfileList
-    ) -> t.Dict:
+    def input_params(self, submit_config: SubmitHadronsConfig) -> t.Dict:
         submit_conf_dict = submit_config.string_dict()
+        outfile_dict = submit_config.files
         epack_path = ""
         multifile = str(self.multifile).lower()
         modules = {}
         if self.load or self.save_eigs:
-            assert outfile_config_list.eig is not None
-            epack_path = outfile_config_list.eig.filestem.format(**submit_conf_dict)
+            epack_path = outfile_dict["eig"].filestem.format(**submit_conf_dict)
 
         # Load or generate eigenvectors
         if self.load:
@@ -67,8 +64,8 @@ class EigHadronsComponent(ComponentBase):
             )
 
         if self.save_evals:
-            assert outfile_config_list.eval is not None
-            eval_path = outfile_config_list.eval.filestem.format(**submit_conf_dict)
+            assert "eval" in outfile_dict
+            eval_path = outfile_dict["eval"].filestem.format(**submit_conf_dict)
             modules["eval_save"] = hadmods.eval_save(
                 name="eval_save", eigen_pack="epack", output=eval_path
             )

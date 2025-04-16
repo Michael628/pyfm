@@ -9,45 +9,47 @@ from pyfm import utils
 from pyfm.nanny import SubmitConfig, TaskBase, tasks
 
 
-# OUTFILE CLASSES
+# NOTE: old attributes of OutfileList class:
+# fat_links: t.Optional[Outfile] = None
+# long_links: t.Optional[Outfile] = None
+# gauge_links: t.Optional[Outfile] = None
+# eig: t.Optional[Outfile] = None
+# eigdir: t.Optional[Outfile] = None
+# eval: t.Optional[Outfile] = None
+# high_modes: t.Optional[Outfile] = None
+# meson_hh: t.Optional[Outfile] = None
+# meson_ll: t.Optional[Outfile] = None
+# meson_lh: t.Optional[Outfile] = None
+# meson_hl: t.Optional[Outfile] = None
+# meson_seq_hh: t.Optional[Outfile] = None
+# meson_seq_ll: t.Optional[Outfile] = None
+# meson_seq_lh: t.Optional[Outfile] = None
+# meson_seq_hl: t.Optional[Outfile] = None
+# contract: t.Optional[Outfile] = None
+# a2a_vec: t.Optional[Outfile] = None
+# a2a_vec_seq: t.Optional[Outfile] = None
+# seq_modes: t.Optional[Outfile] = None
+
+
 # ============Outfile Parameters===========
 @dataclass
-class OutfileList:
-    @dataclass
-    class Outfile:
-        filestem: str
-        ext: str
-        good_size: int
+class Outfile:
+    filestem: str
+    ext: str
+    good_size: int
 
-        @property
-        def filename(self) -> str:
-            return self.filestem + self.ext
-
-    fat_links: t.Optional[Outfile] = None
-    long_links: t.Optional[Outfile] = None
-    gauge_links: t.Optional[Outfile] = None
-    eig: t.Optional[Outfile] = None
-    eigdir: t.Optional[Outfile] = None
-    eval: t.Optional[Outfile] = None
-    high_modes: t.Optional[Outfile] = None
-    meson_hh: t.Optional[Outfile] = None
-    meson_ll: t.Optional[Outfile] = None
-    meson_lh: t.Optional[Outfile] = None
-    meson_hl: t.Optional[Outfile] = None
-    meson_seq_hh: t.Optional[Outfile] = None
-    meson_seq_ll: t.Optional[Outfile] = None
-    meson_seq_lh: t.Optional[Outfile] = None
-    meson_seq_hl: t.Optional[Outfile] = None
-    contract: t.Optional[Outfile] = None
-    a2a_vec: t.Optional[Outfile] = None
-    a2a_vec_seq: t.Optional[Outfile] = None
-    seq_modes: t.Optional[Outfile] = None
+    @property
+    def filename(self) -> str:
+        return self.filestem + self.ext
 
     @classmethod
-    def from_dict(cls, kwargs) -> "OutfileList":
-        params = utils.deep_copy_dict(kwargs)
-        """Creates a new instance of OutfileConfigList from a dictionary."""
-
+    def create(
+        cls,
+        file_path: str,
+        file_label: str,
+        filestem: str,
+        good_size: t.Union[str, int],
+    ) -> "Outfile":
         def get_extension(fname: str) -> str:
             extensions = {
                 "cfg": ".{cfg}",
@@ -72,14 +74,11 @@ class OutfileList:
                 return extensions["cfg_bin_multi"]
             raise ValueError(f"No outfile definition for {fname}.")
 
-        home = params["home"]
-        for f in fields(cls):
-            if f.name in params:
-                params[f.name] = cls.Outfile(
-                    filestem=str(os.path.join(home, params[f.name]["filestem"])),
-                    ext=get_extension(f.name),
-                    good_size=params[f.name]["good_size"],
-                )
+        params = {
+            "filestem": str(os.path.join(file_path, filestem)),
+            "ext": get_extension(file_label),
+            "good_size": good_size,
+        }
 
         return cls(**params)
 
@@ -173,11 +172,10 @@ def get_submit_config(param: t.Dict, job_config: JobConfig, **kwargs) -> SubmitC
     if job_config.params:
         submit_params.update(job_config.params)
 
+    assert "files" not in submit_params
+    submit_params["files"] = param["files"]
+
     return tasks.get_submit_factory(job_config.job_type)(**submit_params, **kwargs)
-
-
-def get_outfile_config(param: t.Dict):
-    return OutfileList.from_dict(param["files"])
 
 
 def input_params(

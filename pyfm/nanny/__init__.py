@@ -2,6 +2,7 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 import pyfm
+from pyfm.nanny.config import Outfile
 
 
 class TaskBase:
@@ -14,3 +15,4 @@ class TaskBase:
 class SubmitConfig(pyfm.ConfigBase):
     ens: str
     time: int
+    files: t.Dict[str, Outfile]

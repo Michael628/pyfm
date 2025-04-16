@@ -107,11 +107,36 @@ class ConfigBase:
     def create(cls: t.Type[T], **kwargs) -> T:
         """Creates a new instance of ConfigBase from a dictionary.
 
-        Note
-        ----
-        Checks for dataclass fields stored in the class object.
-        If kwargs match a dataclass field apart from a leading underscore,
-        e.g. kwargs['mass'] and _mass, the value gets assigned to the underscored object attribute.
+        This method dynamically initializes an instance of the class by mapping
+        the provided keyword arguments (`kwargs`) to the class's dataclass fields
+        or other attributes. It also handles conflicts and ensures that no
+        existing class parameters are overwritten unintentionally.
+
+        Parameters
+        ----------
+        cls : Type[T]
+            The class type to instantiate. This should be a subclass of ConfigBase.
+        kwargs : dict
+            A dictionary of key-value pairs to initialize the instance.
+
+        Returns
+        -------
+        T
+            An instance of the class `cls` initialized with the provided `kwargs`.
+
+        Raises
+        ------
+        ValueError
+            If there are conflicts in the parameters (e.g., both `key` and `_key` are provided),
+            or if an attempt is made to overwrite an existing class parameter.
+
+        Notes
+        -----
+        - The method checks for dataclass fields stored in the class object.
+        - If a keyword argument matches a dataclass field (ignoring a leading underscore),
+          the value is assigned to the corresponding underscored attribute.
+        - Any additional attributes not matching the class's fields are added dynamically
+          to the created instance.
         """
 
         conflicts = [
@@ -148,9 +173,25 @@ class ConfigBase:
         return obj
 
     def string_dict(self):
-        """Converts all attributes without leading underscore to strings or lists of strings.
-        Dictionary attributes are removed from output.
-        Returns a dictionary keyed by the attribute labels
+        """Converts all attributes of the object to a dictionary of strings.
+
+        This method iterates over all attributes of the object, excluding those
+        with names starting with an underscore (`_`) or those that are dictionaries.
+        It converts the values of the attributes to strings or lists of strings,
+        depending on their type.
+
+        Returns
+        -------
+        dict
+            A dictionary where the keys are the attribute names and the values
+            are their string representations.
+
+        Notes
+        -----
+        - Attributes that are lists are converted to lists of strings.
+        - Boolean attributes are converted to lowercase string representations
+          ('true' or 'false').
+        - Attributes with `None` values are excluded from the output.
         """
         res = {}
         for k, v in self.__dict__.items():
