@@ -380,10 +380,13 @@ def input_params(
         if tasks.epack:
             solver_labels.append("ranLL")
         if tasks.high_modes and not tasks.high_modes.skip_cg:
-            residuals = sorted(
-                (float(x) for x in tasks.high_modes.cg_residual), reverse=True
-            )
-            solver_labels += [f"ama_{r}" for r in residuals]
+            if len(tasks.high_modes.cg_residual) == 1:
+                solver_labels.append("ama")
+            else:
+                residuals = sorted(
+                    (float(x) for x in tasks.high_modes.cg_residual), reverse=True
+                )
+                solver_labels += [f"ama_{r}" for r in residuals]
 
         high_path = outfile_config_list.high_modes.filestem
         for op in tasks.high_modes.operations:
@@ -521,7 +524,13 @@ def catalog_files(
             if task_config.epack:
                 res["dset"].append("ranLL")
             if not task_config.high_modes.skip_cg:
-                res["dset"].append("ama")
+                if len(task_config.high_modes.cg_residual) == 1:
+                    res["dset"].append("ama")
+                else:
+                    residuals = sorted(
+                        (float(x) for x in tasks.high_modes.cg_residual), reverse=True
+                    )
+                    res["dset"] += [f"ama_{r}" for r in residuals]
 
             for op in task_config.high_modes.operations:
                 res["gamma_label"] = op.gamma.name.lower()
@@ -596,10 +605,13 @@ def processing_params(
         solver_labels.append("ranLL")
     if task_config.high_modes:
         if not task_config.high_modes.skip_cg:
-            residuals = sorted(
-                (float(x) for x in task_config.high_modes.cg_residual), reverse=True
-            )
-            solver_labels += [f"ama_{r}" for r in residuals]
+            if len(task_config.high_modes.cg_residual) == 1:
+                solver_labels.append("ama")
+            else:
+                residuals = sorted(
+                    (float(x) for x in tasks.high_modes.cg_residual), reverse=True
+                )
+                solver_labels += [f"ama_{r}" for r in residuals]
 
         for op in task_config.high_modes.operations:
             gamma_label = op.gamma.name.lower()
