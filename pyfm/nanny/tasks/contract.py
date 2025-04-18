@@ -111,9 +111,9 @@ def processing_params(
     outfile_config_list: OutfileList,
 ) -> t.Dict:
     infile_stem = outfile_config_list.contract.filename
-    infile_stem = infile_stem.replace("{gamma_label}", "{diagram_label}")
+    # infile_stem = infile_stem.replace("{gamma_label}", "{diagram_label}")
     outfile = outfile_config_list.contract.filestem
-    outfile = outfile.replace("{gamma_label}", "{diagram_label}")
+    # outfile = outfile.replace("{gamma_label}", "{diagram_label}")
     filekeys = utils.format_keys(infile_stem)
     proc_params = {"run": task_config.diagrams}
     outfile = outfile.replace("correlators", "dataframes")
@@ -138,12 +138,15 @@ def processing_params(
         }
 
         proc_params[k]["load_files"]["replacements"] = replacements.copy()
-        proc_params[k]["load_files"]["replacements"]["diagram_label"] = diagram_dict[
-            "diagram_label"
-        ]
+        # proc_params[k]["load_files"]["replacements"]["diagram_label"] = diagram_dict[
+        #     "diagram_label"
+        # ]
         proc_params[k]["load_files"]["array_params"] = {
-            "order": ["t"],
-            "labels": {"t": f"0..{submit_config.time - 1}"},
+            "order": ["t1", "t2"],
+            "labels": {
+                "t1": f"0..{submit_config.time - 1}",
+                "t2": f"0..{submit_config.time - 1}",
+            },
         }
 
     return proc_params
