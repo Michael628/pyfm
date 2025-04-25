@@ -106,6 +106,10 @@ class LMITask(TaskBase):
         solver: str = "mpcg"
         cg_residual: t.List[float] = Field(default=[1e-8])
 
+        def __post_init__(self):
+            assert all([isinstance(x, float) for x in self.cg_residual])
+            self.cg_residual = sorted((x for x in self.cg_residual), reverse=True)
+
     epack: t.Optional[EpackTask] = None
     meson: t.Optional[OpList] = None
     high_modes: t.Optional[HighModes] = None
@@ -139,7 +143,9 @@ class LMITask(TaskBase):
 
 # ============Functions for building params and checking outfiles===========
 def input_params(
-    tasks: LMITask, submit_config: SubmitHadronsConfig, outfile_config_list: OutfileList
+    task_config: LMITask,
+    submit_config: SubmitHadronsConfig,
+    outfile_config_list: OutfileList,
 ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
     def build_schedule(module_names: t.List[str]) -> t.List[str]:
         gammas = ["pion_local", "vec_local", "vec_onelink"]
@@ -208,18 +214,18 @@ def input_params(
     submit_conf_dict = submit_config.string_dict()
 
     if not submit_config.overwrite_sources:
-        if tasks.high_modes:
-            cf = catalog_files(tasks, submit_config, outfile_config_list)
+        if task_config.high_modes:
+            cf = catalog_files(task_config, submit_config, outfile_config_list)
             missing_files = cf[cf["exists"] != True]
             run_tsources = []
             for tsource in submit_config.tsource_range:
                 if any(missing_files["tsource"] == str(tsource)):
                     run_tsources.append(str(tsource))
 
-        if tasks.meson:
-            bf = bad_files(tasks, submit_config, outfile_config_list)
+        if task_config.meson:
+            bf = bad_files(task_config, submit_config, outfile_config_list)
             meson_template = outfile_config_list.meson_ll.filename
-            for i, op in enumerate(tasks.meson.operations[:]):
+            for i, op in enumerate(task_config.meson.operations[:]):
                 for j, mass_label in enumerate(op.mass[:]):
                     meson_files = [
                         meson_template.format(
@@ -233,7 +239,7 @@ def input_params(
                         op.mass.pop(j)
 
                 if not op.mass:
-                    tasks.meson.operations.pop(i)
+                    task_config.meson.operations.pop(i)
 
     else:
         run_tsources = list(map(str, submit_config.tsource_range))
@@ -254,7 +260,7 @@ def input_params(
         templates.cast_gauge("gauge_longf", "gauge_long"),
     ]
 
-    for mass_label in tasks.mass:
+    for mass_label in task_config.mass:
         name = f"stag_mass_{mass_label}"
         mass = str(submit_config.mass[mass_label])
         modules.append(
@@ -264,11 +270,11 @@ def input_params(
         )
 
     if (
-        tasks.high_modes
-        and not tasks.high_modes.skip_cg
-        and tasks.high_modes.solver == "mpcg"
+        task_config.high_modes
+        and not task_config.high_modes.skip_cg
+        and task_config.high_modes.solver == "mpcg"
     ):
-        for mass_label in tasks.high_modes.mass:
+        for mass_label in task_config.high_modes.mass:
             name = f"istag_mass_{mass_label}"
             mass = str(submit_config.mass[mass_label])
             modules.append(
@@ -280,14 +286,14 @@ def input_params(
                 )
             )
 
-    if tasks.epack:
+    if task_config.epack:
         epack_path = ""
-        multifile = str(tasks.epack.multifile).lower()
-        if tasks.epack.load or tasks.epack.save_eigs:
+        multifile = str(task_config.epack.multifile).lower()
+        if task_config.epack.load or task_config.epack.save_eigs:
             epack_path = outfile_config_list.eig.filestem.format(**submit_conf_dict)
 
         # Load or generate eigenvectors
-        if tasks.epack.load:
+        if task_config.epack.load:
             modules.append(
                 templates.epack_load(
                     name="epack",
@@ -314,7 +320,7 @@ def input_params(
             )
 
         # Shift mass of eigenvalues
-        for mass_label in tasks.mass:
+        for mass_label in task_config.mass:
             if mass_label == "zero":
                 continue
             mass = str(submit_config.mass[mass_label])
@@ -324,7 +330,7 @@ def input_params(
                 )
             )
 
-        if tasks.epack.save_evals:
+        if task_config.epack.save_evals:
             eval_path = outfile_config_list.eval.filestem.format(**submit_conf_dict)
             modules.append(
                 templates.eval_save(
@@ -332,9 +338,9 @@ def input_params(
                 )
             )
 
-    if tasks.meson:
+    if task_config.meson:
         meson_template = outfile_config_list.meson_ll.filestem
-        for op in tasks.meson.operations:
+        for op in task_config.meson.operations:
             op_type = op.gamma.name.lower()
             gauge = "" if op.gamma == Gamma.LOCAL else "gauge"
             for mass_label in op.mass:
@@ -356,7 +362,7 @@ def input_params(
                     )
                 )
 
-    if tasks.high_modes:
+    if task_config.high_modes:
 
         def m1_eq_m2(x):
             return x[-2] == x[-1]
@@ -377,19 +383,50 @@ def input_params(
             )
 
         solver_labels = []
-        if tasks.epack:
-            solver_labels.append("ranLL")
-        if tasks.high_modes and not tasks.high_modes.skip_cg:
-            if len(tasks.high_modes.cg_residual) == 1:
+        residuals = task_config.high_modes.cg_residual
+        if task_config.high_modes and not task_config.high_modes.skip_cg:
+            if len(residuals) == 1:
                 solver_labels.append("ama")
             else:
-                residuals = sorted(
-                    (float(x) for x in tasks.high_modes.cg_residual), reverse=True
-                )
                 solver_labels += [f"ama_{r}" for r in residuals]
 
+        for mass_label in task_config.high_modes.mass:
+            if task_config.epack:
+                modules.append(
+                    templates.lma_solver(
+                        name=f"stag_ranLL_mass_{mass_label}",
+                        action=f"stag_mass_{mass_label}",
+                        low_modes=f"evecs_mass_{mass_label}",
+                    )
+                )
+
+            for resid, sl in zip(map(str, residuals), solver_labels):
+                name = f"stag_{sl}_mass_{mass_label}"
+
+                if task_config.high_modes.solver == "rb":
+                    modules.append(
+                        templates.rb_cg(
+                            name=name,
+                            action=f"stag_mass_{mass_label}",
+                            residual=resid,
+                        )
+                    )
+                else:
+                    modules.append(
+                        templates.mixed_precision_cg(
+                            name=name,
+                            outer_action=f"stag_mass_{mass_label}",
+                            inner_action=f"istag_mass_{mass_label}",
+                            residual=resid,
+                        )
+                    )
+
+        if task_config.epack:
+            solver_labels.insert(0, "ranLL")
+
         high_path = outfile_config_list.high_modes.filestem
-        for op in tasks.high_modes.operations:
+
+        for op in task_config.high_modes.operations:
             glabel = op.gamma.name.lower()
             quark_iter = list(
                 itertools.product(run_tsources, solver_labels, op.mass, op.mass)
@@ -455,39 +492,6 @@ def input_params(
                     )
                 )
 
-        for mass_label in tasks.high_modes.mass:
-            for sl in solver_labels:
-                name = f"stag_{sl}_mass_{mass_label}"
-
-                if sl.startswith("ama"):
-                    resid = sl.split("_")[1]
-
-                    if tasks.high_modes.solver == "rb":
-                        modules.append(
-                            templates.rb_cg(
-                                name=name,
-                                action=f"stag_mass_{mass_label}",
-                                residual=resid,
-                            )
-                        )
-                    else:
-                        modules.append(
-                            templates.mixed_precision_cg(
-                                name=name,
-                                outer_action=f"stag_mass_{mass_label}",
-                                inner_action=f"istag_mass_{mass_label}",
-                                residual=resid,
-                            )
-                        )
-                else:
-                    modules.append(
-                        templates.lma_solver(
-                            name=name,
-                            action=f"stag_mass_{mass_label}",
-                            low_modes=f"evecs_mass_{mass_label}",
-                        )
-                    )
-
     module_info = [m["id"] for m in modules]
     schedule = build_schedule(module_info)
 
@@ -524,12 +528,10 @@ def catalog_files(
             if task_config.epack:
                 res["dset"].append("ranLL")
             if not task_config.high_modes.skip_cg:
-                if len(task_config.high_modes.cg_residual) == 1:
+                residuals = task_config.high_modes.cg_residual
+                if len(residuals) == 1:
                     res["dset"].append("ama")
                 else:
-                    residuals = sorted(
-                        (float(x) for x in tasks.high_modes.cg_residual), reverse=True
-                    )
                     res["dset"] += [f"ama_{r}" for r in residuals]
 
             for op in task_config.high_modes.operations:
@@ -605,12 +607,10 @@ def processing_params(
         solver_labels.append("ranLL")
     if task_config.high_modes:
         if not task_config.high_modes.skip_cg:
-            if len(task_config.high_modes.cg_residual) == 1:
+            residuals = task_config.high_modes.cg_residual
+            if len(residuals) == 1:
                 solver_labels.append("ama")
             else:
-                residuals = sorted(
-                    (float(x) for x in tasks.high_modes.cg_residual), reverse=True
-                )
                 solver_labels += [f"ama_{r}" for r in residuals]
 
         for op in task_config.high_modes.operations:

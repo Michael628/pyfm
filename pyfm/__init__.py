@@ -44,13 +44,16 @@ class Gamma(Enum):
 
     @property
     def _local_gammas(self) -> t.List:
-        return [Gamma.LOCAL, Gamma.PION_LOCAL, Gamma.VEC_LOCAL,
-                Gamma.G1_G1,
-                Gamma.GX_GX,
-                Gamma.GY_GY,
-                Gamma.GZ_GZ,
-                Gamma.G5_G5
-                ]
+        return [
+            Gamma.LOCAL,
+            Gamma.PION_LOCAL,
+            Gamma.VEC_LOCAL,
+            Gamma.G1_G1,
+            Gamma.GX_GX,
+            Gamma.GY_GY,
+            Gamma.GZ_GZ,
+            Gamma.G5_G5,
+        ]
 
     @property
     def local(self) -> bool:
@@ -60,22 +63,20 @@ class Gamma(Enum):
             return False
 
 
-def setup():
+def setup_logging(logging_level: str):
     logging.basicConfig(
         format="%(asctime)s - %(levelname)-5s - %(message)s",
         style="%",
         datefmt="%Y-%m-%d %H:%M:%S",
-        handlers=[
-            logging.StreamHandler(sys.stdout)
-        ]
+        handlers=[logging.StreamHandler(sys.stdout)],
     )
+    logging.getLogger().setLevel(logging_level)
 
 
-T = t.TypeVar('T', bound='ConfigBase')
+T = t.TypeVar("T", bound="ConfigBase")
 
 
 class ConfigBase:
-
     @classmethod
     def create(cls: t.Type[T], **kwargs) -> T:
         """Creates a new instance of ConfigBase from a dictionary.
@@ -87,11 +88,16 @@ class ConfigBase:
         e.g. kwargs['mass'] and _mass, the value gets assigned to the underscored object attribute.
         """
 
-        conflicts = [k for k in kwargs.keys() if k in kwargs and f"_{k}" in kwargs and not k.startswith('_')]
+        conflicts = [
+            k
+            for k in kwargs.keys()
+            if k in kwargs and f"_{k}" in kwargs and not k.startswith("_")
+        ]
 
         if any(conflicts):
             raise ValueError(
-                f"Conflict in parameters. Both {conflicts[0]} and _{conflicts[0]} passed to {cls} `create`.")
+                f"Conflict in parameters. Both {conflicts[0]} and _{conflicts[0]} passed to {cls} `create`."
+            )
 
         class_vars = [f.name for f in fields(cls)]
         obj_vars = {}
@@ -99,10 +105,12 @@ class ConfigBase:
         for k, v in kwargs.items():
             if k in class_vars:
                 obj_vars[k] = v
-            elif f"_{k}" in class_vars and not k.startswith('_'):
+            elif f"_{k}" in class_vars and not k.startswith("_"):
                 obj_vars[f"_{k}"] = v
             elif k in cls.__dict__:
-                raise ValueError(f"Cannot overwrite existing {cls} param, `{k}`. Try relabeling `{k}`")
+                raise ValueError(
+                    f"Cannot overwrite existing {cls} param, `{k}`. Try relabeling `{k}`"
+                )
             else:
                 new_vars[k] = v
 
