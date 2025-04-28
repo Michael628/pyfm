@@ -89,6 +89,7 @@ def irl(
     nk: str,
     nm: str,
     multifile: str,
+    residual: str,
     output: str,
 ) -> t.Dict:
     return {
@@ -100,7 +101,7 @@ def irl(
                 "Nstop": nstop,
                 "Nk": nk,
                 "Nm": nm,
-                "resid": "1e-8",
+                "resid": residual,
                 "MaxIt": "5000",
                 "betastp": "0",
                 "MinRes": "0",
