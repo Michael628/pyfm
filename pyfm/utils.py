@@ -1,3 +1,4 @@
+import pandas as pd
 import copy
 import itertools
 import logging
@@ -321,3 +322,37 @@ def process_files(
         collection.append(new_result)
 
     return collection
+
+
+def catalog_files(outfile_generator, replacements) -> pd.DataFrame:
+    def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
+        repls["filepath"] = filepath
+        return repls
+
+    df = []
+    for task_replacements, outfile_config in outfile_generator:
+        assert outfile_config is not None
+        outfile = outfile_config.filestem + outfile_config.ext
+        filekeys = formatkeys(outfile)
+        replacements.update(task_replacements)
+        files = process_files(
+            outfile,
+            processor=build_row,
+            replacements={k: v for k, v in replacements.items() if k in filekeys},
+        )
+        dict_of_rows = {
+            k: [file[k] for file in files] for k in files[0] if len(files) > 0
+        }
+
+        new_df = pd.DataFrame(dict_of_rows)
+        new_df["good_size"] = outfile_config.good_size
+        new_df["exists"] = new_df["filepath"].apply(os.path.exists)
+        new_df["file_size"] = None
+        new_df.loc[new_df["exists"], "file_size"] = new_df[new_df["exists"]][
+            "filepath"
+        ].apply(os.path.getsize)
+        df.append(new_df)
+
+    df = pd.concat(df, ignore_index=True)
+
+    return df

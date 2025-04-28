@@ -12,236 +12,131 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-from pyfm import Gamma, utils
-from pyfm.nanny import TaskBase
-from pyfm.nanny.config import OutfileList
-from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig, templates
+from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
+from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
 
 
 @dataclass
-class SeqSIBTask(TaskBase):
-    mass: str
-    gammas: t.List[Gamma]
-    free: bool = False
-    epack: bool = True
-    tstart: int = 0
+class SeqSIBTask(HadronsTaskBase):
+    gauge_component: gauge.GaugeHadronsComponent
+    highmode_component: highmode.HighModeHadronsComponent
+    eig_component: t.Optional[eig.EigHadronsComponent] = None
 
     @classmethod
     def from_dict(cls, kwargs):
-        params = utils.deep_copy_dict(kwargs)
-        params["gammas"] = [Gamma[g] for g in params["gammas"]]
+        assert "gauge" in kwargs
+        assert "highmode" in kwargs
+        params = {}
+        params["gauge_component"] = gauge.GaugeHadronsComponent.from_dict(
+            kwargs["gauge"]
+        )
+        has_eigs = "eig" in kwargs
+        hc = highmode.HighModeHadronsComponent.from_dict(
+            kwargs["highmode"] | {"has_eigs": has_eigs}
+        )
+        params["highmode_component"] = hc
+        params["eig_component"] = None
+
+        if has_eigs:
+            params["eig_component"] = eig.EigHadronsComponent.from_dict(
+                kwargs["eig"] | {"masses": hc.mass}
+            )
 
         return cls(**params)
 
+    def input_params(
+        self,
+        submit_config: SubmitHadronsConfig,
+    ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
+        modules = self.gauge_component.input_params(
+            submit_config
+        ) | self.highmode_component.input_params(submit_config)
+        if self.eig_component is not None:
+            modules |= self.eig_component.input_params(submit_config)
 
-def input_params(
-    tasks: SeqSIBTask,
-    submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
-) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
-    submit_conf_dict = submit_config.string_dict()
+        # TODO: Get schedule in requisite order.
+        # TODO: initialize highmode_component with proper strategy.
+        schedule = list(modules.keys())
+        mod_list = list(modules.values())
 
-    if tasks.tstart > 0:
-        new_range = [n for n in submit_config.tsource_range if n >= tasks.tstart]
-        run_tsources = list(map(str, new_range))
-    else:
-        run_tsources = list(map(str, submit_config.tsource_range))
+        return mod_list, schedule
 
-    gauge_filepath = outfile_config_list.gauge_links.filestem.format(**submit_conf_dict)
-    gauge_fat_filepath = outfile_config_list.fat_links.filestem.format(
-        **submit_conf_dict
-    )
-    gauge_long_filepath = outfile_config_list.long_links.filestem.format(
-        **submit_conf_dict
-    )
 
-    if tasks.free:
-        modules = [
-            templates.unit_gauge("gauge"),
-            templates.unit_gauge("gauge_fat"),
-            templates.unit_gauge("gauge_long"),
-            templates.cast_gauge("gauge_fatf", "gauge_fat"),
-            templates.cast_gauge("gauge_longf", "gauge_long"),
-        ]
-    else:
-        gauge_filepath = outfile_config_list.gauge_links.filestem.format(
-            **submit_conf_dict
-        )
-        gauge_fat_filepath = outfile_config_list.fat_links.filestem.format(
-            **submit_conf_dict
-        )
-        gauge_long_filepath = outfile_config_list.long_links.filestem.format(
-            **submit_conf_dict
-        )
+# TODO: This assumes it's being handed the hadrons module <id> tag, i.e. containing both name and type.
+# Could replace with name only syntax parsing? Or pass while id subdict.
+def build_schedule(module_names: t.List[str]) -> t.List[str]:
+    gammas = ["pion_local", "vec_local", "vec_onelink"]
 
-        modules = [
-            templates.load_gauge("gauge", gauge_filepath),
-            templates.load_gauge("gauge_fat", gauge_fat_filepath),
-            templates.load_gauge("gauge_long", gauge_long_filepath),
-            templates.cast_gauge("gauge_fatf", "gauge_fat"),
-            templates.cast_gauge("gauge_longf", "gauge_long"),
-        ]
+    def pop_conditional(mi, cond):
+        """Pop all items in mi that match cond"""
+        indices = [i for i, item in enumerate(mi) if cond(item)]
+        # Pop in reverse order but return in original order
+        return [mi.pop(i) for i in indices[::-1]][::-1]
 
-    mass_label = tasks.mass
-    name = f"stag_mass_{mass_label}"
-    mass = str(submit_config.mass[mass_label])
-    modules.append(
-        templates.action(
-            name=name, mass=mass, gauge_fat="gauge_fat", gauge_long="gauge_long"
-        )
+    # HACK: Assumes low mode meson fields only
+    def get_mf_inputs(x):
+        """match meson field inputs"""
+        is_action = x["type"].endswith("ImprovedStaggeredMILC")
+        is_evec = "ModifyEigenPack" in x["type"]
+        has_sea_mass = "mass_l" in x["name"]
+        return (is_action or is_evec) and has_sea_mass
+
+    # Pop gauge modules
+    dp_gauges = pop_conditional(module_names, lambda x: "LoadIldg" in x["type"])
+    # Pop single precision gauge modules
+    sp_gauges = pop_conditional(module_names, lambda x: "PrecisionCast" in x["type"])
+    # Pop meson field modules
+    meson_fields = pop_conditional(module_names, lambda x: "A2AMesonField" in x["type"])
+    # Pop inputs for meson fields
+    meson_field_inputs = pop_conditional(module_names, get_mf_inputs)
+
+    # Pop modules that are indep of mass and time slices
+    indep_mass_tslice = pop_conditional(
+        module_names,
+        lambda x: ("mass" not in x["name"] or "mass_zero" in x["name"])
+        and "_t" not in x["name"],
     )
 
-    name = f"istag_mass_{mass_label}"
-    mass = str(submit_config.mass[mass_label])
-    modules.append(
-        templates.action_float(
-            name=name, mass=mass, gauge_fat="gauge_fatf", gauge_long="gauge_longf"
-        )
-    )
+    sorted_modules = dp_gauges + indep_mass_tslice
+    sorted_modules += meson_field_inputs + meson_fields
+    sorted_modules += sp_gauges
 
-    if tasks.epack:
-        multifile = "false"
-        epack_path = outfile_config_list.eig.filestem.format(**submit_conf_dict)
+    def gamma_order(x):
+        for i, gamma in enumerate(gammas):
+            if gamma in x["name"]:
+                return i
+        return -1
 
-        modules.append(
-            templates.epack_load(
-                name="epack",
-                filestem=epack_path,
-                size=submit_conf_dict["sourceeigs"],
-                multifile=multifile,
-            )
-        )
+    def mass_order(x):
+        for i, mass in enumerate(submit_config.mass.keys()):
+            if f"mass_{mass}" in x["name"]:
+                return i
+        return -1
 
-        mass = str(submit_config.mass[mass_label])
-        modules.append(
-            templates.epack_modify(
-                name=f"evecs_mass_{mass_label}", eigen_pack="epack", mass=mass
-            )
-        )
-        modules.append(
-            templates.lma_solver(
-                name=f"stag_ranLL_mass_{mass_label}",
-                action=f"stag_mass_{mass_label}",
-                low_modes=f"evecs_mass_{mass_label}",
-            )
-        )
+    def mixed_mass_last(x):
+        return len(re.findall(r"_mass", x["name"]))
 
-    modules.append(
-        templates.mixed_precision_cg(
-            name=f"stag_ama_mass_{mass_label}",
-            outer_action=f"stag_mass_{mass_label}",
-            inner_action=f"istag_mass_{mass_label}",
-            residual=submit_conf_dict["cg_residual"],
-        )
-    )
+    def tslice_order(x):
+        time = re.findall(r"_t(\d+)", x["name"])
+        if len(time):
+            return int(time[0])
+        else:
+            return -1
 
-    modules.append(templates.sink(name="sink", mom="0 0 0"))
+    # sort by tslice > mixed mass > mass > gammas
+    module_names = sorted(module_names, key=gamma_order)
+    module_names = sorted(module_names, key=mass_order)
+    module_names = sorted(module_names, key=mixed_mass_last)
+    module_names = sorted(module_names, key=tslice_order)
 
-    for tsource in run_tsources:
-        modules.append(
-            templates.noise_rw(
-                name=f"noise_t{tsource}",
-                nsrc=submit_conf_dict["noise"],
-                t0=tsource,
-                tstep=submit_conf_dict["time"],
-            )
-        )
+    sorted_modules += module_names
 
-        for i, gamma in enumerate(tasks.gammas):
-            glabel = gamma.name
-
-            if i == 0:
-                assert gamma == Gamma.G5_G5
-
-            high_path = outfile_config_list.seq_modes.filestem
-
-            solver_labels = ["ama"]
-            if tasks.epack:
-                solver_labels.append("ranLL")
-
-            for slabel in solver_labels:
-                quark = f"quark_{slabel}_mass_{mass_label}_t{tsource}_{glabel}"
-
-                source = f"noise_t{tsource}"
-                solver = f"stag_{slabel}_mass_{mass_label}"
-                guess = ""
-                if slabel == "ama":
-                    if tasks.epack:
-                        guess = quark + "_ranLL_M"
-
-                modules.append(
-                    templates.quark_prop(
-                        name=quark,
-                        source=source,
-                        solver=solver,
-                        guess=guess,
-                        gammas=gamma.gamma_string,
-                        apply_g5="true",
-                        gauge="" if gamma.local else "gauge",
-                    )
-                )
-
-                # sib = Gamma.G1_G1
-                # quark_g1 = quark+sib.name
-                # modules.append(templates.seq_gamma(
-                #     name=quark_g1,
-                #     q=quark+glabel,
-                #     ta='0',
-                #     tb=submit_conf_dict['time'],
-                #     gammas=sib.gamma_string,
-                #     apply_g5='false',
-                #     gauge="",
-                #     mom='0 0 0'
-                # ))
-
-                quark_g1_M = quark + "_M"
-                guess_M = guess + "_M" if guess else guess
-                modules.append(
-                    templates.quark_prop(
-                        name=quark + "_M",
-                        source=quark + glabel,
-                        solver=solver,
-                        guess=guess_M,
-                        gammas="",
-                        apply_g5="false",
-                        gauge="",
-                    )
-                )
-
-                pion = f"quark_{slabel}_mass_{mass_label}_t{tsource}_G5_G5G5_G5"
-
-                output = high_path.format(
-                    mass=submit_config.mass_out_label[mass_label],
-                    dset=slabel,
-                    gamma=glabel,
-                    tsource=tsource,
-                    **submit_conf_dict,
-                )
-
-                modules.append(
-                    templates.prop_contract(
-                        name=f"corr_{slabel}_{glabel}_mass_{mass_label}_t{tsource}",
-                        source=quark_g1_M,
-                        sink=pion,
-                        sink_func="sink",
-                        source_shift=f"noise_t{tsource}_shift",
-                        source_gammas="",
-                        sink_gammas=gamma.gamma_string,
-                        apply_g5="true",
-                        gauge="" if gamma.local else "gauge",
-                        output=output,
-                    )
-                )
-
-    schedule = [m["id"]["name"] for m in modules]
-
-    return modules, schedule
+    return [m["name"] for m in sorted_modules]
 
 
 def bad_files(
-    task_config: TaskBase,
+    task_config: HadronsTaskBase,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
     logging.warning(
         "Check completion succeeds automatically. No implementation of bad_files function in `hadrons_a2a_vectors.py`."

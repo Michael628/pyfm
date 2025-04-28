@@ -15,8 +15,8 @@ from functools import reduce
 from dict2xml import dict2xml as dxml
 
 from pyfm.nanny.tasks.contract import SubmitContractConfig, ContractTask
-from pyfm.nanny.tasks.hadrons import templates, SubmitHadronsConfig
-
+from pyfm.nanny.tasks.hadrons.components import hadmods
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 
 # Nanny script for managing job queues
 # C. DeTar 7/11/2022
@@ -149,14 +149,10 @@ def make_inputs(param, step, cfgno_steps):
 
         os.environ["ENS"] = submit_config.ens
 
-        outfile_config = config.get_outfile_config(param)
-
         input_file: str = job_config.get_infile(submit_config)
 
         # TODO: Move input file creation into runio module
-        input_params, schedule = config.input_params(
-            job_config, submit_config, outfile_config
-        )
+        input_params, schedule = config.input_params(job_config, submit_config)
 
         if job_config.job_type == "contract":
             input_string = yaml.dump(input_params)
@@ -170,7 +166,7 @@ def make_inputs(param, step, cfgno_steps):
             else:
                 sched_file = ""
 
-            xml_dict = templates.xml_wrapper(
+            xml_dict = hadmods.xml_wrapper(
                 runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
             )
 
@@ -230,7 +226,7 @@ def submit_job(param, step, cfgno_steps, max_cases):
     if scheduler == "LSF":
         cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
     elif scheduler == "PBS":
-        cmd = f"qsub -l nodes={str(nodes)}] -N {job_name} {job_script}"
+        cmd = f"qsub -l nodes={str(nodes)} -N {job_name} {job_script}"
     elif scheduler == "SLURM":
         # NEEDS UPDATING
         cmd = (

@@ -46,6 +46,4 @@ if __name__ == "__main__":
     jc = config.get_job_config(param, "SIB")
     sc = config.get_submit_config(param, jc, series="a", cfg="100")
 
-    fc = config.get_outfile_config(param)
-    stuff = config.input_params(jc, fc)
-
+    stuff = config.input_params(jc)

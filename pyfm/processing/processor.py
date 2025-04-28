@@ -458,10 +458,7 @@ def main(*args, **kwargs):
             step = args[0]
             job_config = config.get_job_config(params, step)
             submit_config = config.get_submit_config(params, job_config)
-            outfile_config = config.get_outfile_config(params)
-            proc_params = config.processing_params(
-                job_config, submit_config, outfile_config
-            )
+            proc_params = config.processing_params(job_config, submit_config)
         else:
             try:
                 proc_params = params["process_files"]

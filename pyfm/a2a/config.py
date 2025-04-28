@@ -2,8 +2,8 @@ import typing as t
 from enum import Enum, auto
 
 import pyfm
+from pyfm.nanny import Outfile
 from pyfm import config as c
-from pyfm.nanny.config import OutfileList
 
 try:
     from mpi4py import MPI
@@ -64,13 +64,13 @@ class DiagramConfig(pyfm.ConfigBase):
         else:
             self.meson_mass = self.mass
 
-    def set_filenames(self, outfile_config: OutfileList) -> None:
+    def set_filenames(self, outfile_config: t.Dict[str, Outfile]) -> None:
         """Uses 'outfile_config' argument to replace provided parameters with
         filenames if the existing parameter matches a field in `outfile_config`."""
 
         def get_filename(s: str):
-            if hasattr(outfile_config, s):
-                return getattr(outfile_config, s).filename
+            if s in outfile_config:
+                return outfile_config[s].filename
             else:
                 return s
 

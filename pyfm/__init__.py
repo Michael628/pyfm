@@ -1,8 +1,10 @@
 import logging
 import sys
 import typing as t
+from pydantic.dataclasses import dataclass
 from dataclasses import fields
 from enum import Enum, auto
+from pyfm import utils
 
 
 class Gamma(Enum):
@@ -76,16 +78,65 @@ def setup_logging(logging_level: str):
 T = t.TypeVar("T", bound="ConfigBase")
 
 
+class ObserverInterface:
+    """Interface for observers that want to be notified of changes."""
+
+    def update(self, **kwargs) -> None:
+        """Update the observer with the new state of the subject."""
+        raise NotImplementedError
+
+
+class SubjectInterface:
+    """Interface for objects that can be observed."""
+
+    def register(self, observer: ObserverInterface) -> None:
+        """Register an observer to be notified of changes."""
+        raise NotImplementedError
+
+    def unregister(self, observer: ObserverInterface) -> None:
+        """Unregister an observer."""
+        raise NotImplementedError
+
+    def notify(self) -> None:
+        """Notify all registered observers of a change."""
+        raise NotImplementedError
+
+
 class ConfigBase:
     @classmethod
     def create(cls: t.Type[T], **kwargs) -> T:
         """Creates a new instance of ConfigBase from a dictionary.
 
-        Note
-        ----
-        Checks for dataclass fields stored in the class object.
-        If kwargs match a dataclass field apart from a leading underscore,
-        e.g. kwargs['mass'] and _mass, the value gets assigned to the underscored object attribute.
+        This method dynamically initializes an instance of the class by mapping
+        the provided keyword arguments (`kwargs`) to the class's dataclass fields
+        or other attributes. It also handles conflicts and ensures that no
+        existing class parameters are overwritten unintentionally.
+
+        Parameters
+        ----------
+        cls : Type[T]
+            The class type to instantiate. This should be a subclass of ConfigBase.
+        kwargs : dict
+            A dictionary of key-value pairs to initialize the instance.
+
+        Returns
+        -------
+        T
+            An instance of the class `cls` initialized with the provided `kwargs`.
+
+        Raises
+        ------
+        ValueError
+            If there are conflicts in the parameters (e.g., both `key` and `_key` are provided),
+            or if an attempt is made to overwrite an existing class parameter.
+
+        Notes
+        -----
+        - The method checks for dataclass fields stored in the class object.
+        - If a keyword argument matches a dataclass field (ignoring a leading underscore),
+          the value is assigned to the corresponding underscored attribute.
+        - Any additional attributes not matching the class's fields are added dynamically
+          to the created instance.
         """
 
         conflicts = [
@@ -122,9 +173,25 @@ class ConfigBase:
         return obj
 
     def string_dict(self):
-        """Converts all attributes without leading underscore to strings or lists of strings.
-        Dictionary attributes are removed from output.
-        Returns a dictionary keyed by the attribute labels
+        """Converts all attributes of the object to a dictionary of strings.
+
+        This method iterates over all attributes of the object, excluding those
+        with names starting with an underscore (`_`) or those that are dictionaries.
+        It converts the values of the attributes to strings or lists of strings,
+        depending on their type.
+
+        Returns
+        -------
+        dict
+            A dictionary where the keys are the attribute names and the values
+            are their string representations.
+
+        Notes
+        -----
+        - Attributes that are lists are converted to lists of strings.
+        - Boolean attributes are converted to lowercase string representations
+          ('true' or 'false').
+        - Attributes with `None` values are excluded from the output.
         """
         res = {}
         for k, v in self.__dict__.items():
@@ -151,3 +218,82 @@ class ConfigBase:
                 res[k] = v
 
         return res
+
+
+# ============Operator List===========
+@dataclass
+class OpList:
+    """Configuration for a list of gamma operations.
+
+    Attributes
+    ----------
+    op_list: list
+        Gamma operations to be performed, usually for meson fields or high mode solves.
+    """
+
+    @dataclass
+    class Op:
+        """Parameters for a gamma operation and associated masses."""
+
+        gamma: Gamma
+        mass: t.List[str]
+
+    op_list: t.List[Op]
+
+    @classmethod
+    def from_dict(cls, kwargs) -> "OpList":
+        """Creates a new instance of OpList from a dictionary.
+
+        Note
+        ----
+        Ignores input keys that do not match format.
+
+        Valid dictionary input formats:
+
+        kwargs = {
+            'gamma': ['op1','op2','op3'],
+            'mass': ['m1','m2']
+        }
+
+        or
+
+        kwargs = {
+            'op1': {
+            'mass': ['m1']
+            },
+            'op2': {
+            'mass': ['m2','m3']
+            }
+        }
+
+        """
+        if "mass" not in kwargs:
+            op_list = []
+            for key, val in kwargs.items():
+                if isinstance(val, dict) and "mass" in val:
+                    mass = val["mass"]
+                    if isinstance(mass, str):
+                        mass = [mass]
+                    gamma = Gamma[key.upper()]
+                    op_list.append(cls.Op(gamma=gamma, mass=mass))
+        else:
+            assert "gamma" in kwargs
+            assert "mass" in kwargs
+            gammas = kwargs["gamma"]
+            mass = kwargs["mass"]
+            if isinstance(mass, str):
+                mass = [mass]
+            if isinstance(gammas, str):
+                gammas = [gammas]
+            op_list = [cls.Op(gamma=Gamma[g.upper()], mass=mass) for g in gammas]
+
+        return cls(op_list=op_list)
+
+    @property
+    def mass(self):
+        res: t.Set = set()
+        for op in self.op_list:
+            for m in op.mass:
+                res.add(m)
+
+        return list(res)

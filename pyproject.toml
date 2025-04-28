@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=42"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pyfm"
+version = "0.1.0"
+authors = [
+    {name = "Michael Lynch", email = "michaellynch628@gmail.com"},
+]
+description = "Nanny, postprocessing, and A2A contraction scripts"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "corrfitter>=8.2",
+    "Cython>=0.29",
+    "dict2xml>=1.7",
+    "gvar>=11.9",
+    "h5py>=2.10.0",
+    "lsqfit>=11.8",
+    "matplotlib>=3.3",
+    "numpy>=1.20",
+    "pandas>=1.2",
+    "PyYAML>=5.4",
+    "scipy>=1.6",
+    "sympy>=1.8",
+    "tables>=3.6",
+    "opt_einsum>=3.3",
+    "pydantic>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/Michael628/pyfm"
+
+[tool.setuptools]
+packages = [
+    "pyfm",
+    "pyfm.a2a",
+    "pyfm.nanny",
+    "pyfm.nanny.tasks",
+    "pyfm.nanny.tasks.hadrons",
+    "pyfm.processing",
+]
+
+# Optional: If you have package data (non-Python files)
+# [tool.setuptools.package-data]
+# "pyfm" = ["data/*", "templates/*"]
+
+# Optional: If you need to include additional files
+# [tool.setuptools.package-dir]
+# "" = "src"  # If using src layout

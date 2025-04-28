@@ -8,7 +8,6 @@ from pydantic.dataclasses import dataclass
 from pyfm import config as c
 from pyfm import utils
 from pyfm.nanny import SubmitConfig, TaskBase
-from pyfm.nanny.config import OutfileList
 
 
 @c.dataclass_with_getters
@@ -24,16 +23,17 @@ class SmearTask(TaskBase):
 
 
 def input_params(
-    tasks: SmearTask, submit_config: SubmitSmearConfig, outfile_config_list: OutfileList
+    tasks: SmearTask, submit_config: SubmitSmearConfig
 ) -> t.Tuple[str, None]:
     submit_conf_dict = submit_config.string_dict()
 
+    outfile_dict = submit_config.files
     lat = tasks.unsmeared_file.format(**submit_conf_dict)
-    lat_ildg_path = outfile_config_list.gauge_links.filename
+    lat_ildg_path = outfile_dict["gauge_links"].filename
     lat_ildg_path = lat_ildg_path.format(**submit_conf_dict)
-    long_ildg_path = outfile_config_list.long_links.filename
+    long_ildg_path = outfile_dict["long_links"].filename
     long_ildg_path = long_ildg_path.format(**submit_conf_dict)
-    fat_ildg_path = outfile_config_list.fat_links.filename
+    fat_ildg_path = outfile_dict["fat_links"].filename
     fat_ildg_path = fat_ildg_path.format(**submit_conf_dict)
     lat_ildg = os.path.basename(lat_ildg_path)
     long_ildg = os.path.basename(long_ildg_path)
@@ -67,14 +67,13 @@ def input_params(
 
 
 def catalog_files(
-    task_config: SmearTask,
-    submit_config: SubmitSmearConfig,
-    outfile_config_list: OutfileList,
+    task_config: SmearTask, submit_config: SubmitSmearConfig
 ) -> pd.DataFrame:
+    outfile_dict = submit_config.files
     outfile_configs = [
-        outfile_config_list.gauge_links,
-        outfile_config_list.long_links,
-        outfile_config_list.fat_links,
+        outfile_dict["gauge_links"],
+        outfile_dict["long_links"],
+        outfile_dict["fat_links"],
     ]
 
     def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
@@ -110,12 +109,8 @@ def catalog_files(
     return df
 
 
-def bad_files(
-    task_config: SmearTask,
-    submit_config: SubmitSmearConfig,
-    outfile_config_list: OutfileList,
-) -> t.List[str]:
-    df = catalog_files(task_config, submit_config, outfile_config_list)
+def bad_files(task_config: SmearTask, submit_config: SubmitSmearConfig) -> t.List[str]:
+    df = catalog_files(task_config, submit_config)
 
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 

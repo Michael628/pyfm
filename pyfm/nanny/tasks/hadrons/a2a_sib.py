@@ -15,8 +15,8 @@ import typing as t
 from pydantic.dataclasses import dataclass
 
 from pyfm.nanny import TaskBase
-from pyfm.nanny.config import OutfileList
-from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig, templates
+from pyfm.nanny.tasks.hadrons.components import hadmods
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 
 
 @dataclass
@@ -38,41 +38,39 @@ class A2ASIBTask(TaskBase):
 def input_params(
     tasks: A2ASIBTask,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
     submit_conf_dict = submit_config.string_dict()
 
+    outfile_dict = submit_config.files
     if tasks.free:
         modules = [
-            templates.unit_gauge("gauge"),
-            templates.unit_gauge("gauge_fat"),
-            templates.unit_gauge("gauge_long"),
-            templates.cast_gauge("gauge_fatf", "gauge_fat"),
-            templates.cast_gauge("gauge_longf", "gauge_long"),
+            hadmods.unit_gauge("gauge"),
+            hadmods.unit_gauge("gauge_fat"),
+            hadmods.unit_gauge("gauge_long"),
+            hadmods.cast_gauge("gauge_fatf", "gauge_fat"),
+            hadmods.cast_gauge("gauge_longf", "gauge_long"),
         ]
     else:
-        gauge_filepath = outfile_config_list.gauge_links.filestem.format(
+        gauge_filepath = outfile_dict["gauge_links"].filestem.format(**submit_conf_dict)
+        gauge_fat_filepath = outfile_dict["fat_links"].filestem.format(
             **submit_conf_dict
         )
-        gauge_fat_filepath = outfile_config_list.fat_links.filestem.format(
-            **submit_conf_dict
-        )
-        gauge_long_filepath = outfile_config_list.long_links.filestem.format(
+        gauge_long_filepath = outfile_dict["long_links"].filestem.format(
             **submit_conf_dict
         )
 
         modules = [
-            templates.load_gauge("gauge", gauge_filepath),
-            templates.load_gauge("gauge_fat", gauge_fat_filepath),
-            templates.load_gauge("gauge_long", gauge_long_filepath),
-            templates.cast_gauge("gauge_fatf", "gauge_fat"),
-            templates.cast_gauge("gauge_longf", "gauge_long"),
+            hadmods.load_gauge("gauge", gauge_filepath),
+            hadmods.load_gauge("gauge_fat", gauge_fat_filepath),
+            hadmods.load_gauge("gauge_long", gauge_long_filepath),
+            hadmods.cast_gauge("gauge_fatf", "gauge_fat"),
+            hadmods.cast_gauge("gauge_longf", "gauge_long"),
         ]
 
     mass_label = tasks.mass
     mass = str(submit_config.mass[mass_label])
     modules.append(
-        templates.action(
+        hadmods.action(
             name=f"stag_mass_{mass_label}",
             mass=mass,
             gauge_fat="gauge_fat",
@@ -82,12 +80,12 @@ def input_params(
 
     if tasks.epack:
         assert not tasks.high_modes
-        meson_path = outfile_config_list.meson_ll.filestem
+        meson_path = outfile_dict["meson_ll"].filestem
         multifile = str(tasks.epack_multifile).lower()
-        epack_path = outfile_config_list.eig.filestem.format(**submit_conf_dict)
+        epack_path = outfile_dict["eig"].filestem.format(**submit_conf_dict)
 
         modules.append(
-            templates.epack_load(
+            hadmods.epack_load(
                 name="epack",
                 filestem=epack_path,
                 size=submit_conf_dict["sourceeigs"],
@@ -102,13 +100,13 @@ def input_params(
         )
 
         modules.append(
-            templates.epack_modify(
+            hadmods.epack_modify(
                 name=f"evecs_mass_{mass_label}", eigen_pack="epack", mass=mass
             )
         )
 
         modules.append(
-            templates.meson_field(
+            hadmods.meson_field(
                 name=f"mf_eig_eig",
                 action=f"stag_mass_{mass_label}",
                 block=submit_conf_dict["blocksize"],
@@ -141,14 +139,14 @@ def input_params(
         module_set = set()
         if tasks.seq:
             meson_path = functools.partial(
-                outfile_config_list.meson_seq_hh.filestem.format, seq=tasks.seq_gamma
+                outfile_dict["meson_seq_hh"].filestem.format, seq=tasks.seq_gamma
             )
             vec_path = functools.partial(
-                outfile_config_list.a2a_vec_seq.filestem.format, seq=tasks.seq_gamma
+                outfile_dict["a2a_vec_seq"].filestem.format, seq=tasks.seq_gamma
             )
         else:
-            meson_path = functools.partial(outfile_config_list.meson_hh.filestem.format)
-            vec_path = functools.partial(outfile_config_list.a2a_vec.filestem.format)
+            meson_path = functools.partial(outfile_dict["meson_hh"].filestem.format)
+            vec_path = functools.partial(outfile_dict["a2a_vec"].filestem.format)
 
         for w_index, v_index in pairings:
             v_name = f"v{v_index}"
@@ -156,7 +154,7 @@ def input_params(
 
             if w_name not in module_set:
                 module_set.add(w_name)
-                modules.append(templates.time_diluted_noise(w_name, 1))
+                modules.append(hadmods.time_diluted_noise(w_name, 1))
 
             if not tasks.low_memory_mode:
                 v_name_unique = v_name
@@ -172,7 +170,7 @@ def input_params(
                 )
 
                 modules.append(
-                    templates.load_vectors(
+                    hadmods.load_vectors(
                         name=v_name_unique,
                         filestem=infile,
                         size=nvecs,
@@ -188,7 +186,7 @@ def input_params(
             )
 
             modules.append(
-                templates.meson_field(
+                hadmods.meson_field(
                     name=f"mf_{w_index}_{v_index}",
                     action=f"stag_mass_{mass_label}",
                     block=nvecs,
@@ -210,7 +208,6 @@ def input_params(
 def bad_files(
     task_config: TaskBase,
     submit_config: SubmitHadronsConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
     logging.warning(
         "Check completion succeeds automatically. No implementation of bad_files function in `hadrons_a2a_vectors.py`."

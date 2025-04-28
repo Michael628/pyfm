@@ -1,14 +1,27 @@
 import typing as t
 from dataclasses import field
 
-from pyfm import config as c
-from pyfm.nanny import SubmitConfig
+from pyfm import config as c, SubjectInterface, ObserverInterface
+from pyfm.nanny import SubmitConfig, TaskBase
+
+
+class HadronsTaskBase(TaskBase, SubjectInterface):
+    observers: t.List[ObserverInterface] = field(default_factory=list)
+
+    def get_notification(self) -> t.Dict:
+        raise NotImplementedError
+
+    def register(self, observer: ObserverInterface):
+        self.observers.append(observer)
+
+    def notify(self):
+        for observer in self.observers:
+            observer.update(**self.get_notification())
 
 
 @c.dataclass_with_getters
 class SubmitHadronsConfig(SubmitConfig):
     tstart: int = 0
-    eigresid: float = 1e-8
     blocksize: int = 500
     multifile: bool = False
     dt: t.Optional[int] = None
@@ -71,4 +84,3 @@ class SubmitHadronsConfig(SubmitConfig):
 
 def get_submit_factory() -> t.Callable[..., SubmitHadronsConfig]:
     return SubmitHadronsConfig.create
-

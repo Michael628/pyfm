@@ -10,7 +10,6 @@ from pyfm import config as c
 from pyfm import utils
 from pyfm.a2a.config import DiagramConfig
 from pyfm.nanny import SubmitConfig, TaskBase
-from pyfm.nanny.config import OutfileList
 
 
 @c.dataclass_with_getters
@@ -41,13 +40,12 @@ class ContractTask(TaskBase):
 def input_params(
     task_config: ContractTask,
     submit_config: SubmitContractConfig,
-    outfile_config_list: OutfileList,
 ) -> t.Tuple[t.List[str], None]:
     input_yaml = submit_config.public_dict
     input_yaml["diagrams"] = {}
     for diagram in task_config.diagrams:
         d_params = submit_config.diagram_params[diagram]
-        d_params.set_filenames(outfile_config_list)
+        d_params.set_filenames(submit_config.files)
         input_yaml["diagrams"][diagram] = d_params.string_dict()
 
     return input_yaml, None
@@ -56,20 +54,19 @@ def input_params(
 def catalog_files(
     task_config: ContractTask,
     submit_config: SubmitContractConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
     def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
         repls["filepath"] = filepath
         return repls
 
     replacements = submit_config.string_dict()
-    outfile_config = outfile_config_list.contract
+    outfile_config = submit_config.files["contract"]
     df = []
     outfile = outfile_config.filestem + outfile_config.ext
     filekeys = utils.format_keys(outfile)
     for diagram in task_config.diagrams:
         d_params = submit_config.diagram_params[diagram]
-        d_params.set_filenames(outfile_config_list)
+        d_params.set_filenames(submit_config.files)
         replacements["mass"] = d_params.mass
         replacements["gamma_label"] = d_params.gamma_label
         files = utils.process_files(
@@ -98,9 +95,8 @@ def catalog_files(
 def bad_files(
     task_config: ContractTask,
     submit_config: SubmitContractConfig,
-    outfile_config_list: OutfileList,
 ) -> t.List[str]:
-    df = catalog_files(task_config, submit_config, outfile_config_list)
+    df = catalog_files(task_config, submit_config)
 
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 
@@ -108,12 +104,10 @@ def bad_files(
 def processing_params(
     task_config: ContractTask,
     submit_config: SubmitContractConfig,
-    outfile_config_list: OutfileList,
 ) -> t.Dict:
-    infile_stem = outfile_config_list.contract.filename
-    # infile_stem = infile_stem.replace("{gamma_label}", "{diagram_label}")
-    outfile = outfile_config_list.contract.filestem
-    # outfile = outfile.replace("{gamma_label}", "{diagram_label}")
+    outfile_dict = submit_config.files
+    infile_stem = outfile_dict["contract"].filename
+    outfile = outfile_dict["contract"].filestem
     filekeys = utils.format_keys(infile_stem)
     proc_params = {"run": task_config.diagrams}
     outfile = outfile.replace("correlators", "dataframes")
