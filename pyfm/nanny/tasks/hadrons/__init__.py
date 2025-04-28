@@ -22,7 +22,6 @@ class HadronsTaskBase(TaskBase, SubjectInterface):
 @c.dataclass_with_getters
 class SubmitHadronsConfig(SubmitConfig):
     tstart: int = 0
-    eigresid: float = 1e-8
     blocksize: int = 500
     multifile: bool = False
     dt: t.Optional[int] = None

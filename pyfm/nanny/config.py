@@ -1,86 +1,10 @@
-import os.path
 import typing as t
-from dataclasses import MISSING, field, fields
-
-from pydantic import BaseModel
+from dataclasses import field
 from pydantic.dataclasses import dataclass
 
 from pyfm import utils
-from pyfm.nanny import SubmitConfig, TaskBase, tasks
-
-
-# NOTE: old attributes of OutfileList class:
-# fat_links: t.Optional[Outfile] = None
-# long_links: t.Optional[Outfile] = None
-# gauge_links: t.Optional[Outfile] = None
-# eig: t.Optional[Outfile] = None
-# eigdir: t.Optional[Outfile] = None
-# eval: t.Optional[Outfile] = None
-# high_modes: t.Optional[Outfile] = None
-# meson_hh: t.Optional[Outfile] = None
-# meson_ll: t.Optional[Outfile] = None
-# meson_lh: t.Optional[Outfile] = None
-# meson_hl: t.Optional[Outfile] = None
-# meson_seq_hh: t.Optional[Outfile] = None
-# meson_seq_ll: t.Optional[Outfile] = None
-# meson_seq_lh: t.Optional[Outfile] = None
-# meson_seq_hl: t.Optional[Outfile] = None
-# contract: t.Optional[Outfile] = None
-# a2a_vec: t.Optional[Outfile] = None
-# a2a_vec_seq: t.Optional[Outfile] = None
-# seq_modes: t.Optional[Outfile] = None
-
-
-# ============Outfile Parameters===========
-@dataclass
-class Outfile:
-    filestem: str
-    ext: str
-    good_size: int
-
-    @property
-    def filename(self) -> str:
-        return self.filestem + self.ext
-
-    @classmethod
-    def create(
-        cls,
-        file_path: str,
-        file_label: str,
-        filestem: str,
-        good_size: t.Union[str, int],
-    ) -> "Outfile":
-        def get_extension(fname: str) -> str:
-            extensions = {
-                "cfg": ".{cfg}",
-                "cfg_bin": ".{cfg}.bin",
-                "cfg_bin_multi": ".{cfg}/v{eig_index}.bin",
-                "cfg_h5": ".{cfg}.h5",
-                "cfg_gamma_h5": ".{cfg}/{gamma}_0_0_0.h5",
-                "cfg_pickle": ".{cfg}.p",
-            }
-
-            if fname.endswith("links"):
-                return extensions["cfg"]
-            if fname.startswith("meson"):
-                return extensions["cfg_gamma_h5"]
-            if fname == "eig" or fname.startswith("a2a_vec"):
-                return extensions["cfg_bin"]
-            if fname == "contract":
-                return extensions["cfg_pickle"]
-            if fname.endswith("modes") or fname == "eval":
-                return extensions["cfg_h5"]
-            if fname == "eigdir":
-                return extensions["cfg_bin_multi"]
-            raise ValueError(f"No outfile definition for {fname}.")
-
-        params = {
-            "filestem": str(os.path.join(file_path, filestem)),
-            "ext": get_extension(file_label),
-            "good_size": good_size,
-        }
-
-        return cls(**params)
+from pyfm.nanny import tasks
+from pyfm.nanny import SubmitConfig, TaskBase
 
 
 # ============Job Configuration===========

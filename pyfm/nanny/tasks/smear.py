@@ -8,7 +8,6 @@ from pydantic.dataclasses import dataclass
 from pyfm import config as c
 from pyfm import utils
 from pyfm.nanny import SubmitConfig, TaskBase
-from pyfm.nanny.config import Outfile
 
 
 @c.dataclass_with_getters

@@ -2,7 +2,7 @@ import typing as t
 from enum import Enum, auto
 
 import pyfm
-from pyfm.nanny.config import Outfile
+from pyfm.nanny import Outfile
 from pyfm import config as c
 
 try:
