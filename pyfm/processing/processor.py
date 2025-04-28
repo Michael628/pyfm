@@ -26,25 +26,35 @@ ACTION_ORDER = [
     "normalize",
     "index",
     "drop",
-    "gvar",
 ]
 
 
-def stdjackknife(series: pd.Series) -> pd.Series:
-    """Builds an array of standard deviations,
-    which you can take the mean and standard deviation
-    from for the error and the error on the error
+def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
     """
-    marray = np.ma.array(series.to_numpy(), mask=False)
-    array_out = np.empty_like(marray)
+    Compute the jackknife standard deviation for each element in a BufferDict.
 
-    marray.mask[0] = True
-    for i in range(len(array_out)):
-        marray.mask[:] = False
-        marray.mask[i] = True
-        array_out[i] = marray.std()
+    This function performs jackknife resampling to calculate the standard deviation
+    for each element in the input BufferDict. Jackknife resampling involves systematically
+    leaving out one sample at a time and computing the desired statistic on the remaining data.
 
-    return pd.Series(array_out, index=series.index)
+    Parameters:
+        buff (gv.BufferDict): Input BufferDict containing data arrays for which
+                              the jackknife standard deviation is to be computed.
+
+    Returns:
+        gv.BufferDict: A BufferDict containing the computed standard deviations
+                       for each key in the input BufferDict.
+    """
+    buff_std = gv.BufferDict()
+
+    for k, v in buff.items():
+        stdarray = np.empty_like(v)
+        for i in range(len(v)):
+            j_sample = np.delete(v, i, axis=0)
+            stdarray[i, :] = np.std(j_sample, axis=0, ddof=1)
+        buff_std[k] = stdarray
+
+    return buff_std
 
 
 def group_apply(
@@ -84,43 +94,54 @@ def group_apply(
         grouped = ungrouped_cols
         ungrouped = [x for x in all_cols if x not in grouped] + [data_col]
 
-    df_out = df.reset_index().groupby(by=grouped)[ungrouped].apply(func)
+    df_out = df.reset_index().groupby(by=grouped, dropna=False)[ungrouped].apply(func)
 
-    while None in df_out.index.names:
-        df_out = df_out.droplevel(df_out.index.names.index(None))
+    # while None in df_out.index.names:
+    #     df_out = df_out.droplevel(df_out.index.names.index(None))
 
     return df_out
 
 
-def gvar(
-    df: pd.DataFrame, data_col: str, key_index: t.Optional[str] = None
+def buffer_avg(buff: gv.BufferDict) -> pd.DataFrame:
+    """
+    Computes the average of data stored in a BufferDict and returns it as a pandas DataFrame.
+
+    Parameters:
+        buff (gv.BufferDict): A dictionary-like object where keys are group identifiers
+                              and values are numpy arrays of data.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing the averaged data, with keys from the BufferDict
+                      as column names.
+    """
+
+    avg_data = ds.avg_data(buff)
+    df = pd.DataFrame(dict(avg_data))
+    df.index.name = "t"
+    return df
+
+
+def buffer(
+    df: pd.DataFrame,
+    data_col: str,
+    key_index: t.Union[str, t.List[str]],
+    fold: bool = False,
 ) -> gv.BufferDict:
-    tvar = "t" if "t" in df.index.names else "dt"
+    """
+    Converts a pandas DataFrame into a grouped buffer dictionary.
 
-    nt = df.index.get_level_values(tvar).nunique()
+    Parameters:
+        df (pd.DataFrame): The input DataFrame, expected to have a multi-index with a time variable.
+        data_col (str): The name of the column containing the data to be buffered.
+        key_index (Union[str, List[str]]): The column(s) or index level(s) to group by.
 
-    labels_dt_last = sorted(df.index.names, key=lambda x: 0 if x == tvar else -1)
+    Returns:
+        gv.BufferDict: A dictionary-like object where keys are group identifiers and values are
+                       numpy arrays of reshaped data corresponding to each group.
 
-    result = {}
-    if not key_index:
-        result[data_col] = ds.avg_data(
-            df.reorder_levels(labels_dt_last)[data_col].to_numpy().reshape((-1, nt))
-        )
-    else:
-        if key_index in df.columns:
-            group_param = {"by": key_index}
-        else:
-            group_param = {"level": key_index}
-
-        for key, xs in df.groupby(**group_param):
-            result[key] = ds.avg_data(
-                xs.reorder_levels(labels_dt_last)[data_col].to_numpy().reshape((-1, nt))
-            )
-
-    return pd.DataFrame(result, index=pd.Index(range(nt), name=tvar))
-
-
-def buffer(df: pd.DataFrame, data_col: str, key_index: str) -> gv.BufferDict:
+    Raises:
+        AssertionError: If the specified key_index is not found in the DataFrame's columns or index levels.
+    """
     tvar = "t" if "t" in df.index.names else "dt"
 
     buff = gv.BufferDict()
@@ -129,24 +150,52 @@ def buffer(df: pd.DataFrame, data_col: str, key_index: str) -> gv.BufferDict:
 
     labels_dt_last = sorted(df.index.names, key=lambda x: 0 if x == tvar else -1)
 
-    if key_index in df.columns:
-        group_param = {"by": key_index}
+    if isinstance(key_index, str):
+        key_indices = [key_index]
     else:
-        group_param = {"level": key_index}
+        key_indices = key_index
+
+    if key_indices[0] in df.columns:
+        assert all([x in df.columns for x in key_indices])
+        group_param = {"by": key_indices}
+    else:
+        assert all([x in df.index.names for x in key_indices])
+        group_param = {"level": key_indices}
+
+    buff_fold = gv.BufferDict()
 
     for key, xs in df.groupby(**group_param):
         buff[key] = (
             xs.reorder_levels(labels_dt_last)[data_col].to_numpy().reshape((-1, nt))
         )
+        if fold:
+            size = buff[key].shape
+            size = (size[0], size[1] // 2 + 1)
 
-    return buff
+            buff_fold[key] = np.zeros(size, dtype=buff[key].dtype)
 
-    # Shaun example code for dicts:
-    # dset = gv.BufferDict()
-    # dset['local'] = localArray
-    # dset['onelink'] = onelinkArray
-    # dsetGvar = ds.avg_data(dset)
-    # localMinusOnelink = dsetGvar['local'] - dsetGvar['onelink']
+            buff_fold[key][:, 1 : nt // 2] = (
+                buff[key][:, 1 : nt // 2] + buff[key][:, -1 : nt // 2 : -1]
+            ) / 2.0
+            buff_fold[key][:, 0] = buff[key][:, 0]
+            buff_fold[key][:, nt // 2] = buff[key][:, nt // 2]
+
+    return buff if not fold else buff_fold
+
+
+def signal_noise_nts(
+    buff: gv.BufferDict, *args, **kwargs
+) -> t.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    signal = buffer_avg(buff, *args, **kwargs)
+    noise = buffer_avg(stdjackknife(buff), *args, **kwargs)
+
+    nts = noise.copy()
+    import numpy as np
+
+    for k in nts.columns:
+        nts[k] = np.divide(nts[k], signal[k])
+
+    return signal, noise, nts
 
 
 # def build_high(df: pd.DataFrame, data_col) -> pd.DataFrame:
@@ -174,29 +223,58 @@ def drop(df, data_col, *args):
     return df
 
 
-def index(df, data_col, *args):
-    indices = [i for i in args]
+def index(df, data_col: str, indices: t.List[str]) -> pd.DataFrame:
+    """
+    Reorganizes the given DataFrame by resetting and setting specified indices.
+
+    Parameters:
+    - df (pd.DataFrame): The input DataFrame to be indexed.
+    - data_col (str): A column name (currently unused in this function).
+    - indices (List[str]): A list of column names to set as the new index.
+
+    Returns:
+    - pd.DataFrame: The DataFrame with the specified indices set and sorted.
+
+    Notes:
+    - If "series.cfg" is in the indices list but not in the DataFrame's index or columns,
+      it is constructed by concatenating the "series" and "cfg" columns with a "." separator.
+    - The function ensures that any existing indices are reset before setting new ones.
+    - The DataFrame is sorted by the new index after setting it.
+
+    Raises:
+    - AssertionError: If any element in `indices` is not a string.
+    - AssertionError: If "series" or "cfg" is not found in the DataFrame when "series.cfg" needs to be built.
+    """
     assert all([isinstance(i, str) for i in indices])
 
-    if indices:
-        if "series.cfg" in indices:
-            series: pd.DataFrame
-            cfg: pd.DataFrame
-            for key in ["series", "cfg"]:
-                if key in df.index.names:
-                    df.reset_index(key, inplace=True)
+    if not indices:
+        return df
 
-            series = df.pop("series")
-            cfg = df.pop("cfg")
+    build_seriescfg = "series.cfg" in indices
+    build_seriescfg &= "series.cfg" not in df.index.names
+    build_seriescfg &= "series.cfg" not in df.columns
 
-            df["series.cfg"] = series + "." + cfg
+    if build_seriescfg:
+        series: pd.DataFrame
+        cfg: pd.DataFrame
+        for key in ["series", "cfg"]:
+            if key in df.index.names:
+                df.reset_index(key, inplace=True)
+            else:
+                assert key in df.columns
 
-            if "series.cfg" in df.index.names:
-                df.reset_index("series.cfg", drop=True, inplace=True)
+        series = df.pop("series")
+        cfg = df.pop("cfg")
 
-        df.reset_index(inplace=True)
-        df.set_index(indices, inplace=True)
-        df.sort_index(inplace=True)
+        df["series.cfg"] = series + "." + cfg
+
+        if "series.cfg" in df.index.names:
+            df.reset_index("series.cfg", drop=True, inplace=True)
+
+    df.reset_index(inplace=True)
+    df.set_index(indices, inplace=True)
+    df.sort_index(inplace=True)
+
     return df
 
 
@@ -338,7 +416,6 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
 #         columns=[data_col]
 #     )
 #
-#
 
 
 def call(df, func_name, data_col, *args, **kwargs):
@@ -370,7 +447,6 @@ def execute(df: pd.DataFrame, actions: t.Dict) -> pd.DataFrame:
 
 
 def main(*args, **kwargs):
-    ps.setup()
     logging_level: str
 
     if kwargs:
@@ -394,7 +470,7 @@ def main(*args, **kwargs):
 
         logging_level = proc_params.pop("logging_level", "INFO")
 
-    logging.getLogger().setLevel(logging_level)
+    ps.setup_logging(logging_level)
 
     result = {}
     for key in proc_params["run"]:

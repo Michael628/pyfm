@@ -612,10 +612,8 @@ def main(param_file: str):
 
     run_config_replacements = run_config.string_dict()
 
-    pyfm.setup()
-
-    if run_config.logging_level:
-        logging.getLogger().setLevel(run_config.logging_level)
+    logging_level = getattr(run_config, "logging_level", "INFO")
+    pyfm.setup_logging(logging_level)
 
     if run_config.hardware == "cpu":
         import numpy as xp
