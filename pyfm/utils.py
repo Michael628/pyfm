@@ -333,7 +333,7 @@ def catalog_files(outfile_generator, replacements) -> pd.DataFrame:
     for task_replacements, outfile_config in outfile_generator:
         assert outfile_config is not None
         outfile = outfile_config.filestem + outfile_config.ext
-        filekeys = formatkeys(outfile)
+        filekeys = format_keys(outfile)
         replacements.update(task_replacements)
         files = process_files(
             outfile,
