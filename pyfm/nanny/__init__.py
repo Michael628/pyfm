@@ -69,12 +69,16 @@ class TaskBase:
 class SubmitConfig(pyfm.ConfigBase):
     ens: str
     time: int
-    files: t.Dict[str, Outfile]
+    _files: t.Dict[str, Outfile]
+
+    @property
+    def files(self) -> t.Dict[str, Outfile]:
+        return self._files
 
     @classmethod
     def create(cls, **kwargs) -> "SubmitConfig":
         params = utils.deep_copy_dict(kwargs)
-        if files := params.get("files", {}):
+        if files := params.pop("files", {}):
             home = files.pop("home")
             for k, v in files.items():
                 files[k] = Outfile.create(
@@ -83,5 +87,5 @@ class SubmitConfig(pyfm.ConfigBase):
                     filestem=v["filestem"],
                     good_size=v["good_size"],
                 )
-        params["files"] = files
+        params["_files"] = files
         return super().create(**params)
