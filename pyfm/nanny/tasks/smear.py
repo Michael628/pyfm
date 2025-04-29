@@ -13,6 +13,7 @@ from pyfm.nanny import SubmitConfig, TaskBase
 @c.dataclass_with_getters
 class SubmitSmearConfig(SubmitConfig):
     space: int
+    node_geometry: str
     series: t.Optional[str] = None
     cfg: t.Optional[str] = None
 
@@ -41,6 +42,7 @@ def input_params(
 
     space = submit_config.space
     time = submit_config.time
+    node_geometry = submit_config.node_geometry
     input_string = "\n".join(
         [
             "prompt 0",
@@ -48,6 +50,8 @@ def input_params(
             f"ny {space}",
             f"nz {space}",
             f"nt {time}",
+            f"node_geometry {node_geometry}",
+            f"ionode_geometry {node_geometry}",
             "iseed 1234",
             f"reload_parallel {lat}",
             "u0   1",
