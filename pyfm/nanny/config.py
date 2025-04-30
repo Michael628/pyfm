@@ -2,7 +2,7 @@ import typing as t
 from dataclasses import field
 from pydantic.dataclasses import dataclass
 
-from pyfm import utils
+from pyfm import utils, setup_logging
 from pyfm.nanny import tasks
 from pyfm.nanny import SubmitConfig, TaskBase
 
@@ -98,6 +98,8 @@ def get_submit_config(param: t.Dict, job_config: JobConfig, **kwargs) -> SubmitC
 
     assert "files" not in submit_params
     submit_params["files"] = param["files"]
+
+    setup_logging(submit_params.get("logging_level", "INFO"))
 
     return tasks.get_submit_factory(job_config.job_type)(**submit_params, **kwargs)
 

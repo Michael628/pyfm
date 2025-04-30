@@ -325,7 +325,27 @@ def process_files(
 
 
 def catalog_files(outfile_generator, replacements) -> pd.DataFrame:
-    def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
+    """
+    Catalogs system file data based on the provided outfile generator and replacements.
+
+    Args:
+        outfile_generator (Iterable[Tuple[Dict[str, str], OutfileConfig]]):
+            An iterable that yields task-specific format key replacements and
+            corresponding outfile data (filestem, expected file size, file extension).
+        replacements (Dict[str, str]):
+            A dictionary of replacement keys and their corresponding values.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing details about the cataloged files,
+        including their existence, size, and other metadata.
+
+    Notes:
+        - The function processes files using a custom processor (`build_row`)
+          and formats keys based on the outfile configuration.
+        - It calculates additional metadata such as file existence and size.
+    """
+
+    def add_filepath(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
         repls["filepath"] = filepath
         return repls
 
@@ -337,7 +357,7 @@ def catalog_files(outfile_generator, replacements) -> pd.DataFrame:
         replacements.update(task_replacements)
         files = process_files(
             outfile,
-            processor=build_row,
+            processor=add_filepath,
             replacements={k: v for k, v in replacements.items() if k in filekeys},
         )
         dict_of_rows = {

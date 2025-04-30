@@ -55,39 +55,19 @@ def catalog_files(
     task_config: ContractTask,
     submit_config: SubmitContractConfig,
 ) -> t.List[str]:
-    def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
-        repls["filepath"] = filepath
-        return repls
+    def generate_outfile_formatting():
+        outfile_config = submit_config.files["contract"]
+        for diagram in task_config.diagrams:
+            diagram_replacements: t.Dict = submit_config.diagram_params[
+                diagram
+            ].string_dict()
+            yield diagram_replacements, outfile_config
+
+    outfile_generator = generate_outfile_formatting()
 
     replacements = submit_config.string_dict()
-    outfile_config = submit_config.files["contract"]
-    df = []
-    outfile = outfile_config.filestem + outfile_config.ext
-    filekeys = utils.format_keys(outfile)
-    for diagram in task_config.diagrams:
-        d_params = submit_config.diagram_params[diagram]
-        d_params.set_filenames(submit_config.files)
-        replacements["mass"] = d_params.mass
-        replacements["gamma_label"] = d_params.gamma_label
-        files = utils.process_files(
-            outfile,
-            processor=build_row,
-            replacements={k: v for k, v in replacements.items() if k in filekeys},
-        )
-        dict_of_rows = {
-            k: [file[k] for file in files] for k in files[0] if len(files) > 0
-        }
 
-        new_df = pd.DataFrame(dict_of_rows)
-        new_df["good_size"] = outfile_config.good_size
-        new_df["exists"] = new_df["filepath"].apply(os.path.exists)
-        new_df["file_size"] = None
-        new_df.loc[new_df["exists"], "file_size"] = new_df[new_df["exists"]][
-            "filepath"
-        ].apply(os.path.getsize)
-        df.append(new_df)
-
-    df = pd.concat(df, ignore_index=True)
+    df = utils.catalog_files(outfile_generator, replacements)
 
     return df
 
@@ -118,7 +98,8 @@ def processing_params(
     }
 
     for k in task_config.diagrams:
-        diagram_dict = submit_config.diagram_params[k].string_dict()
+        diagram = submit_config.diagram_params[k]
+        diagram_dict = diagram.string_dict()
         replacements.update({k: v for k, v in diagram_dict.items() if k in filekeys})
         proc_params[k] = {
             "logging_level": getattr(submit_config, "logging_level", "INFO"),
@@ -127,14 +108,19 @@ def processing_params(
                 "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
                 "dict_labels": ["seedkey", "gamma"],
             },
-            "actions": {"drop": "seedkey"},
             "out_files": {"filestem": outfile, "type": "dataframe"},
         }
+        actions = {}
+        if diagram.has_high:
+            actions["drop"] = "seedkey"
+
+        if diagram.npoint == 2:
+            actions["time_average"] = ["t1", "t2"]
+
+        if actions:
+            proc_params[k]["actions"] = actions
 
         proc_params[k]["load_files"]["replacements"] = replacements.copy()
-        # proc_params[k]["load_files"]["replacements"]["diagram_label"] = diagram_dict[
-        #     "diagram_label"
-        # ]
         proc_params[k]["load_files"]["array_params"] = {
             "order": ["t1", "t2"],
             "labels": {

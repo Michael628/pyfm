@@ -214,7 +214,7 @@ class ConfigBase:
         """
         res = {}
         for k, v in self.__dict__.items():
-            if not k.startswith("_"):
+            if not k.startswith("_") and v is not None:
                 res[k] = v
 
         return res
