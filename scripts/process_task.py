@@ -1,3 +1,4 @@
+from pyfm import setup_logging
 from pyfm.processing import processor
 import argparse
 
@@ -11,6 +12,6 @@ if __name__ == "__main__":
 
     if args.step:
         print("Step value:", args.step)
-        result = processor.main(step)
+        result = processor.main(args.step)
     else:
         result = processor.main()
