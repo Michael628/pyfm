@@ -89,7 +89,7 @@ def processing_params(
     infile_stem = outfile_dict["contract"].filename
     outfile = outfile_dict["contract"].filestem
     filekeys = utils.format_keys(infile_stem)
-    proc_params = {"run": task_config.diagrams}
+    proc_params: t.Dict[str, t.Any] = {"run": task_config.diagrams}
     outfile = outfile.replace("correlators", "dataframes")
     outfile = outfile.replace("_{series}", "")
     outfile += ".h5"
@@ -97,12 +97,19 @@ def processing_params(
         k: v for k, v in submit_config.string_dict().items() if k in filekeys
     }
 
-    for k in task_config.diagrams:
-        diagram = submit_config.diagram_params[k]
+    for diagram_key in task_config.diagrams:
+        diagram = submit_config.diagram_params[diagram_key]
+
+        # TODO: Make processing_params general to 3, and 4pt functions
+        assert diagram.npoint == 2, "Only 2-point diagrams are currently supported"
+
         diagram_dict = diagram.string_dict()
+        logging_level = (
+            submit_config.logging_level if submit_config.logging_level else "INFO"
+        )
         replacements.update({k: v for k, v in diagram_dict.items() if k in filekeys})
-        proc_params[k] = {
-            "logging_level": getattr(submit_config, "logging_level", "INFO"),
+        proc_params[diagram_key] = {
+            "logging_level": logging_level,
             "load_files": {
                 "filestem": infile_stem,
                 "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
@@ -110,24 +117,38 @@ def processing_params(
             },
             "out_files": {"filestem": outfile, "type": "dataframe"},
         }
+        index = ["series.cfg", "gamma"]
         actions = {}
         if diagram.has_high:
             actions["drop"] = "seedkey"
+        else:
+            index.append("seedkey")
 
-        if diagram.npoint == 2:
-            actions["time_average"] = ["t1", "t2"]
+        t_order = [f"t{i}" for i in range(1, diagram.npoint + 1)]
+        array_params = {
+            "order": t_order,
+            "labels": {},
+        }
+
+        t_labels = f"0..{submit_config.time - 1}"
+        # TODO: Make time_average bool determined by something else.
+        time_average = True
+        if time_average:
+            actions["time_average"] = [t_order[0], t_order[-1]]
+            index += t_order[1:-1] + ["t"]
+        else:
+            index += array_params["order"]
+
+        actions["index"] = index
+
+        for t_index in array_params["order"]:
+            array_params["labels"][t_index] = t_labels
 
         if actions:
-            proc_params[k]["actions"] = actions
+            proc_params[diagram_key]["actions"] = actions
 
-        proc_params[k]["load_files"]["replacements"] = replacements.copy()
-        proc_params[k]["load_files"]["array_params"] = {
-            "order": ["t1", "t2"],
-            "labels": {
-                "t1": f"0..{submit_config.time - 1}",
-                "t2": f"0..{submit_config.time - 1}",
-            },
-        }
+        proc_params[diagram_key]["load_files"]["replacements"] = replacements.copy()
+        proc_params[diagram_key]["load_files"]["array_params"] = array_params
 
     return proc_params
 

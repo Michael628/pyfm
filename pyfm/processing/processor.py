@@ -223,7 +223,7 @@ def drop(df, data_col, *args):
     return df
 
 
-def index(df, data_col: str, indices: t.List[str]) -> pd.DataFrame:
+def index(df, data_col: str, *args) -> pd.DataFrame:
     """
     Reorganizes the given DataFrame by resetting and setting specified indices.
 
@@ -245,14 +245,25 @@ def index(df, data_col: str, indices: t.List[str]) -> pd.DataFrame:
     - AssertionError: If any element in `indices` is not a string.
     - AssertionError: If "series" or "cfg" is not found in the DataFrame when "series.cfg" needs to be built.
     """
+    indices = list(args)
+
     assert all([isinstance(i, str) for i in indices])
 
     if not indices:
         return df
 
-    build_seriescfg = "series.cfg" in indices
-    build_seriescfg &= "series.cfg" not in df.index.names
-    build_seriescfg &= "series.cfg" not in df.columns
+    series_cfg = "series_cfg"
+    # HACK: force series.cfg to become series_cfg
+    if "series.cfg" in indices:
+        i = indices.index("series.cfg")
+        indices[i] = series_cfg
+    df.rename({"series.cfg": series_cfg}, axis="index", inplace=True)
+    df.rename({"series.cfg": series_cfg}, axis="columns", inplace=True)
+    # End HACK
+
+    build_seriescfg = series_cfg in indices
+    build_seriescfg &= series_cfg not in df.index.names
+    build_seriescfg &= series_cfg not in df.columns
 
     if build_seriescfg:
         series: pd.DataFrame
@@ -266,10 +277,10 @@ def index(df, data_col: str, indices: t.List[str]) -> pd.DataFrame:
         series = df.pop("series")
         cfg = df.pop("cfg")
 
-        df["series.cfg"] = series + "." + cfg
+        df[series_cfg] = series + "." + cfg
 
-        if "series.cfg" in df.index.names:
-            df.reset_index("series.cfg", drop=True, inplace=True)
+        if series_cfg in df.index.names:
+            df.reset_index(series_cfg, drop=True, inplace=True)
 
     df.reset_index(inplace=True)
     df.set_index(indices, inplace=True)
@@ -383,7 +394,12 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
     one at a time.
     """
     assert len(avg_indices) == 2
-    tvar = "t" if "t" in df.index.names else "dt"
+    # tvar = "t" if "t" in df.index.names else "dt"
+    # Old mysterious line of code above. Just in case this makes sense in some world, assert that it doesn't make sense.
+    assert "t" not in df.index.names
+    tvar = "t"
+
+    logging.debug(f"{df.index.names}: using {tvar}")
 
     def apply_func(x):
         nt = int(np.sqrt(len(x)))
@@ -393,7 +409,12 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
             {data_col: a2a.time_average(corr)}, index=pd.Index(range(nt), name=tvar)
         )
 
-    return group_apply(df, apply_func, data_col, list(avg_indices))
+    df_out = group_apply(df, apply_func, data_col, list(avg_indices))
+
+    logging.debug("Time average result:")
+    logging.debug(df_out)
+
+    return df_out
 
 
 # def fold(df: pd.DataFrame, apply_fold: bool = True) -> pd.DataFrame:
@@ -421,6 +442,7 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
 def call(df, func_name, data_col, *args, **kwargs):
     func = globals().get(func_name, None)
     if callable(func):
+        logging.debug(f"Calling {func_name} with args: {args}, kwargs: {kwargs}")
         return func(df, data_col, *args, **kwargs)
     else:
         raise AttributeError(f"Function '{func_name}' not found or is not callable.")
@@ -497,11 +519,3 @@ def main(*args, **kwargs):
                 raise NotImplementedError(f"No support for out file type {out_type}.")
 
     return result
-
-
-if __name__ == "__main__":
-    if len(sys.argv) == 2:
-        step = sys.argv[1]
-        result = main(step)
-    else:
-        result = main()
