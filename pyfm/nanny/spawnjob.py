@@ -381,24 +381,15 @@ def nanny_loop(YAML):
 
 
 ############################################################
-def main(step: t.Optional[str] = None, cfgnos: t.Optional[t.List[str]] = None):
+def main():
     # Set permissions
     os.system("umask 022")
 
     YAML = "params.yaml"
 
-    if not step:
-        nanny_loop(YAML)
-    else:
-        param = utils.load_param(YAML)
-        make_inputs(param, step, [(c, "") for c in cfgnos])
+    nanny_loop(YAML)
 
 
 ############################################################
 if __name__ == "__main__":
-    if len(sys.argv) > 2:
-        step = sys.argv[1]
-        cfgnos = sys.argv[2:]
-        main(step, cfgnos)
-    else:
-        main()
+    main()
