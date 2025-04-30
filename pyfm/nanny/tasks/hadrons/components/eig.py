@@ -12,6 +12,7 @@ class EigHadronsComponent(ComponentBase):
     multifile: bool = False
     save_eigs: bool = False
     save_evals: bool = True
+    residual: float = 1e-8
     masses: t.List[str] = Field(default_factory=list)
 
     def update(self, **kwargs):
@@ -26,6 +27,7 @@ class EigHadronsComponent(ComponentBase):
         outfile_dict = submit_config.files
         epack_path = ""
         multifile = str(self.multifile).lower()
+        residual = str(self.residual)
         modules = {}
         if self.load or self.save_eigs:
             epack_path = outfile_dict["eig"].filestem.format(**submit_conf_dict)
@@ -50,6 +52,7 @@ class EigHadronsComponent(ComponentBase):
                 nk=submit_conf_dict["nk"],
                 nm=submit_conf_dict["nm"],
                 multifile=multifile,
+                residual=residual,
                 output=epack_path,
             )
 

@@ -22,7 +22,13 @@ class GaugeHadronsComponent(ComponentBase):
             if self.free:
                 modules[name] = [hadmods.unit_gauge(name)]
             else:
-                gauge_outfile = submit_config.files[name]
+                if gauge_outfile := submit_config.files.get(name, {}):
+                    pass
+                else:
+                    gauge_outfile = submit_config.files.get(
+                        name.removeprefix("gauge_") + "_links", {}
+                    )
+                assert gauge_outfile
                 gauge_filepath = gauge_outfile.filestem.format(**submit_conf_dict)
 
                 modules[name] = hadmods.load_gauge(name, gauge_filepath)
