@@ -26,6 +26,10 @@ def processing_params(job_type: str, task_type: str, *args, **kwargs) -> t.Dict:
     return task_builder_module(job_type, task_type).processing_params(*args, **kwargs)
 
 
+def catalog_files(job_type: str, task_type: str, *args, **kwargs) -> t.List[str]:
+    return task_builder_module(job_type, task_type).catalog_files(*args, **kwargs)
+
+
 def bad_files(job_type: str, task_type: str, *args, **kwargs) -> t.List[str]:
     return task_builder_module(job_type, task_type).bad_files(*args, **kwargs)
 

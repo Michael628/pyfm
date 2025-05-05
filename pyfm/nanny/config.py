@@ -126,9 +126,7 @@ def bad_files(job_config: JobConfig, *args, **kwargs) -> t.List[str]:
     )
 
 
-if __name__ == "__main__":
-    lmi_builder = tasks.get_task_factory("hadrons", "lmi")
-
-    a = lmi_builder.from_dict(
-        {"epack": {"load": False}, "meson": {"gamma": "onelink", "mass": "l"}}
+def catalog_files(job_config: JobConfig, *args, **kwargs) -> t.List[str]:
+    return tasks.catalog_files(
+        job_config.job_type, job_config.task_type, job_config.tasks, *args, **kwargs
     )
