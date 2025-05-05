@@ -4,7 +4,7 @@ import logging
 import os
 import typing as t
 from concurrent.futures import ThreadPoolExecutor
-from functools import partial
+from functools import partial, singledispatch
 
 import h5py
 import numpy as np
@@ -18,9 +18,16 @@ dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
 
 
-# ------ Data structure Functions ------ #
+def frame_to_frame(data, **y):
+    assert isinstance(data, pd.DataFrame)
+    return data
+
+
+data_to_frame = singledispatch(frame_to_frame)
+
+
 def ndarray_to_frame(
-    array: np.ndarray, array_params: config.LoadArrayConfig
+    array: np.ndarray, array_config: config.LoadArrayConfig
 ) -> pd.DataFrame:
     """
     Converts a multidimensional numpy array into a pandas DataFrame with a MultiIndex.
@@ -52,50 +59,81 @@ def ndarray_to_frame(
       a single-column DataFrame.
     """
 
-    if len(array_params.order) == 1 and array_params.order[0] == "dt":
-        array_params.labels["dt"] = list(range(np.prod(array.shape)))
+    if len(array_config.order) == 1 and array_config.order[0] == "dt":
+        array_config.labels["dt"] = list(range(np.prod(array.shape)))
 
-    assert len(array_params.labels) == len(array_params.order)
+    assert len(array_config.labels) == len(array_config.order)
 
-    indices = [array_params.labels[k] for k in array_params.order]
+    indices = [array_config.labels[k] for k in array_config.order]
 
     index: pd.MultiIndex = pd.MultiIndex.from_tuples(
-        itertools.product(*indices), names=array_params.order
+        itertools.product(*indices), names=array_config.order
     )
 
     return pd.Series(array.reshape((-1,)), index=index, name="corr").to_frame()
 
 
+data_to_frame.register(np.ndarray)(ndarray_to_frame)
+
+
+def dict_to_frame(data: dict, dict_config: config.LoadDictConfig) -> pd.DataFrame:
+    def entry_gen(
+        nested: t.Dict, _index: t.Tuple = ()
+    ) -> t.Generator[t.Tuple[t.Tuple, np.ndarray], None, None]:
+        """Recursive Depth first search of nested dictionaries building
+        list of indices from dictionary keys.
+
+
+        Parameters
+        ----------
+            nested: dict
+                The current sub-dictionary from traversing path `_index`
+            _index: tuple(str)
+                The sequence of keys traversed thus far in the original
+                dictionary
+
+        Yields
+        ------
+        (path, data)
+            path: tuple(str)
+                The sequence of keys traversed to get to `data` in
+                the nested dictionary.
+            data: ndarray
+                The data that was found in `nested` by traversing indices
+                in `path`.
+        """
+
+        if isinstance(next(iter(nested.values())), np.ndarray):
+            assert all((isinstance(n, np.ndarray) for n in nested.values()))
+
+            for key, val in nested.items():
+                yield (_index + (key,), val)
+        else:
+            for key in nested.keys():
+                yield from entry_gen(nested[key], _index + (key,))
+
+    indices, concat_data = zip(*((index, array) for index, array in entry_gen(data)))
+    concat_data = [data_to_frame(x, dict_config.array_config) for x in concat_data]
+
+    for index, frame in zip(indices, concat_data):
+        frame[dict_config.labels] = list(index)
+
+    df = pd.concat(concat_data)
+
+    df.set_index(dict_config.labels, append=True, inplace=True)
+
+    return df
+
+
+data_to_frame.register(dict_to_frame)
+
+
 def h5_to_frame(
     file: h5py.File,
-    data_to_frame: t.Dict[str, dataFrameFn],
-    h5_params: config.LoadH5Config,
+    h5_config: config.LoadH5Config,
 ) -> pd.DataFrame:
-    """
-    Converts datasets from an HDF5 file to a Pandas DataFrame.
-
-    Parameters:
-    file : h5py.File
-        The HDF5 file object containing the datasets to be converted.
-    data_to_frame : Dict[str, Callable]
-        A dictionary mapping dataset labels to functions that convert their data into DataFrames.
-    h5_params : config.LoadH5Config
-        Configuration object specifying parameters for loading datasets from the HDF5 file,
-        including dataset names and additional metadata.
-
-    Returns:
-    pd.DataFrame
-        A Pandas DataFrame constructed from the datasets in the HDF5 file. If more than one dataset
-        is included, an additional index column is added to distinguish between them.
-
-    Raises:
-    ValueError
-        If a specified dataset is not found in the HDF5 file.
-    """
-    assert all(k in data_to_frame.keys() for k in h5_params.datasets.keys())
-
     df = []
-    for k, v in h5_params.datasets.items():
+    for k, v in h5_config.datasets.items():
         dataset_label = (x for x in v if x in file)
 
         try:
@@ -105,15 +143,18 @@ def h5_to_frame(
         except StopIteration:
             raise ValueError(f"dataset {k} not found in file.")
 
-        frame = data_to_frame[k](data)
-        frame[h5_params.name] = k
+        frame = ndarray_to_frame(data, h5_config.array_config[k])
+        frame[h5_config.name] = k
         df.append(frame)
 
     df = pd.concat(df)
 
-    df.set_index(h5_params.name, append=True, inplace=True)
+    df.set_index(h5_config.name, append=True, inplace=True)
 
     return df
+
+
+data_to_frame.register(h5_to_frame)
 
 
 def frame_to_dict(df: pd.DataFrame, dict_depth: int) -> t.Union[t.Dict, np.ndarray]:
@@ -172,100 +213,55 @@ def frame_to_dict(df: pd.DataFrame, dict_depth: int) -> t.Union[t.Dict, np.ndarr
         return {k: array[i] for k, i in zip(keys, range(len(array)))}
 
 
-def dict_to_frame(
-    data: t.Union[t.Dict, np.ndarray],
-    data_to_frame: dataFrameFn,
-    dict_labels: t.Tuple[str] = tuple(),
-) -> pd.DataFrame:
+def get_pickle_loader(filename: str, _: t.Dict, **kwargs):
+    data = np.load(filename, allow_pickle=True)
+    if isinstance(data, np.ndarray) and len(data.shape) == 0:
+        data = data.item()
+
+    return data_to_frame(data, **kwargs)
+
+
+def get_h5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
     """
-    Processes nested dictionaries or NumPy arrays and converts them into a pandas DataFrame.
+    Load data based on the given I/O configuration.
+
+    This function attempts to load data from an HDF5 file.
+    If the file cannot be loaded directly using pandas due to certain errors (e.g., ValueError, NotImplementedError),
+    it will fallback to using the provided H5 loading configurations from the `io_config`.
+    These configurations specify parameters for handling data arrays and conversion methods for HDF5 structures.
 
     Parameters:
-    data: Dict or ndarray
-        The main input which could either be a nested dictionary structure containing NumPy arrays
-        as values or a NumPy array itself.
-    data_to_frame: callable
-        A function used to convert an input ndarray into a pandas DataFrame.
-    dict_labels: tuple, optional
-        A tuple containing strings which represent labels for additional columns created based on
-        dictionary keys in the nested structure.
+        filename (str): File path to the pickle file.
 
     Returns:
-    DataFrame
-        A pandas DataFrame created from the input data. If `data` is a dictionary, its indices
-        (keys in hierarchical order) are appended as additional columns using the strings from
-        `dict_labels`. If `data` is an ndarray, the function processes it directly via `data_to_frame`.
-
-    Raises:
-    AssertionError
-        If `data` is of an unsupported type, i.e., not a dictionary or NumPy array, or if values in
-        a nested dictionary are inconsistent types.
+        pd.DataFrame
+            A DataFrame containing formatted data from the specified HDF5 file.
     """
+    try:
+        return pd.read_hdf(filename)
+    except (ValueError, NotImplementedError):
+        h5_config = config.LoadH5Config.create(**kwargs)
+        h5_config = config.LoadH5Config.string_replace(h5_config, repl)
 
-    def entry_gen(
-        nested: t.Dict, _index: t.Tuple = ()
-    ) -> t.Generator[t.Tuple[t.Tuple, np.ndarray], None, None]:
-        """Recursive Depth first search of nested dictionaries building
-        list of indices from dictionary keys.
+        file = h5py.File(filename)
+
+        return h5_to_frame(file, h5_config)
 
 
-        Parameters
-        ----------
-            nested: dict
-                The current sub-dictionary from traversing path `_index`
-            _index: tuple(str)
-                The sequence of keys traversed thus far in the original
-                dictionary
-
-        Yields
-        ------
-        (path, data)
-            path: tuple(str)
-                The sequence of keys traversed to get to `data` in
-                the nested dictionary.
-            data: ndarray
-                The data that was found in `nested` by traversing indices
-                in `path`.
-        """
-
-        if isinstance(next(iter(nested.values())), np.ndarray):
-            assert all((isinstance(n, np.ndarray) for n in nested.values()))
-
-            for key, val in nested.items():
-                yield (_index + (key,), val)
-        else:
-            for key in nested.keys():
-                yield from entry_gen(nested[key], _index + (key,))
-
-    if isinstance(data, np.ndarray):
-        return data_to_frame(data)
+def get_file_loader(filestem: str):
+    if filestem.endswith(".p") or filestem.endswith(".npy"):
+        return get_pickle_loader
+    elif filestem.endswith(".h5"):
+        return get_h5_loader
     else:
-        assert isinstance(data, t.Dict)
-
-        indices, concat_data = zip(
-            *((index, array) for index, array in entry_gen(data))
-        )
-        concat_data = [data_to_frame(x) for x in concat_data]
-
-        for index, frame in zip(indices, concat_data):
-            frame[list(dict_labels)] = list(index)
-
-        df = pd.concat(concat_data)
-
-        df.set_index(list(dict_labels), append=True, inplace=True)
-
-    return df
+        raise ValueError("File must have extension '.p' or '.h5'")
 
 
-# ------ End data structure functions ------ #
-
-
-# ------ Input functions ------ #
 async def load_files(
     filestem: str,
-    file_loader: loadFn,
     replacements: t.Optional[t.Dict] = None,
     regex: t.Optional[t.Dict] = None,
+    **kwargs,
 ):
     """
     Loads files and processes them using a provided processing function and optional replacements or regex operations.
@@ -281,7 +277,9 @@ async def load_files(
     pd.DataFrame: A pandas DataFrame result after processing the loaded files.
     """
 
-    async def file_loader_wrapper(filename: str, repl: t.Dict) -> pd.DataFrame:
+    async def file_loader_wrapper(
+        file_loader, filename: str, repl: t.Dict
+    ) -> pd.DataFrame:
         logging.debug(f"Loading file: {filename}")
         new_data: pd.DataFrame = file_loader(filename, repl)
 
@@ -290,144 +288,21 @@ async def load_files(
 
         return new_data
 
-    files = utils.process_files(filestem, lambda *x: x, replacements, regex)
+    def get_filename(*args):
+        return args
+
+    files = utils.process_files(filestem, get_filename, replacements, regex)
+
+    file_loader = partial(get_file_loader(filestem), **kwargs)
+    flw = partial(file_loader_wrapper, file_loader)
 
     async_tasks: t.List[asyncio.Task]
     async with asyncio.TaskGroup() as tg:
-        async_tasks = [tg.create_task(file_loader_wrapper(*file)) for file in files]
+        async_tasks = [tg.create_task(flw(*file)) for file in files]
 
     return [t.result() for t in async_tasks]
 
 
-def load(io_config: config.DataioConfig) -> t.Awaitable[pd.DataFrame]:
-    """
-    Load data from a variety of file formats and process it into a pandas DataFrame.
-
-    Parameters:
-        io_config (config.DataioConfig): Configuration object containing file and processing parameters.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the processed data.
-
-    Raises:
-        ValueError: If the file's contents are of an unsupported type or the file extension is unrecognized.
-
-    The function supports loading data from pickle (.p or .npy) and HDF5 (.h5) formatted files.
-    For pickle files, it uses a custom loader that converts ndarrays or dictionaries into DataFrames.
-    For HDF5 files, it reads the data using pandas' HDF support or processes it manually with custom configurations.
-    Actions specified in the io_config object are then applied to the processed data.
-    """
-
-    def pickle_loader(filename: str, _: t.Dict):
-        """
-        Load data from a given file into a pandas DataFrame.
-
-        Parameters:
-            filename (str): File path to the pickle file.
-
-        Returns:
-            pd.DataFrame: Data loaded from the file and transformed into a
-                          pandas DataFrame.
-
-        Raises:
-            ValueError: If the file contents are not a dictionary or pandas DataFrame.
-
-        Notes:
-            - The file specified by 'filename' is expected to be a numpy file (.npy)
-              with either a dictionary or pandas DataFrame.
-            - Data transformation uses the settings provided in 'io_config' to
-              ensure compatibility with the DataFrame structure.
-        """
-        dict_labels: t.Tuple = tuple()
-        if io_config.dict_labels:
-            dict_labels = tuple(io_config.dict_labels)
-
-        array_params: config.LoadArrayConfig = io_config.array_params
-
-        data_to_frame = partial(ndarray_to_frame, array_params=array_params)
-
-        data = np.load(filename, allow_pickle=True)
-        if isinstance(data, np.ndarray) and len(data.shape) == 0:
-            data = data.item()
-
-        if isinstance(data, pd.DataFrame):
-            return data
-        elif isinstance(data, np.ndarray):
-            return dict_to_frame(data, data_to_frame=data_to_frame)
-        elif isinstance(data, t.Dict):
-            return dict_to_frame(
-                data, data_to_frame=data_to_frame, dict_labels=dict_labels
-            )
-        else:
-            raise ValueError(
-                (
-                    f"Contents of {filename} is of type {type(data)}."
-                    "Expecting dictionary or pandas DataFrame."
-                )
-            )
-
-    def h5_loader(filename: str, repl: t.Dict):
-        """
-        Load data based on the given I/O configuration.
-
-        This function attempts to load data from an HDF5 file.
-        If the file cannot be loaded directly using pandas due to certain errors (e.g., ValueError, NotImplementedError),
-        it will fallback to using the provided H5 loading configurations from the `io_config`.
-        These configurations specify parameters for handling data arrays and conversion methods for HDF5 structures.
-
-        Parameters:
-            filename (str): File path to the pickle file.
-
-        Returns:
-            pd.DataFrame
-                A DataFrame containing formatted data from the specified HDF5 file.
-        """
-        try:
-            return pd.read_hdf(filename)
-        except (ValueError, NotImplementedError):
-            assert io_config.h5_params is not None
-            assert isinstance(io_config.array_params, t.Dict)
-
-            h5_params = {
-                "name": io_config.h5_params.name,
-                "datasets": {
-                    k.format(**repl): [vv.format(**repl) for vv in v]
-                    for k, v in io_config.h5_params.datasets.items()
-                },
-            }
-            h5_params = config.LoadH5Config(**h5_params)
-
-            array_params: t.Dict[str, config.LoadArrayConfig]
-            array_params = io_config.array_params
-
-            data_to_frame = {
-                k.format(**repl): partial(
-                    ndarray_to_frame, array_params=array_params[k]
-                )
-                for k in array_params.keys()
-            }
-            file = h5py.File(filename)
-
-            return h5_to_frame(file, data_to_frame, h5_params)
-
-    replacements = io_config.replacements
-    regex = io_config.regex
-    filestem = io_config.filestem
-
-    if filestem.endswith(".p") or filestem.endswith(".npy"):
-        file_loader = pickle_loader
-    elif filestem.endswith(".h5"):
-        file_loader = h5_loader
-    else:
-        raise ValueError("File must have extension '.p' or '.h5'")
-
-    return load_files(filestem, file_loader, replacements, regex)
-
-
-# ------ End Input functions ------ #
-
-
-# ------ Input functions ------ #
 def write_data(
     df: pd.DataFrame, filestem: str, write_fn: t.Callable[[pd.DataFrame, str], None]
 ) -> None:
@@ -459,6 +334,7 @@ def write_data(
 
         for group, df_group in df.groupby(by=repl_keys):
             repl_vals = (group,) if isinstance(group, str) else group
+
             repl = dict(zip(repl_keys, repl_vals))
 
             filename = filestem.format(**repl)
@@ -517,77 +393,90 @@ def write_frame(df: pd.DataFrame, filestem: str) -> None:
     )
 
 
-def main(**kwargs) -> t.Awaitable:
-    """
-    Main function to handle configuration and data loading.
-
-    Parameters:
-    kwargs: Arbitrary keyword arguments
-      - logging_level: str (optional)
-        Optional logging level to set for the logger.
-      - load_files: parameter key used to fetch configuration data.
-
-    Behavior:
-    If `kwargs` are provided:
-      - Extracts logging level and attempts to fetch the DataIO configuration using the `load_files` key.
-
-    If `kwargs` are not provided:
-      - Reads the `params.yaml` file to obtain `load_files` key data to build DataIO configuration.
-      - Raises a ValueError if the `load_files` key is missing.
-
-    Returns:
-      Configuration data loaded using the load function.
-    """
-    logging_level: str
-    if kwargs:
-        logging_level = kwargs.pop("logging_level", "INFO")
-        dataio_config = config.get_dataio_config(kwargs["load_files"])
-    else:
-        try:
-            params = utils.load_param("params.yaml")["load_files"]
-        except KeyError as exc:
-            raise ValueError("Expecting `load_files` key in params.yaml file.") from exc
-
-        logging_level = params.pop("logging_level", "INFO")
-        dataio_config = config.get_dataio_config(params)
-
-    logging.getLogger().setLevel(logging_level)
-
+def load(*args, **kwargs):
     loop = None
     try:
         # Try to get the running loop (will raise RuntimeError if not in a running loop)
         loop = asyncio.get_running_loop()
     except RuntimeError:
-        # If no running loop, use asyncio.run() as normal
-        df = asyncio.run(load(dataio_config))
+        pass
 
-    async def load_wrapper(io_config: config.DataioConfig) -> pd.DataFrame:
-        df = await load(io_config)
-        actions: t.Dict = dataio_config.actions
-        df = [processor.execute(elem, actions=actions) for elem in df]
+    async def load_wrapper() -> pd.DataFrame:
+        df = await load_files(*args, **kwargs)
 
         return pd.concat(df)
 
     if loop:
         if loop.is_running():
             # If inside a running loop (e.g., Jupyter), run the coroutine with `loop.create_task`
-            return loop.create_task(load_wrapper(dataio_config))
+            return loop.create_task(load_wrapper())
         else:
             # If not running, use `loop.run_until_complete`
-            return loop.run_until_complete(load_wrapper(dataio_config))
-
-    actions: t.Dict = dataio_config.actions
-    df = [processor.execute(elem, actions=actions) for elem in df]
-
-    df = pd.concat(df)
-
-    return df
+            return loop.run_until_complete(load_wrapper())
 
 
-if __name__ == "__main__":
-    print("Assuming python interpreter is being run in interactive mode.")
-    print(("Result will be stored in `result` variable upon load file completion."))
-    result = main()
-    logging.info("Result of file load is now stored in `result` variable.")
-
-# ------ End Output functions ------ #
+# def main(**kwargs) -> t.Awaitable:
+#     """
+#     Main function to handle configuration and data loading.
+#
+#     Parameters:
+#     kwargs: Arbitrary keyword arguments
+#       - logging_level: str (optional)
+#         Optional logging level to set for the logger.
+#       - load_files: parameter key used to fetch configuration data.
+#
+#     Behavior:
+#     If `kwargs` are provided:
+#       - Extracts logging level and attempts to fetch the DataIO configuration using the `load_files` key.
+#
+#     If `kwargs` are not provided:
+#       - Reads the `params.yaml` file to obtain `load_files` key data to build DataIO configuration.
+#       - Raises a ValueError if the `load_files` key is missing.
+#
+#     Returns:
+#       Configuration data loaded using the load function.
+#     """
+#     logging_level: str
+#     if kwargs:
+#         logging_level = kwargs.pop("logging_level", "INFO")
+#         dataio_config = config.get_dataio_config(kwargs["load_files"])
+#     else:
+#         try:
+#             params = utils.load_param("params.yaml")["load_files"]
+#         except KeyError as exc:
+#             raise ValueError("Expecting `load_files` key in params.yaml file.") from exc
+#
+#         logging_level = params.pop("logging_level", "INFO")
+#         dataio_config = config.get_dataio_config(params)
+#
+#     logging.getLogger().setLevel(logging_level)
+#
+#     loop = None
+#     try:
+#         # Try to get the running loop (will raise RuntimeError if not in a running loop)
+#         loop = asyncio.get_running_loop()
+#     except RuntimeError:
+#         # If no running loop, use asyncio.run() as normal
+#         df = asyncio.run(load(dataio_config))
+#
+#     async def load_wrapper(io_config: config.DataioConfig) -> pd.DataFrame:
+#         df = await load(io_config)
+#         actions: t.Dict = dataio_config.actions
+#         df = [processor.execute(elem, actions=actions) for elem in df]
+#
+#         return pd.concat(df)
+#
+#     if loop:
+#         if loop.is_running():
+#             # If inside a running loop (e.g., Jupyter), run the coroutine with `loop.create_task`
+#             return loop.create_task(load_wrapper(dataio_config))
+#         else:
+#             # If not running, use `loop.run_until_complete`
+#             return loop.run_until_complete(load_wrapper(dataio_config))
+#
+#     actions: t.Dict = dataio_config.actions
+#     df = [processor.execute(elem, actions=actions) for elem in df]
+#
+#     df = pd.concat(df)
+#
+#     return df

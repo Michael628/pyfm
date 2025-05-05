@@ -6,34 +6,6 @@ from pyfm import ConfigBase, utils
 
 
 @dataclass
-class LoadH5Config:
-    """Parameters providing index names and values to convert hdf5 datasets
-    into a DataFrame.
-
-    Properties
-    ----------
-        name: str
-            The name to give the datasets provided in `datasets`
-        datasets: dict(str, str|list(str))
-            Dictionary keys will correspond to DataFrame index labels.
-            Dictionary values are hdf5 file paths to access corresponding data. If given
-                a list of paths, the first valid path will be used.
-    """
-
-    name: str
-    datasets: t.Dict[str, t.List[str]]
-
-    @classmethod
-    def from_dict(cls, **kwargs):
-        params = utils.deep_copy_dict(kwargs)
-        for k, v in params["datasets"].items():
-            if isinstance(v, str):
-                params["datasets"][k] = [v]
-
-        return cls(**params)
-
-
-@dataclass
 class LoadArrayConfig:
     """Parameters providing index names and values to convert ndarray
     into a DataFrame.
@@ -60,14 +32,70 @@ class LoadArrayConfig:
 
 
 @dataclass
+class LoadDictConfig:
+    labels: t.List[str]
+    array_config: LoadArrayConfig
+
+    def __init__(
+        self,
+        labels: t.List[str],
+        array_params: t.Dict,
+    ) -> None:
+        self.labels = labels
+        self.array_config = LoadArrayConfig(**array_params)
+
+
+@dataclass
+class LoadH5Config:
+    name: str
+    datasets: t.Dict[str, t.List[str]]
+    array_config: t.Dict[str, LoadArrayConfig]
+
+    @classmethod
+    def create(
+        cls,
+        name: str,
+        datasets: t.Dict,
+        array_params: t.Dict,
+    ) -> "LoadH5Config":
+        assert all((k in array_params for k in datasets.keys())), (
+            "Must define array_params for each data set"
+        )
+
+        dsets = {}
+        for k, v in datasets.items():
+            if isinstance(datasets[k], str):
+                dsets[k] = [v]
+            else:
+                dsets[k] = v
+
+        array_config = {}
+        for k, v in array_params.items():
+            array_config[k] = LoadArrayConfig(**v)
+
+        return cls(name=name, datasets=dsets, array_config=array_config)
+
+    @classmethod
+    def string_replace(cls, h5_config: "LoadH5Config", repl: t.Dict[str, str]):
+        h5_params = {
+            "name": h5_config.name,
+            "datasets": {
+                k.format(**repl): [vv.format(**repl) for vv in v]
+                for k, v in h5_config.datasets.items()
+            },
+            "array_config": {
+                k.format(**repl): v for k, v in h5_config.array_config.items()
+            },
+        }
+
+        return cls(**h5_params)
+
+
+@dataclass
 class DataioConfig(ConfigBase):
     filestem: str
-    array_params: t.Optional[t.Union[LoadArrayConfig, t.Dict[str, LoadArrayConfig]]] = (
-        None
-    )
     replacements: t.Optional[t.Dict[str, t.Union[str, t.List[str]]]] = None
     regex: t.Optional[t.Dict[str, str]] = None
-    h5_params: t.Optional[LoadH5Config] = None
     dict_labels: t.Optional[t.List[str]] = None
     actions: t.Optional[t.Dict[str, t.Any]] = None
 
@@ -99,16 +127,7 @@ class DataioConfig(ConfigBase):
         """
 
         obj_vars = kwargs.copy()
-        h5_params = obj_vars.pop("h5_params", {})
         array_params = obj_vars.pop("array_params", {})
-        if h5_params:
-            obj_vars["h5_params"] = LoadH5Config.from_dict(**h5_params)
-
-            obj_vars["array_params"] = {}
-            for k, v in array_params.items():
-                obj_vars["array_params"][k] = LoadArrayConfig(**v)
-        elif array_params:
-            obj_vars["array_params"] = LoadArrayConfig(**array_params)
 
         return DataioConfig(**obj_vars)
 
