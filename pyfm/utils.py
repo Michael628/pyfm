@@ -1,4 +1,5 @@
 import pandas as pd
+import glob
 import copy
 import itertools
 import logging
@@ -193,25 +194,24 @@ def file_regex_gen(filestem: partial, regex: t.Dict[str, str]):
     if len(regex) == 0:
         yield {}, filestem()
     else:
+        glob_repl = {k: "*" for k in regex.keys()}
+
+        files = glob.glob(filestem(**glob_repl))
+
         # Build regex objects to catch each replacement
         regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
-        file_pattern = filestem(**regex_repl)
 
-        # FIXME: Assumes all regex matches occur in file name,
-        # not in the directory path.
-        directory, match = os.path.split(file_pattern)
-
-        files: t.List[str] = os.listdir(directory)
-
-        regex_pattern: re.Pattern = re.compile(match)
+        file_pattern = os.path.basename(filestem(**regex_repl))
+        pattern_parser: re.Pattern = re.compile(file_pattern)
 
         for file in files:
+            base = os.path.basename(file)
             try:
-                regex_repl = next(regex_pattern.finditer(file)).groupdict()
+                regex_repl = next(pattern_parser.finditer(base)).groupdict()
             except StopIteration:
                 continue
 
-            yield regex_repl, f"{directory}/{file}"
+            yield regex_repl, file
 
 
 def string_replacement_gen(
@@ -300,8 +300,14 @@ def process_files(
     logging.debug(f"repl_keys: {sorted(repl_keys)}")
     logging.debug(f"str_repl keys: {sorted(str_repl.keys())}")
     logging.debug(f"regex_repl keys: {sorted(regex_repl.keys())}")
-    assert len(repl_keys) == len(str_repl) + len(regex_repl)
-    assert all(((k in str_repl or k in regex_repl) for k in repl_keys))
+    missing_keys = set(repl_keys) - set(str_repl.keys()) - set(regex_repl.keys())
+    if len(missing_keys) > 0:
+        logging.warning(
+            f"Missing keys in replacements: {', '.join(sorted(missing_keys))}"
+        )
+        if input("Fill with wildcards (y/N)? ").strip().lower().startswith("y"):
+            for k in missing_keys:
+                regex_repl[k] = ".*"
 
     collection: t.List = []
 
