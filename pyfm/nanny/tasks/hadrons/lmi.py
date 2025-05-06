@@ -11,21 +11,16 @@ from pydantic import Field
 from pyfm import Gamma, utils
 from pyfm.nanny import TaskBase
 from pyfm.nanny.tasks.hadrons.components import hadmods
-from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
+from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
+from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
+
+# TODO: Change modules into a dictionary instead of a list
+# TODO: Move functions into LMITask class and use `self` instead of task_config
 
 
 # ============LMI Task Configuration===========
 @dataclass
 class LMITask(TaskBase):
-    # ============Epack===========
-    @dataclass
-    class EpackTask(TaskBase):
-        load: bool
-        multifile: bool = False
-        save_eigs: bool = False
-        save_evals: bool = True
-        residual: float = 1e-8
-
     # ============Operator List===========
     @dataclass
     class OpList(TaskBase):
@@ -101,29 +96,38 @@ class LMITask(TaskBase):
 
             return list(res)
 
-    @dataclass
-    class HighModes(OpList):
-        skip_cg: bool = False
-        solver: str = "mpcg"
-        cg_residual: t.List[float] = Field(default=[1e-8])
-
-        def __post_init__(self):
-            assert all([isinstance(x, float) for x in self.cg_residual])
-            self.cg_residual = sorted((x for x in self.cg_residual), reverse=True)
-
-    epack: t.Optional[EpackTask] = None
-    meson: t.Optional[OpList] = None
-    high_modes: t.Optional[HighModes] = None
+    gauge_component: t.Optional[gauge.GaugeHadronsComponent] = None
+    epack_component: t.Optional[eig.EigHadronsComponent] = None
+    meson_component: t.Optional[OpList] = None
+    high_modes_component: t.Optional[highmode.HighModeHadronsComponent] = None
 
     @classmethod
     def from_dict(cls, kwargs) -> "LMITask":
         """Creates a new instance of LMITaskConfig from a dictionary."""
-        params = utils.deep_copy_dict(kwargs)
-        for f in fields(cls):
-            field_name = f.name
-            field_type = f.type.__args__[0]
-            if field_name in kwargs:
-                params[field_name] = field_type.from_dict(kwargs[field_name])
+        # assert "highmode" in kwargs
+        params = {}
+        params["gauge_component"] = gauge.GaugeHadronsComponent.from_dict(
+            kwargs.get("gauge", {})
+        )
+        has_eigs = "epack" in kwargs
+        if hc := kwargs.get("high_modes", None):
+            hc = highmode.HighModeHadronsComponent.from_dict(
+                hc | {"has_eigs": has_eigs}
+            )
+        params["high_modes_component"] = hc
+
+        if mc := kwargs.get("meson", None):
+            params["meson_component"] = cls.OpList.from_dict(mc)
+
+        # if hc := kwargs.get("high_modes", None):
+        #     hc = cls.HighModes.from_dict(hc)
+
+        params["epack_component"] = None
+        if has_eigs:
+            masses = {"masses": hc.mass} if hc else {}
+            params["epack_component"] = eig.EigHadronsComponent.from_dict(
+                kwargs["epack"] | masses
+            )
 
         return cls(**params)
 
@@ -132,12 +136,12 @@ class LMITask(TaskBase):
         """Returns list of labels for masses required by task components."""
         res = []
 
-        if self.epack and not self.epack.load:
+        if self.epack_component and not self.epack_component.load:
             res.append("zero")
-        if self.meson:
-            res += self.meson.mass
-        if self.high_modes:
-            res += self.high_modes.mass
+        if self.meson_component:
+            res += self.meson_component.mass
+        if self.high_modes_component:
+            res += self.high_modes_component.mass
 
         return list(set(res))
 
@@ -216,18 +220,10 @@ def input_params(
     submit_conf_dict = submit_config.string_dict()
 
     if not submit_config.overwrite_sources:
-        if task_config.high_modes:
-            cf = catalog_files(task_config, submit_config)
-            missing_files = cf[cf["exists"] != True]
-            run_tsources = []
-            for tsource in submit_config.tsource_range:
-                if any(missing_files["tsource"] == str(tsource)):
-                    run_tsources.append(str(tsource))
-
-        if task_config.meson:
+        if task_config.meson_component:
             bf = bad_files(task_config, submit_config)
             meson_template = outfile_dict["meson_ll"].filename
-            for i, op in enumerate(task_config.meson.operations[:]):
+            for i, op in enumerate(task_config.meson_component.operations[:]):
                 for j, mass_label in enumerate(op.mass[:]):
                     meson_files = [
                         meson_template.format(
@@ -241,22 +237,10 @@ def input_params(
                         op.mass.pop(j)
 
                 if not op.mass:
-                    task_config.meson.operations.pop(i)
+                    task_config.meson_component.operations.pop(i)
 
-    else:
-        run_tsources = list(map(str, submit_config.tsource_range))
-
-    gauge_filepath = outfile_dict["gauge_links"].filestem.format(**submit_conf_dict)
-    gauge_fat_filepath = outfile_dict["fat_links"].filestem.format(**submit_conf_dict)
-    gauge_long_filepath = outfile_dict["long_links"].filestem.format(**submit_conf_dict)
-
-    modules = [
-        hadmods.load_gauge("gauge", gauge_filepath),
-        hadmods.load_gauge("gauge_fat", gauge_fat_filepath),
-        hadmods.load_gauge("gauge_long", gauge_long_filepath),
-        hadmods.cast_gauge("gauge_fatf", "gauge_fat"),
-        hadmods.cast_gauge("gauge_longf", "gauge_long"),
-    ]
+    temp = task_config.gauge_component.input_params(submit_config)
+    modules = list(temp.values())
 
     for mass_label in task_config.mass:
         name = f"stag_mass_{mass_label}"
@@ -267,80 +251,17 @@ def input_params(
             )
         )
 
-    if (
-        task_config.high_modes
-        and not task_config.high_modes.skip_cg
-        and task_config.high_modes.solver == "mpcg"
-    ):
-        for mass_label in task_config.high_modes.mass:
-            name = f"istag_mass_{mass_label}"
-            mass = str(submit_config.mass[mass_label])
-            modules.append(
-                hadmods.action_float(
-                    name=name,
-                    mass=mass,
-                    gauge_fat="gauge_fatf",
-                    gauge_long="gauge_longf",
-                )
-            )
+    if task_config.epack_component is not None:
+        temp = task_config.epack_component.input_params(submit_config)
+        modules += temp.values()
 
-    if task_config.epack:
-        epack_path = ""
-        multifile = str(task_config.epack.multifile).lower()
-        residual = str(task_config.epack.residual)
-        if task_config.epack.load or task_config.epack.save_eigs:
-            epack_path = outfile_dict["eig"].filestem.format(**submit_conf_dict)
+    if task_config.epack_component is not None:
+        temp = task_config.high_modes_component.input_params(submit_config)
+        modules += temp.values()
 
-        # Load or generate eigenvectors
-        if task_config.epack.load:
-            modules.append(
-                hadmods.epack_load(
-                    name="epack",
-                    filestem=epack_path,
-                    size=submit_conf_dict["eigs"],
-                    multifile=multifile,
-                )
-            )
-        else:
-            modules.append(hadmods.op("stag_op", "stag_mass_zero"))
-            modules.append(
-                hadmods.irl(
-                    name="epack",
-                    op="stag_op_schur",
-                    alpha=submit_conf_dict["alpha"],
-                    beta=submit_conf_dict["beta"],
-                    npoly=submit_conf_dict["npoly"],
-                    nstop=submit_conf_dict["nstop"],
-                    nk=submit_conf_dict["nk"],
-                    nm=submit_conf_dict["nm"],
-                    multifile=multifile,
-                    residual=residual,
-                    output=epack_path,
-                )
-            )
-
-        # Shift mass of eigenvalues
-        for mass_label in task_config.mass:
-            if mass_label == "zero":
-                continue
-            mass = str(submit_config.mass[mass_label])
-            modules.append(
-                hadmods.epack_modify(
-                    name=f"evecs_mass_{mass_label}", eigen_pack="epack", mass=mass
-                )
-            )
-
-        if task_config.epack.save_evals:
-            eval_path = outfile_dict["eval"].filestem.format(**submit_conf_dict)
-            modules.append(
-                hadmods.eval_save(
-                    name="eval_save", eigen_pack="epack", output=eval_path
-                )
-            )
-
-    if task_config.meson:
+    if task_config.meson_component:
         meson_template = outfile_dict["meson_ll"].filestem
-        for op in task_config.meson.operations:
+        for op in task_config.meson_component.operations:
             op_type = op.gamma.name.lower()
             gauge = "" if op.gamma == Gamma.LOCAL else "gauge"
             for mass_label in op.mass:
@@ -362,136 +283,6 @@ def input_params(
                     )
                 )
 
-    if task_config.high_modes:
-
-        def m1_eq_m2(x):
-            return x[-2] == x[-1]
-
-        def m1_ge_m2(x):
-            return x[-2] >= x[-1]
-
-        modules.append(hadmods.sink(name="sink", mom="0 0 0"))
-
-        for tsource in run_tsources:
-            modules.append(
-                hadmods.noise_rw(
-                    name=f"noise_t{tsource}",
-                    nsrc=submit_conf_dict["noise"],
-                    t0=tsource,
-                    tstep=submit_conf_dict["time"],
-                )
-            )
-
-        solver_labels = []
-        residuals = task_config.high_modes.cg_residual
-        if task_config.high_modes and not task_config.high_modes.skip_cg:
-            if len(residuals) == 1:
-                solver_labels.append("ama")
-            else:
-                solver_labels += [f"ama_{r}" for r in residuals]
-
-        for mass_label in task_config.high_modes.mass:
-            if task_config.epack:
-                modules.append(
-                    hadmods.lma_solver(
-                        name=f"stag_ranLL_mass_{mass_label}",
-                        action=f"stag_mass_{mass_label}",
-                        low_modes=f"evecs_mass_{mass_label}",
-                    )
-                )
-
-            for resid, sl in zip(map(str, residuals), solver_labels):
-                name = f"stag_{sl}_mass_{mass_label}"
-
-                if task_config.high_modes.solver == "rb":
-                    modules.append(
-                        hadmods.rb_cg(
-                            name=name,
-                            action=f"stag_mass_{mass_label}",
-                            residual=resid,
-                        )
-                    )
-                else:
-                    modules.append(
-                        hadmods.mixed_precision_cg(
-                            name=name,
-                            outer_action=f"stag_mass_{mass_label}",
-                            inner_action=f"istag_mass_{mass_label}",
-                            residual=resid,
-                        )
-                    )
-
-        if task_config.epack:
-            solver_labels.insert(0, "ranLL")
-
-        high_path = outfile_dict["high_modes"].filestem
-
-        for op in task_config.high_modes.operations:
-            glabel = op.gamma.name.lower()
-            quark_iter = list(
-                itertools.product(run_tsources, solver_labels, op.mass, op.mass)
-            )
-
-            for tsource, slabel, mlabel, _ in filter(m1_eq_m2, quark_iter):
-                quark = f"quark_{slabel}_{glabel}_mass_{mlabel}_t{tsource}"
-                source = f"noise_t{tsource}"
-                solver = f"stag_{slabel}_mass_{mlabel}"
-
-                if guess_index := solver_labels.index(slabel):
-                    guess_index -= 1
-                    guess = f"quark_{solver_labels[guess_index]}_{glabel}_mass_{mlabel}_t{tsource}"
-                else:
-                    guess = ""
-
-                modules.append(
-                    hadmods.quark_prop(
-                        name=quark,
-                        source=source,
-                        solver=solver,
-                        guess=guess,
-                        gammas=op.gamma.gamma_string,
-                        apply_g5="true",
-                        gauge="" if op.gamma.local else "gauge",
-                    )
-                )
-
-            for tsource, slabel, m1label, m2label in filter(m1_ge_m2, quark_iter):
-                quark1 = f"quark_{slabel}_{glabel}_mass_{m1label}_t{tsource}"
-                quark2 = f"quark_{slabel}_pion_local_mass_{m2label}_t{tsource}"
-
-                if m1label == m2label:
-                    mass_label = f"mass_{m1label}"
-                    mass_output = f"{submit_config.mass_out_label[m1label]}"
-                else:
-                    mass_label = f"mass_{m1label}_mass_{m2label}"
-                    mass_output = (
-                        f"{submit_config.mass_out_label[m1label]}"
-                        f"_m{submit_config.mass_out_label[m2label]}"
-                    )
-
-                output = high_path.format(
-                    mass=mass_output,
-                    dset=slabel,
-                    gamma_label=glabel,
-                    tsource=tsource,
-                    **submit_conf_dict,
-                )
-
-                modules.append(
-                    hadmods.prop_contract(
-                        name=f"corr_{slabel}_{glabel}_{mass_label}_t{tsource}",
-                        source=quark1,
-                        sink=quark2,
-                        sink_func="sink",
-                        source_shift=f"noise_t{tsource}_shift",
-                        source_gammas=op.gamma.gamma_string,
-                        sink_gammas=op.gamma.gamma_string,
-                        apply_g5="true",
-                        gauge="" if op.gamma.local else "gauge",
-                        output=output,
-                    )
-                )
-
     module_info = [m["id"] for m in modules]
     schedule = build_schedule(module_info)
 
@@ -502,74 +293,76 @@ def catalog_files(
     task_config: LMITask,
     submit_config: SubmitHadronsConfig,
 ) -> pd.DataFrame:
+    """
+    Generates a catalog of files based on the task and submission configurations.
+
+    Args:
+        task_config (LMITask): The configuration for the LMI task, which includes
+            components like epack, meson, and high modes.
+        submit_config (SubmitHadronsConfig): The submission configuration, which
+            includes file paths, eigenvalues, mass labels, and other parameters.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing details about the generated files,
+        including their paths and associated metadata.
+
+    Notes:
+        - The function uses nested generators to yield file formatting details
+          for different components (e.g., epack, meson, high modes).
+        - The `utils.catalog_files` function is used to process the generated
+          file details and replacements into a DataFrame.
+    """
+
     def generate_outfile_formatting():
+        """
+        A generator function that yields file formatting details for different
+        components of the task configuration.
+
+        Yields:
+            Tuple[Dict[str, Any], str]: A dictionary of replacements and the
+            corresponding output file path for each component.
+        """
+
         outfile_dict = submit_config.files
-        if task_config.epack:
-            if task_config.epack.save_eigs:
-                if task_config.epack.multifile:
+        if task_config.epack_component:
+            if task_config.epack_component.save_eigs:
+                if task_config.epack_component.multifile:
                     yield (
                         {"eig_index": list(range(int(submit_config.eigs)))},
                         outfile_dict["eigdir"],
                     )
                 else:
                     yield {}, outfile_dict["eig"]
-            if task_config.epack.save_eigs:
+            if task_config.epack_component.save_eigs:
                 yield {}, outfile_dict["eval"]
 
-        if task_config.meson:
+        if task_config.meson_component:
             res: t.Dict = {}
-            for op in task_config.meson.operations:
+            for op in task_config.meson_component.operations:
                 res["gamma"] = op.gamma.gamma_list
                 res["mass"] = [submit_config.mass_out_label[m] for m in op.mass]
                 yield res, outfile_dict["meson_ll"]
 
-        if task_config.high_modes:
+        if task_config.high_modes_component:
             res = {"tsource": list(map(str, submit_config.tsource_range)), "dset": []}
-            if task_config.epack:
+            if task_config.epack_component:
                 res["dset"].append("ranLL")
-            if not task_config.high_modes.skip_cg:
-                residuals = task_config.high_modes.cg_residual
+            if not task_config.high_modes_component.skip_cg:
+                residuals = task_config.high_modes_component.cg_residual
                 if len(residuals) == 1:
                     res["dset"].append("ama")
                 else:
                     res["dset"] += [f"ama_{r}" for r in residuals]
 
-            for op in task_config.high_modes.operations:
+            for op in task_config.high_modes_component.operations:
                 res["gamma_label"] = op.gamma.name.lower()
                 res["mass"] = [submit_config.mass_out_label[m] for m in op.mass]
                 yield res, outfile_dict["high_modes"]
 
-    def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
-        repls["filepath"] = filepath
-        return repls
-
     outfile_generator = generate_outfile_formatting()
     replacements = submit_config.string_dict()
 
-    df = []
-    for task_replacements, outfile_config in outfile_generator:
-        outfile = outfile_config.filestem + outfile_config.ext
-        filekeys = utils.format_keys(outfile)
-        replacements.update(task_replacements)
-        files = utils.process_files(
-            outfile,
-            processor=build_row,
-            replacements={k: v for k, v in replacements.items() if k in filekeys},
-        )
-        dict_of_rows = {
-            k: [file[k] for file in files] for k in files[0] if len(files) > 0
-        }
-
-        new_df = pd.DataFrame(dict_of_rows)
-        new_df["good_size"] = outfile_config.good_size
-        new_df["exists"] = new_df["filepath"].apply(os.path.exists)
-        new_df["file_size"] = None
-        new_df.loc[new_df["exists"], "file_size"] = new_df[new_df["exists"]][
-            "filepath"
-        ].apply(os.path.getsize)
-        df.append(new_df)
-
-    df = pd.concat(df, ignore_index=True)
+    df = utils.catalog_files(outfile_generator, replacements)
 
     return df
 
@@ -601,17 +394,17 @@ def processing_params(
     replacements["tsource"] = list(map(str, submit_config.tsource_range))
 
     solver_labels = []
-    if task_config.epack:
+    if task_config.epack_component:
         solver_labels.append("ranLL")
-    if task_config.high_modes:
-        if not task_config.high_modes.skip_cg:
-            residuals = task_config.high_modes.cg_residual
+    if task_config.high_modes_component:
+        if not task_config.high_modes_component.skip_cg:
+            residuals = task_config.high_modes_component.cg_residual
             if len(residuals) == 1:
                 solver_labels.append("ama")
             else:
                 solver_labels += [f"ama_{r}" for r in residuals]
 
-        for op in task_config.high_modes.operations:
+        for op in task_config.high_modes_component.operations:
             gamma_label = op.gamma.name.lower()
             replacements["gamma_label"] = gamma_label
             for m, dset in itertools.product(op.mass, solver_labels):
@@ -635,7 +428,8 @@ def processing_params(
                         "filestem": infile_stem,
                         "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
                         "replacements": utils.deep_copy_dict(replacements),
-                        "h5_params": {"name": "gamma", "datasets": h5_datasets},
+                        "name": "gamma",
+                        "datasets": h5_datasets,
                         "array_params": array_params,
                     },
                     "out_files": {"filestem": outfile, "type": "dataframe"},
@@ -646,55 +440,3 @@ def processing_params(
 
 def get_task_factory():
     return LMITask.from_dict
-
-
-if __name__ == "__main__":
-    from pyfm import utils
-    from pyfm.nanny.spawnjob import make_inputs
-
-    param = utils.load_param("params.yaml")
-    param["job_setup"]["lmi"] = {
-        "run": "run.slurm",
-        "params": {
-            "ext": "1e8",
-            "run_id": "LMI-RW-series-{series}-2000-eigs-{noise}-noise",
-            "blocksize": 1000,
-        },
-        "tasks": {
-            "epack": {
-                "load": False,
-                "save_eigs": True,
-                "save_evals": True,
-                "multifile": False,
-            },
-            "meson": {
-                "gamma": [
-                    "local",
-                    "onelink",
-                ],
-                "mass": [
-                    "l",
-                ],
-            },
-            "high_modes": {
-                "gamma": [
-                    "pion_local",
-                    "vec_local",
-                    "vec_onelink",
-                ],
-                "mass": [
-                    "l",
-                ],
-            },
-        },
-        "io": "lmi-test",
-        "wall_time": "12:00:00",
-    }
-    cfgno_steps = [("a.108", None)]
-    make_inputs(param, "lmi", cfgno_steps)
-    # param = utils.load_param("params.yaml")
-    #
-    # jc = config.get_job_config(param, "lmi")
-    # sc = config.get_submit_config(param, jc, series="a", cfg="100")
-    #
-    # stuff = config.input_params(jc)
