@@ -126,7 +126,7 @@ def buffer(
     data_col: str,
     key_index: t.Union[str, t.List[str]],
     fold: bool = False,
-) -> gv.BufferDict:
+) -> t.Tuple[gv.BufferDict, t.List[str]]:
     """
     Converts a pandas DataFrame into a grouped buffer dictionary.
 
@@ -180,20 +180,60 @@ def buffer(
             buff_fold[key][:, 0] = buff[key][:, 0]
             buff_fold[key][:, nt // 2] = buff[key][:, nt // 2]
 
-    return buff if not fold else buff_fold
+    return (buff if not fold else buff_fold, key_indices)
+
+
+def melt_df_cols(
+    df: pd.DataFrame,
+    data_col: str,
+    key_index: t.Union[str, t.List[str]],
+    *args,
+    **kwargs,
+) -> pd.DataFrame:
+    logging.info(data_col)
+    logging.info(key_index)
+    df_out = pd.melt(df, value_name=data_col, ignore_index=False)
+    if isinstance(key_index, str) or len(key_index) == 1:
+        var_names = ["variable"]
+    else:
+        var_names = [f"variable_{i}" for i in range(len(key_index))]
+
+    df_out.rename(columns=dict(zip(var_names, key_index)), inplace=True)
+    df_out[["mean", "error"]] = (
+        df_out[data_col].apply(lambda x: (gv.mean(x), gv.sdev(x))).to_list()
+    )
+    return df_out
 
 
 def signal_noise_nts(
-    buff: gv.BufferDict, *args, **kwargs
+    data: t.Union[gv.BufferDict, pd.DataFrame], stacked: bool, *args, **kwargs
 ) -> t.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    signal = buffer_avg(buff, *args, **kwargs)
-    noise = buffer_avg(stdjackknife(buff), *args, **kwargs)
+    corr_col = "corr"
+    if isinstance(data, pd.DataFrame):
+        buff, col_names = buffer(data, *args, **kwargs)
+    else:
+        assert isinstance(data, gv.BufferDict)
+        buff = data
+        col_names = None
+
+    signal = buffer_avg(buff)
+    noise = buffer_avg(stdjackknife(buff))
+    if col_names is not None:
+        signal.columns.names = col_names
+        noise.columns.names = col_names
 
     nts = noise.copy()
     import numpy as np
 
     for k in nts.columns:
         nts[k] = np.divide(nts[k], signal[k])
+
+    # Merges data from columns into a single stack with [variable_i...] columns
+    # giving the values of the buffer keys
+    if stacked:
+        signal, noise, nts = (
+            melt_df_cols(df, *args, **kwargs) for df in (signal, noise, nts)
+        )
 
     return signal, noise, nts
 
@@ -257,8 +297,11 @@ def index(df, data_col: str, *args) -> pd.DataFrame:
     if "series.cfg" in indices:
         i = indices.index("series.cfg")
         indices[i] = series_cfg
-    df.rename({"series.cfg": series_cfg}, axis="index", inplace=True)
-    df.rename({"series.cfg": series_cfg}, axis="columns", inplace=True)
+    df.rename_axis(index={"series.cfg": series_cfg}, inplace=True)
+    df.rename({"series.cfg": series_cfg}, inplace=True)
+    logging.debug(f"Current df index: {df.index.names}")
+    logging.debug(f"Current df columns: {df.columns}")
+    logging.debug(f"Setting index as {indices}")
     # End HACK
 
     build_seriescfg = series_cfg in indices
@@ -399,8 +442,6 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
     assert "t" not in df.index.names
     tvar = "t"
 
-    logging.debug(f"{df.index.names}: using {tvar}")
-
     def apply_func(x):
         nt = int(np.sqrt(len(x)))
         assert nt**2 == len(x)
@@ -410,9 +451,6 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
         )
 
     df_out = group_apply(df, apply_func, data_col, list(avg_indices))
-
-    logging.debug("Time average result:")
-    logging.debug(df_out)
 
     return df_out
 
@@ -468,6 +506,7 @@ def execute(df: pd.DataFrame, actions: t.Dict) -> pd.DataFrame:
     return df_out
 
 
+# TODO: Change to use argparse. Move to pyfm/scripts
 def main(*args, **kwargs):
     logging_level: str
 
@@ -495,7 +534,7 @@ def main(*args, **kwargs):
     for key in proc_params["run"]:
         run_params = proc_params[key]
 
-        result[key] = dataio.main(**run_params)
+        result[key] = pd.concat(dataio.load(**run_params["load_files"]).values())
         actions = run_params.get("actions", {})
         out_files = run_params.get("out_files", {})
         index = out_files.pop("index", None)
