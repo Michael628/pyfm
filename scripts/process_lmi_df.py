@@ -2,10 +2,11 @@ import typing as t
 import pandas as pd
 from pyfm.processing import processor, dataio
 import argparse
+import logging
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process some inputs.")
-    parser.add_argument("file_paths", nargs="*", type=str, help="Job Step")
+    parser.add_argument("file_paths", nargs="*", type=str, help="files to process")
     args = parser.parse_args()
 
     for file_path in args.file_paths:
@@ -33,4 +34,5 @@ if __name__ == "__main__":
         if "seedkey" in df.columns and df["seedkey"].nunique() == 1:
             processor.execute(df, actions={"drop": ["seedkey"]})
 
+        logging.info(f"Writing processed file to: {path_out}")
         dataio.write_frame(df, path_out)
