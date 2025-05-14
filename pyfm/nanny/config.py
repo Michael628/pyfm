@@ -112,9 +112,7 @@ def input_params(
     )
 
 
-def processing_params(
-    job_config: JobConfig, *args, **kwargs
-) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
+def processing_params(job_config: JobConfig, *args, **kwargs) -> t.Dict:
     return tasks.processing_params(
         job_config.job_type, job_config.task_type, job_config.tasks, *args, **kwargs
     )

@@ -218,30 +218,29 @@ def get_pickle_loader(filename: str, _: t.Dict, **kwargs):
     if isinstance(data, np.ndarray) and len(data.shape) == 0:
         data = data.item()
 
-    return data_to_frame(data, **kwargs)
+    # TODO: Debug this for when pickle file is just pure ndarray
+    pickle_config = config.LoadDictConfig.create(**kwargs)
+
+    return data_to_frame(data, pickle_config)
 
 
 def get_h5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
     """
-    Load data based on the given I/O configuration.
+    Loads data from an HDF5 file and returns it as a DataFrame.
 
-    This function attempts to load data from an HDF5 file.
-    If the file cannot be loaded directly using pandas due to certain errors (e.g., ValueError, NotImplementedError),
-    it will fallback to using the provided H5 loading configurations from the `io_config`.
-    These configurations specify parameters for handling data arrays and conversion methods for HDF5 structures.
-
-    Parameters:
-        filename (str): File path to the pickle file.
+    Args:
+        filename (str): Path to the HDF5 file.
+        repl (Dict[str, str]): A dictionary of string replacements to apply to the configuration.
+        **kwargs: Additional keyword arguments passed to LoadH5Config.
 
     Returns:
-        pd.DataFrame
-            A DataFrame containing formatted data from the specified HDF5 file.
+        pd.DataFrame: The loaded data as a pandas DataFrame.
+
     """
     try:
         return pd.read_hdf(filename)
     except (ValueError, NotImplementedError):
-        h5_config = config.LoadH5Config.create(**kwargs)
-        h5_config = config.LoadH5Config.string_replace(h5_config, repl)
+        h5_config = config.LoadH5Config.create(**kwargs).format_data_strings(repl)
 
         file = h5py.File(filename)
 
@@ -304,7 +303,9 @@ async def load_files(
     return {file: t.result() for file, t in zip(files, async_tasks)}
 
 
-def load(*args, **kwargs) -> t.Dict[str, pd.DataFrame]:
+def load(
+    *args, **kwargs
+) -> t.Dict[str, pd.DataFrame] | t.Coroutine[t.Any, t.Any, t.Dict[str, pd.DataFrame]]:
     loop = None
     try:
         # Try to get the running loop (will raise RuntimeError if not in a running loop)
@@ -313,80 +314,15 @@ def load(*args, **kwargs) -> t.Dict[str, pd.DataFrame]:
         # If no running loop, use asyncio.run() as normal
         return asyncio.run(load_files(*args, **kwargs))
 
-    if loop:
-        if loop.is_running():
-            # If inside a running loop (e.g., Jupyter), run the coroutine with `loop.create_task`
-            return loop.create_task(load_files(*args, **kwargs))
-        else:
-            # If not running, use `loop.run_until_complete`
-            return loop.run_until_complete(load_files(*args, **kwargs))
+    assert loop, "We should have a loop or have already returned by now"
 
-
-# def main(**kwargs) -> t.Awaitable:
-#     """
-#     Main function to handle configuration and data loading.
-#
-#     Parameters:
-#     kwargs: Arbitrary keyword arguments
-#       - logging_level: str (optional)
-#         Optional logging level to set for the logger.
-#       - load_files: parameter key used to fetch configuration data.
-#
-#     Behavior:
-#     If `kwargs` are provided:
-#       - Extracts logging level and attempts to fetch the DataIO configuration using the `load_files` key.
-#
-#     If `kwargs` are not provided:
-#       - Reads the `params.yaml` file to obtain `load_files` key data to build DataIO configuration.
-#       - Raises a ValueError if the `load_files` key is missing.
-#
-#     Returns:
-#       Configuration data loaded using the load function.
-#     """
-#     logging_level: str
-#     if kwargs:
-#         logging_level = kwargs.pop("logging_level", "INFO")
-#         dataio_config = config.get_dataio_config(kwargs["load_files"])
-#     else:
-#         try:
-#             params = utils.load_param("params.yaml")["load_files"]
-#         except KeyError as exc:
-#             raise ValueError("Expecting `load_files` key in params.yaml file.") from exc
-#
-#         logging_level = params.pop("logging_level", "INFO")
-#         dataio_config = config.get_dataio_config(params)
-#
-#     logging.getLogger().setLevel(logging_level)
-#
-#     loop = None
-#     try:
-#         # Try to get the running loop (will raise RuntimeError if not in a running loop)
-#         loop = asyncio.get_running_loop()
-#     except RuntimeError:
-#         # If no running loop, use asyncio.run() as normal
-#         df = asyncio.run(load(dataio_config))
-#
-#     async def load_wrapper(io_config: config.DataioConfig) -> pd.DataFrame:
-#         df = await load(io_config)
-#         actions: t.Dict = dataio_config.actions
-#         df = [processor.execute(elem, actions=actions) for elem in df]
-#
-#         return pd.concat(df)
-#
-#     if loop:
-#         if loop.is_running():
-#             # If inside a running loop (e.g., Jupyter), run the coroutine with `loop.create_task`
-#             return loop.create_task(load_wrapper(dataio_config))
-#         else:
-#             # If not running, use `loop.run_until_complete`
-#             return loop.run_until_complete(load_wrapper(dataio_config))
-#
-#     actions: t.Dict = dataio_config.actions
-#     df = [processor.execute(elem, actions=actions) for elem in df]
-#
-#     df = pd.concat(df)
-#
-#     return df
+    if loop.is_running():
+        return load_files(*args, **kwargs)
+        # If inside a running loop (e.g., Jupyter), run the coroutine with `loop.create_task`
+        # return loop.create_task(load_files(*args, **kwargs))
+    else:
+        # If not running, use `loop.run_until_complete`
+        return loop.run_until_complete(load_files(*args, **kwargs))
 
 
 def write_data(
@@ -411,7 +347,8 @@ def write_data(
         - Writes the entire DataFrame to a single file using the specified `filestem` as the filename.
     - Creates the necessary directories for the output files if they do not already exist.
     """
-    repl_keys = utils.format_keys(filestem)
+    fs = os.path.expanduser(filestem)
+    repl_keys = utils.format_keys(fs)
     if repl_keys:
         logging.debug(f"df columns: {df.columns}")
         logging.debug(f"df indices: {df.index.names}")
@@ -423,7 +360,7 @@ def write_data(
 
             repl = dict(zip(repl_keys, repl_vals))
 
-            filename = filestem.format(**repl)
+            filename = fs.format(**repl)
             logging.info(f"Writing file: {filename}")
 
             if directory := os.path.dirname(filename):
@@ -434,12 +371,12 @@ def write_data(
             write_fn(df_group[out_cols], filename)
 
     else:
-        filename = filestem
+        filename = fs
         logging.info(f"Writing file: {filename}")
         if directory := os.path.dirname(filename):
             os.makedirs(directory, exist_ok=True)
 
-        write_fn(df, filestem)
+        write_fn(df, fs)
 
 
 def write_dict(df: pd.DataFrame, filestem: str, dict_depth: int) -> None:

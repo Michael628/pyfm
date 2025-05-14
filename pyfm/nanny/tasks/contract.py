@@ -126,8 +126,8 @@ def processing_params(
 
         t_order = [f"t{i}" for i in range(1, diagram.npoint + 1)]
         array_params = {
-            "order": t_order,
-            "labels": {},
+            "array_order": t_order,
+            "array_labels": {},
         }
 
         t_labels = f"0..{submit_config.time - 1}"
@@ -148,7 +148,7 @@ def processing_params(
             proc_params[diagram_key]["actions"] = actions
 
         proc_params[diagram_key]["load_files"]["replacements"] = replacements.copy()
-        proc_params[diagram_key]["load_files"]["array_params"] = array_params
+        proc_params[diagram_key]["load_files"] |= array_params
 
     return proc_params
 

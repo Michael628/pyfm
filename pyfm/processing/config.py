@@ -2,10 +2,10 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-from pyfm import ConfigBase, utils
+from pyfm import utils
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoadArrayConfig:
     """Parameters providing index names and values to convert ndarray
     into a DataFrame.
@@ -27,41 +27,49 @@ class LoadArrayConfig:
     order: t.List
     labels: t.Dict[str, t.Union[str, t.List]]
 
-    def __post_init__(self):
-        self.labels = utils.process_params(**self.labels)
+    @classmethod
+    def create(
+        cls,
+        order: t.List | None,
+        labels: t.Dict | None,
+        array_order: t.List | None,
+        array_labels: t.Dict | None,
+    ) -> "LoadArrayConfig":
+        o = array_order or order
+        l = array_labels or labels
+        assert o and l, "Must provide an 'order' and 'labels' parameter"
+        return cls(
+            order=o,
+            labels=utils.process_params(**l),
+        )
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoadDictConfig:
     labels: t.List[str]
     array_config: LoadArrayConfig
 
-    def __init__(
-        self,
-        labels: t.List[str],
-        array_params: t.Dict,
-    ) -> None:
-        self.labels = labels
-        self.array_config = LoadArrayConfig(**array_params)
+    @classmethod
+    def create(
+        cls,
+        labels: t.List[str] | None,
+        dict_labels: t.List[str] | None,
+        *args,
+        **kwargs,
+    ) -> "LoadDictConfig":
+        l = dict_labels or labels
+        assert l, "Must provide 'labels' parameter"
+        return cls(labels=l, array_config=LoadArrayConfig.create(*args, **kwargs))
 
 
-@dataclass
+@dataclass(frozen=True)
 class LoadH5Config:
     name: str
     datasets: t.Dict[str, t.List[str]]
     array_config: t.Dict[str, LoadArrayConfig]
 
     @classmethod
-    def create(
-        cls,
-        name: str,
-        datasets: t.Dict,
-        array_params: t.Dict,
-    ) -> "LoadH5Config":
-        assert all((k in array_params for k in datasets.keys())), (
-            "Must define array_params for each data set"
-        )
-
+    def create(cls, name: str, datasets: t.Dict, *args, **kwargs) -> "LoadH5Config":
         dsets = {}
         for k, v in datasets.items():
             if isinstance(datasets[k], str):
@@ -70,76 +78,21 @@ class LoadH5Config:
                 dsets[k] = v
 
         array_config = {}
-        for k, v in array_params.items():
-            array_config[k] = LoadArrayConfig(**v)
+        # TODO: Currently only supports having same array params (encoded in args, kwargs)
+        # for all h5 data sets
+        for k in datasets.keys():
+            array_config[k] = LoadArrayConfig.create(*args, **kwargs)
 
         return cls(name=name, datasets=dsets, array_config=array_config)
 
-    @classmethod
-    def string_replace(cls, h5_config: "LoadH5Config", repl: t.Dict[str, str]):
+    def format_data_strings(self, repl: t.Dict[str, str]):
         h5_params = {
-            "name": h5_config.name,
+            "name": self.name,
             "datasets": {
                 k.format(**repl): [vv.format(**repl) for vv in v]
-                for k, v in h5_config.datasets.items()
+                for k, v in self.datasets.items()
             },
-            "array_config": {
-                k.format(**repl): v for k, v in h5_config.array_config.items()
-            },
+            "array_config": {k.format(**repl): v for k, v in self.array_config.items()},
         }
 
-        return cls(**h5_params)
-
-
-@dataclass
-class DataioConfig(ConfigBase):
-    filestem: str
-    replacements: t.Optional[t.Dict[str, t.Union[str, t.List[str]]]] = None
-    regex: t.Optional[t.Dict[str, str]] = None
-    dict_labels: t.Optional[t.List[str]] = None
-    actions: t.Optional[t.Dict[str, t.Any]] = None
-
-    def __post_init__(self):
-        """Set defaults and process `replacements`"""
-
-        if not self.replacements:
-            self.replacements = {}
-        if not self.regex:
-            self.regex = {}
-        if not self.dict_labels:
-            self.dict_labels = []
-        if not self.actions:
-            self.actions = {}
-
-        self.replacements = utils.process_params(**self.replacements)
-
-    @classmethod
-    def create(cls, **kwargs):
-        """Returns an instance of DataioConfig from `params` dictionary.
-
-        Parameters
-        ----------
-        kwargs
-            keys should correspond to class parameters (above).
-            `h5_params` and `array_params`, if provided,
-            should have dictionaries that can be passed to `create` static methods
-            in H5Params and ArrayParams, respectively.
-        """
-
-        obj_vars = kwargs.copy()
-        array_params = obj_vars.pop("array_params", {})
-
-        return DataioConfig(**obj_vars)
-
-
-def get_config_factory(config_label: str):
-    configs = {"dataio": DataioConfig.create}
-
-    if config_label in configs:
-        return configs[config_label]
-    else:
-        raise ValueError(f"No config implementation for `{config_label}`.")
-
-
-def get_dataio_config(params: t.Dict) -> DataioConfig:
-    return get_config_factory("dataio")(**params)
+        return type(self)(**h5_params)

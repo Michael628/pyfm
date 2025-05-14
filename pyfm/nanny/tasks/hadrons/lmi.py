@@ -223,8 +223,9 @@ def input_params(
         if task_config.meson_component:
             bf = bad_files(task_config, submit_config)
             meson_template = outfile_dict["meson_ll"].filename
-            for i, op in enumerate(task_config.meson_component.operations[:]):
-                for j, mass_label in enumerate(op.mass[:]):
+            meson_ops = task_config.meson_component.operations[:]
+            for i, op in sorted(enumerate(meson_ops), reverse=True):
+                for j, mass_label in sorted(enumerate(op.mass[:]), reverse=True):
                     meson_files = [
                         meson_template.format(
                             mass=submit_config.mass_out_label[mass_label],
@@ -419,9 +420,10 @@ def processing_params(
                     for i, g in enumerate(op.gamma.gamma_list)
                 }
                 array_params = {
-                    g: {"order": ["t"], "labels": {"t": f"0..{submit_config.time - 1}"}}
-                    for g in h5_datasets.keys()
+                    "order": ["t"],
+                    "labels": {"t": f"0..{submit_config.time - 1}"},
                 }
+
                 proc_params[file_label] = {
                     "logging_level": getattr(submit_config, "logging_level", "INFO"),
                     "load_files": {
@@ -430,7 +432,7 @@ def processing_params(
                         "replacements": utils.deep_copy_dict(replacements),
                         "name": "gamma",
                         "datasets": h5_datasets,
-                        "array_params": array_params,
+                        **array_params,
                     },
                     "out_files": {"filestem": outfile, "type": "dataframe"},
                 }
