@@ -312,7 +312,9 @@ def process_files(
     collection: t.List = []
 
     def file_gen():
-        for str_reps, repl_filename in string_replacement_gen(filestem, str_repl):
+
+        fs = os.path.expanduser(filestem)
+        for str_reps, repl_filename in string_replacement_gen(fs, str_repl):
             for reg_reps, regex_filename in file_regex_gen(repl_filename, regex_repl):
                 str_reps.update(reg_reps)
                 yield regex_filename, deep_copy_dict(str_reps)

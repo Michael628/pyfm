@@ -7,6 +7,4 @@ __pycache__/*
 .tags_sorted_by_file
 .idea
 CMakeLists.txt
-tests/data
-test/nanny/schedules
-test/nanny/in
+test
