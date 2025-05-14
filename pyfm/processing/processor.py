@@ -1,18 +1,12 @@
 #! /usr/bin/env python3
 import logging
-import sys
 import typing as t
 
 import gvar as gv
 import gvar.dataset as ds
 import numpy as np
 import pandas as pd
-
-import pyfm as ps
-from pyfm import utils
 from pyfm.a2a import contract as a2a
-from pyfm.nanny import config
-from pyfm.processing import dataio
 
 ACTION_ORDER = [
     "build_high",
@@ -27,6 +21,13 @@ ACTION_ORDER = [
     "index",
     "drop",
 ]
+
+
+def col_mask_gen(df: pd.DataFrame, group_cols: list[str]) -> t.Generator[pd.Series]:
+    """Yields a mask for each combination of columns in `group_cols`"""
+    groupno = df.groupby(group_cols).ngroup()
+    for i in range(groupno.nunique()):
+        yield groupno == i
 
 
 def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
@@ -55,6 +56,30 @@ def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
         buff_std[k] = stdarray
 
     return buff_std
+
+
+def mask_apply(
+    df: pd.DataFrame,
+    func: t.Callable,
+    data_col: str,
+    ungrouped_cols: t.List,
+    invert: bool = False,
+) -> pd.DataFrame:
+    all_cols = list(df.columns)
+
+    if not invert:
+        ungrouped = ungrouped_cols + [data_col]
+        grouped = [x for x in all_cols if x not in ungrouped]
+    else:
+        grouped = ungrouped_cols
+        ungrouped = [x for x in all_cols if x not in grouped] + [data_col]
+
+    df_out = []
+
+    for mask in col_mask_gen(df, grouped):
+        df_out.append(func(df[mask]))
+
+    return pd.concat(df_out)
 
 
 def group_apply(
@@ -351,11 +376,21 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
     """Averages `data_col` column in `df` over columns or indices specified in `avg_indices`,
     one at a time.
     """
+
+    def average_repeated_indices(df):
+        df_out = df.copy()
+        df_out[data_col] = df.groupby(level=df.index.names)[data_col].mean()
+        df_out = df_out.drop_duplicates()
+        return df_out
+
     df_out = df
     for col in avg_indices:
-        df_out = group_apply(
-            df_out, lambda x: x[data_col].mean(), data_col, [col]
-        ).to_frame(data_col)
+        if col in df.index.names:
+            df_out = df_out.reset_index(col, drop=True)
+        else:
+            df_out = df_out.drop(columns=col)
+
+        df_out = mask_apply(df_out, average_repeated_indices, data_col, [])
 
     return df_out
 
@@ -507,54 +542,54 @@ def execute(df: pd.DataFrame, actions: t.Dict) -> pd.DataFrame:
 
 
 # TODO: Change to use argparse. Move to pyfm/scripts
-def main(*args, **kwargs):
-    logging_level: str
-
-    if kwargs:
-        logging_level = kwargs.pop("logging_level", "INFO")
-        proc_params = kwargs
-    else:
-        params = utils.load_param("params.yaml")
-        if len(args) == 1 and isinstance(args[0], str):
-            step = args[0]
-            job_config = config.get_job_config(params, step)
-            submit_config = config.get_submit_config(params, job_config)
-            proc_params = config.processing_params(job_config, submit_config)
-        else:
-            try:
-                proc_params = params["process_files"]
-            except KeyError:
-                raise ValueError("Expecting `process_files` key in params.yaml file.")
-
-        logging_level = proc_params.pop("logging_level", "INFO")
-
-    ps.setup_logging(logging_level)
-
-    result = {}
-    for key in proc_params["run"]:
-        run_params = proc_params[key]
-
-        result[key] = pd.concat(dataio.load(**run_params["load_files"]).values())
-        actions = run_params.get("actions", {})
-        out_files = run_params.get("out_files", {})
-        index = out_files.pop("index", None)
-
-        if index:
-            actions.update({"index": index})
-
-        if "actions" in run_params:
-            result[key] = execute(result[key], run_params["actions"])
-
-        if out_files:
-            out_type = out_files["type"]
-            if out_type == "dictionary":
-                filestem = out_files["filestem"]
-                depth = int(out_files["depth"])
-                dataio.write_dict(result[key], filestem, depth)
-            elif out_type == "dataframe":
-                filestem = out_files["filestem"]
-                dataio.write_frame(result[key], filestem)
-            else:
-                raise NotImplementedError(f"No support for out file type {out_type}.")
-
-    return result
+# def main(*args, **kwargs):
+#     logging_level: str
+#
+#     if kwargs:
+#         logging_level = kwargs.pop("logging_level", "INFO")
+#         proc_params = kwargs
+#     else:
+#         params = utils.load_param("params.yaml")
+#         if len(args) == 1 and isinstance(args[0], str):
+#             step = args[0]
+#             job_config = config.get_job_config(params, step)
+#             submit_config = config.get_submit_config(params, job_config)
+#             proc_params = config.processing_params(job_config, submit_config)
+#         else:
+#             try:
+#                 proc_params = params["process_files"]
+#             except KeyError:
+#                 raise ValueError("Expecting `process_files` key in params.yaml file.")
+#
+#         logging_level = proc_params.pop("logging_level", "INFO")
+#
+#     ps.setup_logging(logging_level)
+#
+#     result = {}
+#     for key in proc_params["run"]:
+#         run_params = proc_params[key]
+#
+#         result[key] = pd.concat(dataio.load(**run_params["load_files"]).values())
+#         actions = run_params.get("actions", {})
+#         out_files = run_params.get("out_files", {})
+#         index = out_files.pop("index", None)
+#
+#         if index:
+#             actions.update({"index": index})
+#
+#         if "actions" in run_params:
+#             result[key] = execute(result[key], run_params["actions"])
+#
+#         if out_files:
+#             out_type = out_files["type"]
+#             if out_type == "dictionary":
+#                 filestem = out_files["filestem"]
+#                 depth = int(out_files["depth"])
+#                 dataio.write_dict(result[key], filestem, depth)
+#             elif out_type == "dataframe":
+#                 filestem = out_files["filestem"]
+#                 dataio.write_frame(result[key], filestem)
+#             else:
+#                 raise NotImplementedError(f"No support for out file type {out_type}.")
+#
+#     return result
