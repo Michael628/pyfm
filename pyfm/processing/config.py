@@ -30,10 +30,10 @@ class LoadArrayConfig:
     @classmethod
     def create(
         cls,
-        order: t.List | None,
-        labels: t.Dict | None,
-        array_order: t.List | None,
-        array_labels: t.Dict | None,
+        order: t.List | None = None,
+        labels: t.Dict | None = None,
+        array_order: t.List | None = None,
+        array_labels: t.Dict | None = None,
     ) -> "LoadArrayConfig":
         o = array_order or order
         l = array_labels or labels
@@ -52,8 +52,8 @@ class LoadDictConfig:
     @classmethod
     def create(
         cls,
-        labels: t.List[str] | None,
-        dict_labels: t.List[str] | None,
+        labels: t.List[str] | None = None,
+        dict_labels: t.List[str] | None = None,
         *args,
         **kwargs,
     ) -> "LoadDictConfig":

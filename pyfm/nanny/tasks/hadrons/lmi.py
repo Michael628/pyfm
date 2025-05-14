@@ -256,7 +256,7 @@ def input_params(
         temp = task_config.epack_component.input_params(submit_config)
         modules += temp.values()
 
-    if task_config.epack_component is not None:
+    if task_config.high_modes_component is not None:
         temp = task_config.high_modes_component.input_params(submit_config)
         modules += temp.values()
 

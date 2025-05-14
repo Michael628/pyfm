@@ -137,12 +137,12 @@ def processing_params(
             actions["time_average"] = [t_order[0], t_order[-1]]
             index += t_order[1:-1] + ["t"]
         else:
-            index += array_params["order"]
+            index += array_params["array_order"]
 
         actions["index"] = index
 
-        for t_index in array_params["order"]:
-            array_params["labels"][t_index] = t_labels
+        for t_index in array_params["array_order"]:
+            array_params["array_labels"][t_index] = t_labels
 
         if actions:
             proc_params[diagram_key]["actions"] = actions

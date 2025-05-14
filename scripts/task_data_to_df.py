@@ -53,6 +53,3 @@ if __name__ == "__main__":
                 dio.write_frame(result[key], filestem)
             else:
                 raise NotImplementedError(f"No support for out file type {out_type}.")
-
-    return result
-

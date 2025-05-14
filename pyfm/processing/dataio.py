@@ -213,7 +213,7 @@ def frame_to_dict(df: pd.DataFrame, dict_depth: int) -> t.Union[t.Dict, np.ndarr
         return {k: array[i] for k, i in zip(keys, range(len(array)))}
 
 
-def get_pickle_loader(filename: str, _: t.Dict, **kwargs):
+def get_pickle_loader(filename: str, repl: t.Dict, **kwargs):
     data = np.load(filename, allow_pickle=True)
     if isinstance(data, np.ndarray) and len(data.shape) == 0:
         data = data.item()

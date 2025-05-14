@@ -1,4 +1,3 @@
-#! /usr/bin/env python3
 import logging
 import typing as t
 
@@ -23,7 +22,9 @@ ACTION_ORDER = [
 ]
 
 
-def col_mask_gen(df: pd.DataFrame, group_cols: list[str]) -> t.Generator[pd.Series]:
+def col_mask_gen(
+    df: pd.DataFrame, group_cols: list[str]
+) -> t.Generator[pd.Series, None, None]:
     """Yields a mask for each combination of columns in `group_cols`"""
     groupno = df.groupby(group_cols).ngroup()
     for i in range(groupno.nunique()):
