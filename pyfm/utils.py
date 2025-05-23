@@ -262,6 +262,7 @@ def process_files(
     processor: procFn,
     replacements: t.Optional[t.Dict] = None,
     regex: t.Optional[t.Dict] = None,
+    wildcard_fill: bool = False,
 ) -> t.List:
     """
     Processes files by applying string and regex replacements, then passing
@@ -302,17 +303,18 @@ def process_files(
     logging.debug(f"regex_repl keys: {sorted(regex_repl.keys())}")
     missing_keys = set(repl_keys) - set(str_repl.keys()) - set(regex_repl.keys())
     if len(missing_keys) > 0:
-        logging.warning(
-            f"Missing keys in replacements: {', '.join(sorted(missing_keys))}"
-        )
-        if input("Fill with wildcards (y/N)? ").strip().lower().startswith("y"):
+        if wildcard_fill:
+            logging.info(
+                f"Adding wildcards to keys in replacements: {', '.join(sorted(missing_keys))}"
+            )
             for k in missing_keys:
                 regex_repl[k] = ".*"
+        else:
+            raise ValueError(f"Missing keys {', '.join(sorted(missing_keys))}")
 
     collection: t.List = []
 
     def file_gen():
-
         fs = os.path.expanduser(filestem)
         for str_reps, repl_filename in string_replacement_gen(fs, str_repl):
             for reg_reps, regex_filename in file_regex_gen(repl_filename, regex_repl):

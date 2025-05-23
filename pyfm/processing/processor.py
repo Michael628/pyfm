@@ -1,6 +1,6 @@
 import logging
 import typing as t
-
+from collections import namedtuple
 import gvar as gv
 import gvar.dataset as ds
 import numpy as np
@@ -24,11 +24,12 @@ ACTION_ORDER = [
 
 def col_mask_gen(
     df: pd.DataFrame, group_cols: list[str]
-) -> t.Generator[pd.Series, None, None]:
+) -> t.Generator[t.Tuple[t.NamedTuple, pd.Series], None, None]:
     """Yields a mask for each combination of columns in `group_cols`"""
-    groupno = df.groupby(group_cols).ngroup()
-    for i in range(groupno.nunique()):
-        yield groupno == i
+    group_tuple = namedtuple("GroupTuple", group_cols)
+    groups = df[group_cols].assign(group_num=df.groupby(group_cols).ngroup())
+    for i, (group, _) in enumerate(groups.groupby(group_cols)):
+        yield (group_tuple(*group), groups["group_num"] == i)
 
 
 def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
@@ -54,7 +55,7 @@ def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
         for i in range(len(v)):
             j_sample = np.delete(v, i, axis=0)
             stdarray[i, :] = np.std(j_sample, axis=0, ddof=1)
-        buff_std[k] = stdarray
+        buff_std[k] = stdarray / np.sqrt(len(stdarray))
 
     return buff_std
 
@@ -168,11 +169,11 @@ def buffer(
     Raises:
         AssertionError: If the specified key_index is not found in the DataFrame's columns or index levels.
     """
-    tvar = "t" if "t" in df.index.names else "dt"
+    tvar = "t" if "t" in df.columns else "dt"
 
     buff = gv.BufferDict()
 
-    nt = df.index.get_level_values(tvar).nunique()
+    nt = df[tvar].nunique()
 
     labels_dt_last = sorted(df.index.names, key=lambda x: 0 if x == tvar else -1)
 
@@ -181,19 +182,10 @@ def buffer(
     else:
         key_indices = key_index
 
-    if key_indices[0] in df.columns:
-        assert all([x in df.columns for x in key_indices])
-        group_param = {"by": key_indices}
-    else:
-        assert all([x in df.index.names for x in key_indices])
-        group_param = {"level": key_indices}
-
     buff_fold = gv.BufferDict()
 
-    for key, xs in df.groupby(**group_param):
-        buff[key] = (
-            xs.reorder_levels(labels_dt_last)[data_col].to_numpy().reshape((-1, nt))
-        )
+    for key, xs in df.groupby(key_indices, as_index=False):
+        buff[key] = xs[data_col].to_numpy().reshape((-1, nt))
         if fold:
             size = buff[key].shape
             size = (size[0], size[1] // 2 + 1)
@@ -249,7 +241,6 @@ def signal_noise_nts(
         noise.columns.names = col_names
 
     nts = noise.copy()
-    import numpy as np
 
     for k in nts.columns:
         nts[k] = np.divide(nts[k], signal[k])

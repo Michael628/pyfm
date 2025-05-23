@@ -258,8 +258,9 @@ def get_file_loader(filestem: str):
 
 async def load_files(
     filestem: str,
-    replacements: t.Optional[t.Dict] = None,
-    regex: t.Optional[t.Dict] = None,
+    replacements: t.Dict | None = None,
+    regex: t.Dict | None = None,
+    wildcard_fill: bool = False,
     **kwargs,
 ) -> t.Dict[str, pd.DataFrame]:
     """
@@ -268,8 +269,8 @@ async def load_files(
     Parameters:
     filestem (str): The base name or stem of the files to be loaded and processed.
     file_loader (loadFn): A callable function responsible for file loading.
-    replacements (t.Optional[t.Dict]): Optional dictionary containing key replacements to apply to `filestem`.
-    regex (t.Optional[t.Dict]): Optional dictionary containing regex patterns as key replacements to `filestem`, matching
+    replacements (t.Dict | None): Optional dictionary containing key replacements to apply to `filestem`.
+    regex (t.Dict | None): Optional dictionary containing regex patterns as key replacements to `filestem`, matching
      all files found on disk according to the resulting pattern.
 
     Returns:
@@ -290,7 +291,9 @@ async def load_files(
     def get_filename(*args):
         return args
 
-    file_repls = utils.process_files(filestem, get_filename, replacements, regex)
+    file_repls = utils.process_files(
+        filestem, get_filename, replacements, regex, wildcard_fill
+    )
 
     file_loader = partial(get_file_loader(filestem), **kwargs)
     flw = partial(file_loader_wrapper, file_loader)
