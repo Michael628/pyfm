@@ -41,6 +41,7 @@ Homepage = "https://github.com/Michael628/pyfm"
 [tool.setuptools]
 packages = [
     "pyfm",
+    "pyfm.analysis",
     "pyfm.a2a",
     "pyfm.nanny",
     "pyfm.nanny.tasks",

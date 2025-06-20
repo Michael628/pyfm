@@ -1,6 +1,7 @@
 import typing as t
 import pandas as pd
-from pyfm.processing import processor, dataio
+import pyfm.processing.processor as pc
+import pyfm.processing.dataio as dio
 import argparse
 import logging
 
@@ -29,10 +30,10 @@ if __name__ == "__main__":
         if "tsource" in df.index.names or "tsource" in df.columns:
             actions["average"] = ["tsource"]
 
-        df = processor.execute(df, actions=actions)
+        df = pc.execute(df, actions=actions)
 
         if "seedkey" in df.columns and df["seedkey"].nunique() == 1:
-            processor.execute(df, actions={"drop": ["seedkey"]})
+            pc.execute(df, actions={"drop": ["seedkey"]})
 
         logging.info(f"Writing processed file to: {path_out}")
-        dataio.write_frame(df, path_out)
+        dio.write_frame(df, path_out)

@@ -21,15 +21,53 @@ ACTION_ORDER = [
     "drop",
 ]
 
+MaskGroup = t.Tuple[t.Optional[t.NamedTuple], pd.Series]
+MaskedDFGroup = t.Tuple[t.Optional[t.NamedTuple], pd.DataFrame]
+
+
+def norm_dist(df: pd.DataFrame) -> pd.DataFrame:
+    def normalize(df: pd.DataFrame) -> pd.DataFrame:
+        return df.assign(
+            corr=(
+                df["corr"].sub(df["corr"].mean())
+                if len(df) == 1
+                else df["corr"].sub(df["corr"].mean()).divide(df["corr"].std())
+            )
+        )
+
+    def new_normalize(df: pd.DataFrame) -> pd.Series:
+        return (
+            df["corr"].sub(df["corr"].groupby("t").transform("mean"))
+            if len(df) == 1
+            else df["corr"]
+            .sub(df["corr"].groupby("t").transform("mean"))
+            .divide(df["corr"].groupby("t").transform("std"))
+        )
+
+    return df.set_index("t").assign(corr=new_normalize).reset_index("t")
+    # return pd.concat([normalize(f) for _, f in df.groupby("t")])
+
 
 def col_mask_gen(
     df: pd.DataFrame, group_cols: list[str]
-) -> t.Generator[t.Tuple[t.NamedTuple, pd.Series], None, None]:
+) -> t.Generator[MaskGroup, None, None]:
     """Yields a mask for each combination of columns in `group_cols`"""
     group_tuple = namedtuple("GroupTuple", group_cols)
     groups = df[group_cols].assign(group_num=df.groupby(group_cols).ngroup())
     for i, (group, _) in enumerate(groups.groupby(group_cols)):
         yield (group_tuple(*group), groups["group_num"] == i)
+
+
+def masked_df_gen(
+    df: pd.DataFrame, mask: pd.Series | t.Iterator[MaskGroup] | None = None
+) -> t.Generator[MaskedDFGroup, None, None]:
+    if mask is None:
+        yield None, df
+    elif isinstance(mask, pd.Series):
+        yield None, df[mask]
+    else:
+        for g, m in mask:
+            yield g, df[m]
 
 
 def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
@@ -78,7 +116,7 @@ def mask_apply(
 
     df_out = []
 
-    for mask in col_mask_gen(df, grouped):
+    for group, mask in col_mask_gen(df, grouped):
         df_out.append(func(df[mask]))
 
     return pd.concat(df_out)
@@ -129,7 +167,7 @@ def group_apply(
     return df_out
 
 
-def buffer_avg(buff: gv.BufferDict) -> pd.DataFrame:
+def buffer_avg(buff: gv.BufferDict, col_names: list[str] | None = None) -> pd.DataFrame:
     """
     Computes the average of data stored in a BufferDict and returns it as a pandas DataFrame.
 
@@ -142,9 +180,20 @@ def buffer_avg(buff: gv.BufferDict) -> pd.DataFrame:
                       as column names.
     """
 
+    nlevels = len(next(iter(buff.keys())))
+    if col_names is None:
+        col_names = [f"level_{i}" for i in range(nlevels)]
+    counts = pd.Series({k: len(v) for k, v in buff.items()}, name="ncfgs").rename_axis(
+        index=col_names
+    )
     avg_data = ds.avg_data(buff)
-    df = pd.DataFrame(dict(avg_data))
-    df.index.name = "t"
+    df = (
+        pd.DataFrame(dict(avg_data))
+        .rename_axis(index="t")
+        .rename_axis(columns=col_names)
+        .melt(ignore_index=False, value_name="corr")
+        .merge(counts, right_index=True, left_on=col_names)
+    )
     return df
 
 
@@ -201,31 +250,9 @@ def buffer(
     return (buff if not fold else buff_fold, key_indices)
 
 
-def melt_df_cols(
-    df: pd.DataFrame,
-    data_col: str,
-    key_index: t.Union[str, t.List[str]],
-    *args,
-    **kwargs,
-) -> pd.DataFrame:
-    logging.info(data_col)
-    logging.info(key_index)
-    df_out = pd.melt(df, value_name=data_col, ignore_index=False)
-    if isinstance(key_index, str) or len(key_index) == 1:
-        var_names = ["variable"]
-    else:
-        var_names = [f"variable_{i}" for i in range(len(key_index))]
-
-    df_out.rename(columns=dict(zip(var_names, key_index)), inplace=True)
-    df_out[["mean", "error"]] = (
-        df_out[data_col].apply(lambda x: (gv.mean(x), gv.sdev(x))).to_list()
-    )
-    return df_out
-
-
 def signal_noise_nts(
-    data: t.Union[gv.BufferDict, pd.DataFrame], stacked: bool, *args, **kwargs
-) -> t.Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    data: t.Union[gv.BufferDict, pd.DataFrame], *args, **kwargs
+) -> pd.DataFrame:
     corr_col = "corr"
     if isinstance(data, pd.DataFrame):
         buff, col_names = buffer(data, *args, **kwargs)
@@ -234,25 +261,26 @@ def signal_noise_nts(
         buff = data
         col_names = None
 
-    signal = buffer_avg(buff)
-    noise = buffer_avg(stdjackknife(buff))
-    if col_names is not None:
-        signal.columns.names = col_names
-        noise.columns.names = col_names
+    signal = buffer_avg(buff, col_names)
+    noise = buffer_avg(stdjackknife(buff), col_names)
 
-    nts = noise.copy()
+    nts = noise.copy().assign(
+        **{corr_col: lambda x: x[corr_col].divide(signal[corr_col])}
+    )
 
-    for k in nts.columns:
-        nts[k] = np.divide(nts[k], signal[k])
-
-    # Merges data from columns into a single stack with [variable_i...] columns
-    # giving the values of the buffer keys
-    if stacked:
-        signal, noise, nts = (
-            melt_df_cols(df, *args, **kwargs) for df in (signal, noise, nts)
+    df_out = (
+        pd.concat(
+            [signal, noise, nts],
+            keys=["signal", "noise", "nts"],
+            names=["dset"],
         )
-
-    return signal, noise, nts
+        .reset_index()
+        .assign(
+            mean=lambda x: x[corr_col].map(gv.mean),
+            error=lambda x: x[corr_col].map(gv.sdev),
+        )
+    )
+    return df_out
 
 
 # def build_high(df: pd.DataFrame, data_col) -> pd.DataFrame:
@@ -370,10 +398,11 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
     """
 
     def average_repeated_indices(df):
-        df_out = df.copy()
-        df_out[data_col] = df.groupby(level=df.index.names)[data_col].mean()
-        df_out = df_out.drop_duplicates()
-        return df_out
+        agg_dict = {
+            data_col: "mean",
+        }
+        agg_dict = agg_dict | {k: "first" for k in df_out.columns if k != data_col}
+        return df.agg(agg_dict)
 
     df_out = df
     for col in avg_indices:

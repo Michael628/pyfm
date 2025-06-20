@@ -7,7 +7,7 @@ import pandas as pd
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Proved job step (from params.yaml) to process outputs for."
+        description="Provide job step (matching params.yaml steps) to process all outputs for step."
     )
     parser.add_argument("step", type=str, help="Job Step")
     parser.add_argument(
@@ -42,6 +42,7 @@ if __name__ == "__main__":
         if "actions" in run_params:
             result[key] = pc.execute(result[key], run_params["actions"])
 
+        # TODO: move "type" param to flag --format that...gets passed to processing_params?
         if out_files:
             out_type = out_files["type"]
             if out_type == "dictionary":
