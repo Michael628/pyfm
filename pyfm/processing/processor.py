@@ -114,12 +114,15 @@ def mask_apply(
         grouped = ungrouped_cols
         ungrouped = [x for x in all_cols if x not in grouped] + [data_col]
 
-    df_out = []
-
+    df_out = df
     for group, mask in col_mask_gen(df, grouped):
-        df_out.append(func(df[mask]))
-
-    return pd.concat(df_out)
+        df_out = df_out.mask(mask, func(df_out[mask]))
+    # df_out = []
+    #
+    # for group, mask in col_mask_gen(df, grouped):
+    #     df_out.append(func(df[mask]))
+    #
+    # return pd.concat(df_out)
 
 
 def group_apply(
@@ -407,11 +410,10 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
     df_out = df
     for col in avg_indices:
         if col in df.index.names:
-            df_out = df_out.reset_index(col, drop=True)
-        else:
-            df_out = df_out.drop(columns=col)
+            df_out = df_out.reset_index(col)
 
-        df_out = mask_apply(df_out, average_repeated_indices, data_col, [])
+        groups = [x for x in df_out.columns if x not in [data_col, col]]
+        df_out = df_out.drop(columns=[col]).groupby(by=groups, as_index=False).mean()
 
     return df_out
 
