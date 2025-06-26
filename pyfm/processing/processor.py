@@ -23,6 +23,7 @@ ACTION_ORDER = [
 
 MaskGroup = t.Tuple[t.Optional[t.NamedTuple], pd.Series]
 MaskedDFGroup = t.Tuple[t.Optional[t.NamedTuple], pd.DataFrame]
+BufferTuple = namedtuple("BufferTuple", ["columns", "buffer"])
 
 
 def norm_dist(df: pd.DataFrame) -> pd.DataFrame:
@@ -49,13 +50,16 @@ def norm_dist(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def col_mask_gen(
-    df: pd.DataFrame, group_cols: list[str]
+    df: pd.DataFrame, group_cols: t.Optional[list[str]] = None
 ) -> t.Generator[MaskGroup, None, None]:
     """Yields a mask for each combination of columns in `group_cols`"""
-    group_tuple = namedtuple("GroupTuple", group_cols)
-    groups = df[group_cols].assign(group_num=df.groupby(group_cols).ngroup())
-    for i, (group, _) in enumerate(groups.groupby(group_cols)):
-        yield (group_tuple(*group), groups["group_num"] == i)
+    if not group_cols:
+        yield (None, pd.Series(True, index=df.index))
+    else:
+        GroupTuple = namedtuple("GroupTuple", group_cols)
+        groups = df[group_cols].assign(group_num=df.groupby(group_cols).ngroup())
+        for i, (group, _) in enumerate(groups.groupby(group_cols)):
+            yield (GroupTuple(*group), groups["group_num"] == i)
 
 
 def masked_df_gen(
@@ -205,7 +209,7 @@ def buffer(
     data_col: str,
     key_index: t.Union[str, t.List[str]],
     fold: bool = False,
-) -> t.Tuple[gv.BufferDict, t.List[str]]:
+) -> BufferTuple:
     """
     Converts a pandas DataFrame into a grouped buffer dictionary.
 
@@ -237,20 +241,21 @@ def buffer(
     buff_fold = gv.BufferDict()
 
     for key, xs in df.groupby(key_indices, as_index=False):
-        buff[key] = xs[data_col].to_numpy().reshape((-1, nt))
+        k = key if len(key_indices) > 1 else key[0]
+        buff[k] = xs[data_col].to_numpy().reshape((-1, nt))
         if fold:
-            size = buff[key].shape
+            size = buff[k].shape
             size = (size[0], size[1] // 2 + 1)
 
-            buff_fold[key] = np.zeros(size, dtype=buff[key].dtype)
+            buff_fold[k] = np.zeros(size, dtype=buff[k].dtype)
 
-            buff_fold[key][:, 1 : nt // 2] = (
-                buff[key][:, 1 : nt // 2] + buff[key][:, -1 : nt // 2 : -1]
+            buff_fold[k][:, 1 : nt // 2] = (
+                buff[k][:, 1 : nt // 2] + buff[k][:, -1 : nt // 2 : -1]
             ) / 2.0
-            buff_fold[key][:, 0] = buff[key][:, 0]
-            buff_fold[key][:, nt // 2] = buff[key][:, nt // 2]
+            buff_fold[k][:, 0] = buff[k][:, 0]
+            buff_fold[k][:, nt // 2] = buff[k][:, nt // 2]
 
-    return (buff if not fold else buff_fold, key_indices)
+    return BufferTuple(buffer=buff if not fold else buff_fold, columns=key_indices)
 
 
 def signal_noise_nts(
@@ -258,7 +263,7 @@ def signal_noise_nts(
 ) -> pd.DataFrame:
     corr_col = "corr"
     if isinstance(data, pd.DataFrame):
-        buff, col_names = buffer(data, *args, **kwargs)
+        col_names, buff = buffer(data, *args, **kwargs)
     else:
         assert isinstance(data, gv.BufferDict)
         buff = data
@@ -399,13 +404,6 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
     """Averages `data_col` column in `df` over columns or indices specified in `avg_indices`,
     one at a time.
     """
-
-    def average_repeated_indices(df):
-        agg_dict = {
-            data_col: "mean",
-        }
-        agg_dict = agg_dict | {k: "first" for k in df_out.columns if k != data_col}
-        return df.agg(agg_dict)
 
     df_out = df
     for col in avg_indices:

@@ -37,7 +37,7 @@ def collapse_iter(
 
 
 def outlier_mask(
-    df: pd.DataFrame, n_std: int = 3, filter_by_cfg=False, invert=False
+    df: pd.DataFrame, n_std: int = 3, filter_by_cfg=True, invert=True
 ) -> pd.DataFrame:
     mean = df.groupby("t")["corr"].transform("mean")
     std = df.groupby("t")["corr"].transform("std")
@@ -108,7 +108,8 @@ def lmi_data_gen(df: pd.DataFrame | t.Iterator):
 
         return replace_low_modes(df.sort_values(["series_cfg", "gamma", "t"]))
 
-    yield from processed_df_gen(df, calculate_lmi)
+    for g, df_out in complete_dset_gen(df):
+        yield g, calculate_lmi(df_out)
 
 
 def plot_signal_noise_nts(df: pd.DataFrame | t.Iterator, **kwargs):
