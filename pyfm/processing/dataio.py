@@ -1,4 +1,5 @@
 import asyncio
+from collections import namedtuple
 import itertools
 import logging
 import os
@@ -12,6 +13,7 @@ import pandas as pd
 
 import pyfm as ps
 from pyfm import utils
+from pyfm.analysis.domain import WrappedDataPipe
 from pyfm.processing import config, processor
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
@@ -254,6 +256,65 @@ def get_file_loader(filestem: str):
         return get_h5_loader
     else:
         raise ValueError("File must have extension '.p' or '.h5'")
+
+
+def load_files_new(
+    filestem: str,
+    replacements: t.Dict | None = None,
+    regex: t.Dict | None = None,
+    wildcard_fill: bool = False,
+    **kwargs,
+) -> WrappedDataPipe:
+    """
+    Loads files and processes them using a provided processing function and optional replacements or regex operations.
+
+    Parameters:
+    filestem (str): The base name or stem of the files to be loaded and processed.
+    file_loader (loadFn): A callable function responsible for file loading.
+    replacements (t.Dict | None): Optional dictionary containing key replacements to apply to `filestem`.
+    regex (t.Dict | None): Optional dictionary containing regex patterns as key replacements to `filestem`, matching
+     all files found on disk according to the resulting pattern.
+
+    Returns:
+    pd.DataFrame: A pandas DataFrame result after processing the loaded files.
+    """
+
+    def file_loader_wrapper(file_loader, filename: str, repl: t.Dict) -> pd.DataFrame:
+        logging.debug(f"Loading file: {filename}")
+        new_data: pd.DataFrame = file_loader(filename, repl)
+
+        if len(repl) != 0:
+            new_data[list(repl.keys())] = tuple(repl.values())
+
+        return repl, new_data
+
+    def file_factory():
+        def get_filename(filename, reps):
+            return filename, reps
+
+        file_repls = utils.process_files(
+            filestem, get_filename, replacements, regex, wildcard_fill
+        )
+
+        file_loader = partial(get_file_loader(filestem), **kwargs)
+        flw = partial(file_loader_wrapper, file_loader)
+
+        group_cols = []
+        if len(file_repls) > 0:
+            group_cols = file_repls[0][1].keys()
+
+        GroupTuple = namedtuple("GroupTuple", group_cols)
+
+        def temp(*args):
+            fname, rep = args[0]
+            return flw(fname, rep)
+
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            results = executor.map(temp, file_repls)
+
+        yield from ((GroupTuple(**g), r) for g, r in results)
+
+    return WrappedDataPipe(file_factory)
 
 
 async def load_files(

@@ -37,8 +37,11 @@ def plot_hl(x: t.Sequence, y: float, ax=None, **kwargs) -> plt.Axes:
     return ax
 
 
-def plot_data_hist(df: pd.DataFrame, kind: str = "violin"):
-    norm_df = df.groupby("label").apply(pc.norm_dist)
+def plot_data_hist(df: pd.DataFrame, kind: str = "violin", normalize: bool = True):
+    norm_df = df
+    if normalize:
+        norm_df = df.groupby("label").apply(pc.norm_dist)
+
     return sns.catplot(
         data=norm_df,
         x="corr",
@@ -46,7 +49,7 @@ def plot_data_hist(df: pd.DataFrame, kind: str = "violin"):
         col="t",
         hue="label",
         col_wrap=4,
-        sharex=True,
+        sharex=False,
         # whis=(0.3, 99.7),
         dodge=True,
     ).set_titles(norm_df.iloc[0]["gamma_label"] + " {col_var}={col_name}")

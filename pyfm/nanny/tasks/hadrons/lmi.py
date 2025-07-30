@@ -8,11 +8,11 @@ import pandas as pd
 from pydantic.dataclasses import dataclass
 from pydantic import Field
 
-from pyfm import Gamma, utils
+from pyfm import utils
 from pyfm.nanny import TaskBase
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
-from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
+from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode, meson
 
 # TODO: Change modules into a dictionary instead of a list
 # TODO: Move functions into LMITask class and use `self` instead of task_config
@@ -21,84 +21,9 @@ from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
 # ============LMI Task Configuration===========
 @dataclass
 class LMITask(TaskBase):
-    # ============Operator List===========
-    @dataclass
-    class OpList(TaskBase):
-        """Configuration for a list of gamma operations.
-
-        Attributes
-        ----------
-        operations: list
-            Gamma operations to be performed, usually for meson fields or high mode solves.
-        """
-
-        @dataclass
-        class Op:
-            """Parameters for a gamma operation and associated masses."""
-
-            gamma: Gamma
-            mass: t.List[str]
-
-        operations: t.List[Op]
-
-        @classmethod
-        def from_dict(cls, kwargs) -> "LMITask.OpList":
-            """Creates a new instance of OpList from a dictionary.
-
-            Note
-            ----
-            Valid dictionary input formats:
-
-            kwargs = {
-              'gamma': ['op1','op2','op3'],
-              'mass': ['m1','m2']
-            }
-
-            or
-
-            kwargs = {
-              'op1': {
-                'mass': ['m1']
-              },
-              'op2': {
-                'mass': ['m2','m3']
-              }
-            }
-
-            """
-            params = utils.deep_copy_dict(kwargs)
-
-            if "mass" not in params:
-                operations = []
-                for key, val in params.items():
-                    mass = val["mass"]
-                    if isinstance(mass, str):
-                        mass = [mass]
-                    gamma = Gamma[key.upper()]
-                    operations.append(cls.Op(gamma=gamma, mass=mass))
-            else:
-                gammas = params["gamma"]
-                mass = params["mass"]
-                if isinstance(mass, str):
-                    mass = [mass]
-                if isinstance(gammas, str):
-                    gammas = [gammas]
-                operations = [cls.Op(gamma=Gamma[g.upper()], mass=mass) for g in gammas]
-            params["operations"] = operations
-            return cls(**params)
-
-        @property
-        def mass(self):
-            res: t.Set = set()
-            for op in self.operations:
-                for m in op.mass:
-                    res.add(m)
-
-            return list(res)
-
     gauge_component: t.Optional[gauge.GaugeHadronsComponent] = None
     epack_component: t.Optional[eig.EigHadronsComponent] = None
-    meson_component: t.Optional[OpList] = None
+    meson_component: t.Optional[meson.MesonHadronsComponent] = None
     high_modes_component: t.Optional[highmode.HighModeHadronsComponent] = None
 
     @classmethod
@@ -117,7 +42,7 @@ class LMITask(TaskBase):
         params["high_modes_component"] = hc
 
         if mc := kwargs.get("meson", None):
-            params["meson_component"] = cls.OpList.from_dict(mc)
+            params["meson_component"] = meson.MesonHadronsComponent.from_dict(mc)
 
         # if hc := kwargs.get("high_modes", None):
         #     hc = cls.HighModes.from_dict(hc)
@@ -219,26 +144,8 @@ def input_params(
 
     submit_conf_dict = submit_config.string_dict()
 
-    if not submit_config.overwrite_sources:
-        if task_config.meson_component:
-            bf = bad_files(task_config, submit_config)
-            meson_template = outfile_dict["meson_ll"].filename
-            meson_ops = task_config.meson_component.operations[:]
-            for i, op in sorted(enumerate(meson_ops), reverse=True):
-                for j, mass_label in sorted(enumerate(op.mass[:]), reverse=True):
-                    meson_files = [
-                        meson_template.format(
-                            mass=submit_config.mass_out_label[mass_label],
-                            gamma=g,
-                            **submit_conf_dict,
-                        )
-                        for g in op.gamma.gamma_list
-                    ]
-                    if not any([mf in bf for mf in meson_files]):
-                        op.mass.pop(j)
-
-                if not op.mass:
-                    task_config.meson_component.operations.pop(i)
+    if task_config.meson_component:
+        task_config.meson_component.filter_existing_operations(submit_config)
 
     temp = task_config.gauge_component.input_params(submit_config)
     modules = list(temp.values())
@@ -261,28 +168,8 @@ def input_params(
         modules += temp.values()
 
     if task_config.meson_component:
-        meson_template = outfile_dict["meson_ll"].filestem
-        for op in task_config.meson_component.operations:
-            op_type = op.gamma.name.lower()
-            gauge = "" if op.gamma == Gamma.LOCAL else "gauge"
-            for mass_label in op.mass:
-                output = meson_template.format(
-                    mass=submit_config.mass_out_label[mass_label], **submit_conf_dict
-                )
-                modules.append(
-                    hadmods.meson_field(
-                        name=f"mf_{op_type}_mass_{mass_label}",
-                        action=f"stag_mass_{mass_label}",
-                        block=submit_conf_dict["blocksize"],
-                        gammas=op.gamma.gamma_string,
-                        apply_g5="false",
-                        gauge=gauge,
-                        low_modes=f"evecs_mass_{mass_label}",
-                        left="",
-                        right="",
-                        output=output,
-                    )
-                )
+        temp = task_config.meson_component.input_params(submit_config)
+        modules += temp.values()
 
     module_info = [m["id"] for m in modules]
     schedule = build_schedule(module_info)
@@ -338,10 +225,11 @@ def catalog_files(
                 yield {}, outfile_dict["eval"]
 
         if task_config.meson_component:
-            res: t.Dict = {}
             for op in task_config.meson_component.operations:
-                res["gamma"] = op.gamma.gamma_list
-                res["mass"] = [submit_config.mass_out_label[m] for m in op.mass]
+                res = {
+                    "gamma": op.gamma.gamma_list,
+                    "mass": [submit_config.mass_out_label[m] for m in op.mass],
+                }
                 yield res, outfile_dict["meson_ll"]
 
         if task_config.high_modes_component:
@@ -372,6 +260,10 @@ def bad_files(
     task_config: LMITask,
     submit_config: SubmitHadronsConfig,
 ) -> t.List[str]:
+    """Get list of files that don't meet size requirements.
+
+    Note: This function is deprecated. Use component-specific methods instead.
+    """
     df = catalog_files(task_config, submit_config)
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 

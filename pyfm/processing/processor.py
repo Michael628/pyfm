@@ -49,8 +49,8 @@ def norm_dist(df: pd.DataFrame) -> pd.DataFrame:
     # return pd.concat([normalize(f) for _, f in df.groupby("t")])
 
 
-def col_mask_gen(
-    df: pd.DataFrame, group_cols: t.Optional[list[str]] = None
+def generate_column_masks(
+    df: pd.DataFrame, group_cols: list[str] | None = None
 ) -> t.Generator[MaskGroup, None, None]:
     """Yields a mask for each combination of columns in `group_cols`"""
     if not group_cols:
@@ -62,7 +62,7 @@ def col_mask_gen(
             yield (GroupTuple(*group), groups["group_num"] == i)
 
 
-def masked_df_gen(
+def generate_dfs(
     df: pd.DataFrame, mask: pd.Series | t.Iterator[MaskGroup] | None = None
 ) -> t.Generator[MaskedDFGroup, None, None]:
     if mask is None:
@@ -72,6 +72,10 @@ def masked_df_gen(
     else:
         for g, m in mask:
             yield g, df[m]
+
+
+def generate_column_dfs(df, cols):
+    yield from generate_dfs(df, generate_column_masks(df, cols))
 
 
 def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
@@ -119,7 +123,7 @@ def mask_apply(
         ungrouped = [x for x in all_cols if x not in grouped] + [data_col]
 
     df_out = df
-    for group, mask in col_mask_gen(df, grouped):
+    for group, mask in generate_column_masks(df, grouped):
         df_out = df_out.mask(mask, func(df_out[mask]))
     # df_out = []
     #

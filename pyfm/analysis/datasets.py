@@ -1,7 +1,11 @@
 import pandas as pd
 import typing as t
+from pyfm.analysis.domain import WrappedDataPipe
 import pyfm.processing.processor as pc
 import pyfm.processing.dataio as dio
+
+from .services.filter import create_col_iter, filter_outliers, filter_incomplete_lmi
+from .services.process import append_lmi, average
 
 
 def fix_sign_flip(df):
@@ -11,7 +15,7 @@ def fix_sign_flip(df):
         return x
 
     subsets = [c for c in df.columns if c != "corr"]
-    subset_mask_iter = pc.col_mask_gen(df, subsets)
+    subset_mask_iter = pc.generate_column_masks(df, subsets)
     for _, subset_mask in subset_mask_iter:
         df.loc[subset_mask, "corr"] = (
             df[subset_mask].groupby("series_cfg")["corr"].transform(flip)
@@ -31,21 +35,43 @@ def post_processing(df: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def load_and_clean(fstring: str) -> WrappedDataPipe:
+    return (
+        dio.load_files_new(fstring, wildcard_fill=True)
+        .pipe(lambda x: x.drop(columns="index") if "index" in x.columns else x)
+        .pipe(post_processing)
+        .pipe(lambda x: x.assign(gamma="G5") if "gamma" not in x.columns else x)
+    )
+
+
+def clean_lmi(df: pd.DataFrame, n_std=5) -> WrappedDataPipe:
+    def clean_outliers(f: pd.DataFrame) -> pd.DataFrame:
+        return pd.concat(
+            [filter_outliers(x, n_std).passed for _, x in f.groupby("dset")]
+        )
+
+    return (
+        create_col_iter(df, ["gamma_label"])
+        .pipe(lambda x: filter_incomplete_lmi(x).passed)
+        .pipe(append_lmi)
+        .pipe(average)
+        .pipe(clean_outliers)
+        .nop(lambda x: print(x["series_cfg"].nunique()))
+        # .nop(lambda x: print(x))
+    )
+
+
 async def load_data(
     fstring: str,
     post_proc_fn: t.Callable | None = None,
     repl: t.Dict | None = None,
     **kwargs,
 ) -> pd.DataFrame:
-    data = pd.concat(
-        strip_vals(
-            await dio.load(
-                fstring,
-                replacements=repl if repl is not None else {},
-                wildcard_fill=True,
-                **kwargs,
-            )
-        )
+    data = await dio.load(
+        fstring,
+        replacements=repl if repl is not None else {},
+        wildcard_fill=True,
+        **kwargs,
     ).pipe(post_proc_fn if post_proc_fn is not None else lambda x: x)
 
     return data
@@ -98,7 +124,7 @@ async def l144288_4keig() -> pd.DataFrame:
     Returns:
         pd.DataFrame with extra columns `ext` = 'proj', `eigs` = '2000'
     """
-    fstring = "~/Dropbox/2-Areas/lattice_data/l144288/e{eigs}n1dt2_{ext}/m000569/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m000569.h5"
+    fstring = "~/Dropbox/2-Areas/lattice_data/l144288/e{eigs}n1dt2_{ext}/processed_dataframes/m000569/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m000569.h5"
 
     replacements = {"ext": ["proj", "full"], "eigs": "4000", "mass": "000569"}
     data_4k = (await load_data(fstring, post_processing, replacements)).query(

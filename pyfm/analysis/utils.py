@@ -11,105 +11,39 @@ import matplotlib.pyplot as plt
 import logging
 
 
-def processed_df_gen(
+def generate_processed_df(
     df: pd.DataFrame | t.Iterator,
-    proc_fun: t.Callable,
+    proc_fn: t.Callable,
     group_as_param: bool = False,
     **kwargs,
 ):
     if isinstance(df, pd.DataFrame):
         if group_as_param:
-            yield None, proc_fun(df, None, **kwargs)
+            yield None, proc_fn(df, None, **kwargs)
         else:
-            yield None, proc_fun(df, **kwargs)
+            yield None, proc_fn(df, **kwargs)
     else:
         for g, df_out in df:
+            logging.debug(f"group: {g}")
             if group_as_param:
-                yield g, proc_fun(df_out, g, **kwargs)
+                yield g, proc_fn(df_out, g, **kwargs)
             else:
-                yield g, proc_fun(df_out, **kwargs)
+                yield g, proc_fn(df_out, **kwargs)
+
+
+def generate_masked_df(
+    df: pd.DataFrame | t.Iterator, mask_fn: t.Callable, *args, **kwargs
+):
+    def apply_mask(df, *args, **kwargs):
+        return df[mask_fn(df, *args, **kwargs)]
+
+    yield from generate_processed_df(df, apply_mask, *args, **kwargs)
 
 
 def collapse_iter(
     df: pd.DataFrame | t.Iterator,
 ) -> pd.DataFrame:
-    return pd.concat([x for _, x in processed_df_gen(df, lambda x: x)])
-
-
-def outlier_mask(
-    df: pd.DataFrame, n_std: int = 3, filter_by_cfg=True, invert=True
-) -> pd.DataFrame:
-    mean = df.groupby("t")["corr"].transform("mean")
-    std = df.groupby("t")["corr"].transform("std")
-    cutoff = std * n_std
-    lower, upper = mean - cutoff, mean + cutoff
-    mask = (df["corr"] < lower) | (df["corr"] > upper)
-
-    if filter_by_cfg:
-        outlier_cfgs = df[mask]["series_cfg"].drop_duplicates().to_list()
-        if len(outlier_cfgs) != 0:
-            logging.debug(f"{len(outlier_cfgs)} outliers found")
-            logging.debug(f"Outlier configs: {outlier_cfgs}")
-        else:
-            logging.debug(f"No outliers found.")
-
-        if invert:
-            return ~(df["series_cfg"].isin(outlier_cfgs))
-        return df["series_cfg"].isin(outlier_cfgs)
-    else:
-        if invert:
-            return ~mask
-        else:
-            return mask
-
-
-def remove_outlier_gen(df: pd.DataFrame | t.Iterator, *args, **kwargs):
-    """Iterates over df items removing outlier points
-
-    Args:
-        df: Dataframe or iterable to filter
-        filter_by_cfg: If true, removes all points in df that share a config with outlier
-        *args: See `outliers_std_mask`
-        **kwargs: See `outliers_std_mask`
-
-    Yields:
-        NamedTuple describing group filter and filtered dataframe
-    """
-
-    def remove_outliers(df, group, *args, **kwargs):
-        logging.debug(group)
-        return df[outlier_mask(df, *args, **kwargs)]
-
-    yield from processed_df_gen(
-        df, remove_outliers, group_as_param=True, *args, **kwargs
-    )
-
-
-def lmi_data_gen(df: pd.DataFrame | t.Iterator):
-    def calculate_lmi(df: pd.DataFrame) -> pd.DataFrame:
-        def replace_low_modes(df: pd.DataFrame) -> pd.DataFrame:
-            agg_dict = {k: "first" for k in df.columns} | {"corr": "mean"}
-
-            return (
-                df[df["dset"] == "ama"]
-                .copy()
-                .assign(
-                    corr=(
-                        df.loc[df.dset == "ama", "corr"].values
-                        - df.loc[df.dset == "ranLL", "corr"].values
-                        + df.loc[df.dset == "a2aLL", "corr"].values
-                    )
-                )
-                .groupby(["series_cfg", "t"], as_index=False)
-                .agg(agg_dict)
-                .drop("gamma", axis=1)
-                .assign(dset="lmi")
-            )
-
-        return replace_low_modes(df.sort_values(["series_cfg", "gamma", "t"]))
-
-    for g, df_out in complete_dset_gen(df):
-        yield g, calculate_lmi(df_out)
+    return pd.concat([x for _, x in generate_processed_df(df, lambda x: x)])
 
 
 def plot_signal_noise_nts(df: pd.DataFrame | t.Iterator, **kwargs):
@@ -117,19 +51,19 @@ def plot_signal_noise_nts(df: pd.DataFrame | t.Iterator, **kwargs):
         df: pd.DataFrame,
         fold=False,
         title: str = "",
-        postproc_func: t.Callable = lambda x: x,
+        postproc_fn: t.Callable = lambda x: x,
         **kwargs,
     ):
         gvar_data = (
             pc.signal_noise_nts(df, "corr", ["label"], fold=fold)
-            .pipe(postproc_func)
+            .pipe(postproc_fn)
             .assign(
                 label=lambda x: x.label + " (" + x.ncfgs.astype("string") + " cfgs)"
             )
         )
 
         plot_params = {
-            "nts": {"ylabel": f"$N/S$"},
+            "nts": {"ylabel": "$N/S$"},
             "signal": {"ylabel": "$C(t)$"},
             "noise": {"ylabel": r"$\sigma(t)$"},
         }
@@ -141,7 +75,8 @@ def plot_signal_noise_nts(df: pd.DataFrame | t.Iterator, **kwargs):
             plot_params = {k: v | kwargs for k, v in plot_params.items()}
         print(plot_params)
 
-        for gg, d in pc.masked_df_gen(gvar_data, pc.col_mask_gen(gvar_data, ["dset"])):
+        for gg, d in pc.generate_column_dfs(gvar_data, ["dset"]):
+            assert hasattr(gg, "dset") and gg is not None
             legend_title = title + f" {gg.dset}"
             pivot = pd.pivot_table(
                 d,
@@ -154,38 +89,11 @@ def plot_signal_noise_nts(df: pd.DataFrame | t.Iterator, **kwargs):
                 pivot, afm=0.042, legend_title=legend_title, **plot_params[gg.dset]
             )
             if gg.dset == "nts":
-                plot.plot_hl(pivot.index, 1.0, ax)
+                plot.plot_hl(pivot.index.to_list(), 1.0, ax)
 
     plotter_wrap = functools.partial(plotter, **kwargs)
-    for _ in processed_df_gen(df, plotter_wrap):
+    for _ in generate_processed_df(df, plotter_wrap):
         pass
-
-
-def complete_dset_mask(df: pd.DataFrame, expected_dsets: int = 3) -> pd.Series:
-    mask = df.groupby("series_cfg")["dset"].nunique() == expected_dsets
-    # NOTE: how it's done when series_cfg is in index
-    # mask = mask.loc[df.index.get_level_values("series_cfg")].values
-
-    incomplete_configs = mask[~mask].index.values
-
-    if len(incomplete_configs) != 0:
-        logging.debug(f"Incomplete configs: {incomplete_configs}")
-    else:
-        logging.debug("`complete_dset_mask`: No configs filtered.")
-
-    mask = mask.loc[df["series_cfg"]].values
-    if len(df[mask]) == 0:
-        raise ValueError(f"No configs found with {expected_dsets} data sets")
-    return mask
-
-
-def complete_dset_gen(df: pd.DataFrame | t.Iterator, invert=False, *args, **kwargs):
-    for g, df_out in processed_df_gen(df, lambda x: x):
-        logging.debug(g)
-        mask = complete_dset_mask(df_out, *args, **kwargs)
-        if invert:
-            mask = ~mask
-        yield g, df_out[mask]
 
 
 def show_config_range(a: pd.DataFrame, cfgnos: bool = True) -> None:
@@ -224,11 +132,9 @@ def show_config_range(a: pd.DataFrame, cfgnos: bool = True) -> None:
 
 
 def print_outliers(df: pd.DataFrame | t.Iterator, **kwargs) -> None:
-    def printer(df, group) -> None:
-        if group:
-            print(f"{group}")
-        outlier_mask = outliers_std_mask(df, **kwargs)
-        outliers = t.cast(pd.DataFrame, df[outlier_mask])
+    def printer(df) -> None:
+        outliers = next(remove_outliers(df, **kwargs))[1]
+        print(outliers)
         if len(outliers) != 0:
             outlier_cfgs = outliers["series_cfg"].drop_duplicates().to_list()
             print(f"{len(outlier_cfgs)} outliers found")
@@ -237,15 +143,18 @@ def print_outliers(df: pd.DataFrame | t.Iterator, **kwargs) -> None:
             print(f"No outliers found.")
         print()
 
-    for group, p_func in processed_df_gen(df, printer, group_as_param=True):
+    for group, p_fn in generate_processed_df(df, printer):
         pass
 
 
 def show_strip_plot(
-    df: pd.DataFrame | t.Iterator, preproc_func: t.Callable = lambda x: x, **kwargs
+    df: pd.DataFrame | t.Iterator,
+    preproc_fn: t.Callable = lambda x: x,
+    normalize: bool = True,
+    **kwargs,
 ) -> None:
     def plotter(df: pd.DataFrame, group: t.NamedTuple) -> None:
-        plot.plot_data_hist(preproc_func(df), kind="strip")
+        plot.plot_data_hist(preproc_fn(df), kind="strip", normalize=normalize)
         if figdir := kwargs.get("figdir", None):
             file_name = kwargs.get("file_name", None).format(**group._asdict())
 
@@ -271,5 +180,5 @@ def show_strip_plot(
                 bbox_inches="tight",
             )
 
-    for _ in processed_df_gen(df, plotter, group_as_param=True):
+    for _ in generate_processed_df(df, plotter, group_as_param=True):
         pass
