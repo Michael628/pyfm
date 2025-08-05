@@ -160,6 +160,7 @@ def make_inputs(param, step, cfgno_steps):
             assert isinstance(submit_config, SubmitHadronsConfig)
 
             if schedule:
+                os.makedirs("schedules/", exist_ok=True)
                 sched_file = f"schedules/{input_file[: -len('.xml')]}.sched"
                 with open(sched_file, "w") as f:
                     f.write(str(len(schedule)) + "\n" + "\n".join(schedule))
@@ -175,6 +176,7 @@ def make_inputs(param, step, cfgno_steps):
         else:
             input_string = input_params
 
+        os.makedirs("in/", exist_ok=True)
         with open(f"in/{input_file}", "w") as f:
             f.write(input_string)
 
