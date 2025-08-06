@@ -70,7 +70,7 @@ hadrons_params:
   cg_residual: 1e-8
   eigresid: 1e-8
   blocksize: 500
-  overwrite_sources: True
+  overwrite_sources: False
   run_id: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
 
 precess:    # (cfg - cfg0)/dcfg*tstep % dt
@@ -179,10 +179,10 @@ files:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
     good_size: 13100
   meson_contract_ll:
-    filestem: e{eigs}n{noise}dt{dt}.2024/mesons/m{meson_mass}/mf_{series}
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{meson_mass}/mf_{series}
     good_size: 36864000000
   meson_ll:
-    filestem: e{eigs}n{noise}dt{dt}.2024/mesons/m{mass}/mf_{series}
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
     good_size: 36864000000
   contract:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}

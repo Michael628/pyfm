@@ -599,7 +599,7 @@
         <mom>
           <elem>0 0 0</elem>
         </mom>
-        <output>/pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau/e1000n1dt1.2024/mesons/m002426/mf_a</output>
+        <output>/pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau/e1000n1dt1/mesons/m002426/mf_a</output>
         <right></right>
         <spinTaste>
           <applyG5>false</applyG5>
@@ -621,7 +621,7 @@
         <mom>
           <elem>0 0 0</elem>
         </mom>
-        <output>/pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau/e1000n1dt1.2024/mesons/m002426/mf_a</output>
+        <output>/pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau/e1000n1dt1/mesons/m002426/mf_a</output>
         <right></right>
         <spinTaste>
           <applyG5>false</applyG5>
