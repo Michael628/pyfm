@@ -1,6 +1,8 @@
 import typing as t
+from typing import Union, List, Optional, Dict
 
 from pydantic.dataclasses import dataclass
+import pandas as pd
 import pyfm
 from pyfm import utils
 import os
@@ -60,9 +62,60 @@ class Outfile:
 
 @dataclass
 class TaskBase:
+    """Base class for task configurations implementing TaskConfigProtocol.
+    
+    This class provides default implementations that delegate to the legacy
+    module-based dispatch system for backward compatibility. Subclasses should
+    override these methods to provide direct implementations.
+    """
+    
     @classmethod
     def from_dict(cls, kwargs: t.Dict[str, t.Any]) -> "TaskBase":
         return cls(**kwargs)
+    
+    def input_params(self, submit_config: "SubmitConfig") -> Union[
+        t.Tuple[List[Dict], Optional[List[str]]], 
+        Dict[str, Dict]
+    ]:
+        """Default implementation delegating to module-based dispatch.
+        
+        Subclasses should override this method to provide direct implementations.
+        """
+        from pyfm.nanny import tasks
+        # Try to get job_type and task_type from the instance
+        job_type = getattr(self, 'job_type', 'hadrons')
+        task_type = getattr(self, 'task_type', 'lmi')
+        return tasks.input_params(job_type, task_type, self, submit_config)
+    
+    def processing_params(self, submit_config: "SubmitConfig") -> Dict:
+        """Default implementation delegating to module-based dispatch.
+        
+        Subclasses should override this method to provide direct implementations.
+        """
+        from pyfm.nanny import tasks
+        job_type = getattr(self, 'job_type', 'hadrons')
+        task_type = getattr(self, 'task_type', 'lmi')
+        return tasks.processing_params(job_type, task_type, self, submit_config)
+    
+    def catalog_files(self, submit_config: "SubmitConfig") -> pd.DataFrame:
+        """Default implementation delegating to module-based dispatch.
+        
+        Subclasses should override this method to provide direct implementations.
+        """
+        from pyfm.nanny import tasks
+        job_type = getattr(self, 'job_type', 'hadrons')
+        task_type = getattr(self, 'task_type', 'lmi')
+        return tasks.catalog_files(job_type, task_type, self, submit_config)
+    
+    def bad_files(self, submit_config: "SubmitConfig") -> List[str]:
+        """Default implementation delegating to module-based dispatch.
+        
+        Subclasses should override this method to provide direct implementations.
+        """
+        from pyfm.nanny import tasks
+        job_type = getattr(self, 'job_type', 'hadrons')
+        task_type = getattr(self, 'task_type', 'lmi')
+        return tasks.bad_files(job_type, task_type, self, submit_config)
 
 
 @dataclass

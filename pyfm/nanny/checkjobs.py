@@ -255,12 +255,14 @@ def good_output(step: str, cfgno: str, param: t.Dict) -> bool:
 
     submit_config = config.get_submit_config(param, job_config, series=series, cfg=cfg)
 
-    bad_files = config.bad_files(job_config, submit_config)
-    if bad_files:
-        logging.warning(f"File `{bad_files[0]}` not found or not of correct file size.")
-        return False
-    else:
+    # Use the new JobConfig method for cleaner code
+    if job_config.has_good_output(submit_config):
         return True
+    else:
+        bad_files = job_config.bad_files(submit_config)
+        if bad_files:
+            logging.warning(f"File `{bad_files[0]}` not found or not of correct file size.")
+        return False
 
 
 ######################################################################

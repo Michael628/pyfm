@@ -14,8 +14,10 @@ from pydantic.dataclasses import dataclass
 
 from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
 from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
+from pyfm.nanny.registry import register_task
 
 
+@register_task("hadrons", "seq_sib")
 @dataclass
 class SeqSIBTask(HadronsTaskBase):
     gauge_component: gauge.GaugeHadronsComponent
@@ -144,5 +146,4 @@ def bad_files(
     return []
 
 
-def get_task_factory():
-    return SeqSIBTask.from_dict
+# Factory function removed - now handled by plugin registry in tasks/__init__.py

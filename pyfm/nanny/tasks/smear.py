@@ -1,6 +1,7 @@
 import logging
 import os.path
 import typing as t
+from typing import Union, List, Optional, Dict, Tuple
 
 import pandas as pd
 from pydantic.dataclasses import dataclass
@@ -8,8 +9,10 @@ from pydantic.dataclasses import dataclass
 from pyfm import config as c
 from pyfm import utils
 from pyfm.nanny import SubmitConfig, TaskBase
+from pyfm.nanny.registry import register_task, register_submit_config
 
 
+@register_submit_config("smear")
 @c.dataclass_with_getters
 class SubmitSmearConfig(SubmitConfig):
     space: int
@@ -18,9 +21,72 @@ class SubmitSmearConfig(SubmitConfig):
     cfg: t.Optional[str] = None
 
 
+@register_task("smear")
 @dataclass
 class SmearTask(TaskBase):
     unsmeared_file: str
+    
+    def input_params(self, submit_config: SubmitSmearConfig) -> Tuple[str, None]:
+        """Generate input parameters for smear job execution.
+        
+        Parameters
+        ----------
+        submit_config : SubmitSmearConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Tuple[str, None]
+            Input string for smear execution and None for schedule.
+        """
+        return input_params(self, submit_config)
+    
+    def processing_params(self, submit_config: SubmitSmearConfig) -> Dict:
+        """Generate processing parameters for smear data analysis.
+        
+        Note: Smear tasks typically don't have processing parameters.
+        
+        Parameters
+        ----------
+        submit_config : SubmitSmearConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Dict
+            Empty processing configuration.
+        """
+        return {}
+    
+    def catalog_files(self, submit_config: SubmitSmearConfig) -> pd.DataFrame:
+        """Generate file catalog for smear outputs.
+        
+        Parameters
+        ----------
+        submit_config : SubmitSmearConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: filepath, exists, file_size, good_size
+        """
+        return catalog_files(self, submit_config)
+    
+    def bad_files(self, submit_config: SubmitSmearConfig) -> List[str]:
+        """Identify incomplete or corrupted smear files.
+        
+        Parameters
+        ----------
+        submit_config : SubmitSmearConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        List[str]
+            List of problematic file paths.
+        """
+        return bad_files(self, submit_config)
 
 
 def input_params(
@@ -119,9 +185,17 @@ def bad_files(task_config: SmearTask, submit_config: SubmitSmearConfig) -> t.Lis
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 
 
-def get_task_factory():
-    return SmearTask.from_dict
+def processing_params(task_config: SmearTask, submit_config: SubmitSmearConfig) -> Dict:
+    """Generate processing parameters for smear tasks.
+    
+    Note: Smear tasks typically don't require post-processing.
+    
+    Returns
+    -------
+    Dict
+        Empty processing configuration.
+    """
+    return {}
 
 
-def get_submit_factory() -> t.Callable[..., SubmitSmearConfig]:
-    return SubmitSmearConfig.create
+# Factory functions removed - now handled by plugin registry in tasks/__init__.py

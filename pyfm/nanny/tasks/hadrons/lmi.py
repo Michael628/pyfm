@@ -2,6 +2,7 @@ import itertools
 import os.path
 import re
 import typing as t
+from typing import Union, List, Optional, Dict
 from dataclasses import fields
 
 import pandas as pd
@@ -13,12 +14,14 @@ from pyfm.nanny import TaskBase
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
 from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode, meson
+from pyfm.nanny.registry import register_task
 
 # TODO: Change modules into a dictionary instead of a list
 # TODO: Move functions into LMITask class and use `self` instead of task_config
 
 
 # ============LMI Task Configuration===========
+@register_task("hadrons", "lmi")
 @dataclass
 class LMITask(TaskBase):
     gauge_component: t.Optional[gauge.GaugeHadronsComponent] = None
@@ -69,6 +72,66 @@ class LMITask(TaskBase):
             res += self.high_modes_component.mass
 
         return list(set(res))
+    
+    def input_params(self, submit_config: SubmitHadronsConfig) -> t.Tuple[List[Dict], Optional[List[str]]]:
+        """Generate input parameters for LMI job execution.
+        
+        Parameters
+        ----------
+        submit_config : SubmitHadronsConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Tuple[List[Dict], Optional[List[str]]]
+            Tuple of (modules, schedule) for LMI execution.
+        """
+        return input_params(self, submit_config)
+    
+    def processing_params(self, submit_config: SubmitHadronsConfig) -> Dict:
+        """Generate processing parameters for LMI data analysis.
+        
+        Parameters
+        ----------
+        submit_config : SubmitHadronsConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Dict
+            Processing configuration with 'run' key containing list of processing tasks.
+        """
+        return processing_params(self, submit_config)
+    
+    def catalog_files(self, submit_config: SubmitHadronsConfig) -> pd.DataFrame:
+        """Generate file catalog for LMI outputs.
+        
+        Parameters
+        ----------
+        submit_config : SubmitHadronsConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: filepath, exists, file_size, good_size
+        """
+        return catalog_files(self, submit_config)
+    
+    def bad_files(self, submit_config: SubmitHadronsConfig) -> List[str]:
+        """Identify incomplete or corrupted LMI files.
+        
+        Parameters
+        ----------
+        submit_config : SubmitHadronsConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        List[str]
+            List of problematic file paths.
+        """
+        return bad_files(self, submit_config)
 
 
 # ============Functions for building params and checking outfiles===========
@@ -332,5 +395,4 @@ def processing_params(
     return proc_params
 
 
-def get_task_factory():
-    return LMITask.from_dict
+# Factory function removed - now handled by plugin registry in tasks/__init__.py

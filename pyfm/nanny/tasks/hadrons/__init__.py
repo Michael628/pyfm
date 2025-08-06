@@ -3,6 +3,7 @@ from dataclasses import field
 
 from pyfm import config as c, SubjectInterface, ObserverInterface
 from pyfm.nanny import SubmitConfig, TaskBase
+from pyfm.nanny.registry import register_submit_config
 
 
 class HadronsTaskBase(TaskBase, SubjectInterface):
@@ -19,6 +20,7 @@ class HadronsTaskBase(TaskBase, SubjectInterface):
             observer.update(**self.get_notification())
 
 
+@register_submit_config("hadrons")
 @c.dataclass_with_getters
 class SubmitHadronsConfig(SubmitConfig):
     tstart: int = 0
@@ -82,5 +84,4 @@ class SubmitHadronsConfig(SubmitConfig):
         return res
 
 
-def get_submit_factory() -> t.Callable[..., SubmitHadronsConfig]:
-    return SubmitHadronsConfig.create
+# Factory function removed - now handled by plugin registry in tasks/__init__.py

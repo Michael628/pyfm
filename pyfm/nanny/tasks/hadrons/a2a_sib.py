@@ -17,8 +17,10 @@ from pydantic.dataclasses import dataclass
 from pyfm.nanny import TaskBase
 from pyfm.nanny.tasks.hadrons.components import hadmods
 from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
+from pyfm.nanny.registry import register_task
 
 
+@register_task("hadrons", "a2a_sib")
 @dataclass
 class A2ASIBTask(TaskBase):
     mass: str
@@ -215,5 +217,4 @@ def bad_files(
     return []
 
 
-def get_task_factory():
-    return A2ASIBTask.from_dict
+# Factory function removed - now handled by plugin registry in tasks/__init__.py

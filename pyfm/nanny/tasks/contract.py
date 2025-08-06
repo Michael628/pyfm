@@ -1,6 +1,7 @@
 import logging
 import os
 import typing as t
+from typing import Union, List, Optional, Dict, Tuple
 from dataclasses import field
 
 import pandas as pd
@@ -10,8 +11,10 @@ from pyfm import config as c
 from pyfm import utils
 from pyfm.a2a.config import DiagramConfig
 from pyfm.nanny import SubmitConfig, TaskBase
+from pyfm.nanny.registry import register_task, register_submit_config
 
 
+@register_submit_config("contract")
 @c.dataclass_with_getters
 class SubmitContractConfig(SubmitConfig):
     _diagram_params: t.Dict[str, DiagramConfig] = field(default_factory=dict)
@@ -32,9 +35,70 @@ class SubmitContractConfig(SubmitConfig):
         super().__init__(**params)
 
 
+@register_task("contract")
 @dataclass
 class ContractTask(TaskBase):
     diagrams: t.List[str]
+    
+    def input_params(self, submit_config: SubmitContractConfig) -> Tuple[List[str], None]:
+        """Generate input parameters for contract job execution.
+        
+        Parameters
+        ----------
+        submit_config : SubmitContractConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Tuple[List[str], None]
+            Input YAML configuration and None for schedule.
+        """
+        return input_params(self, submit_config)
+    
+    def processing_params(self, submit_config: SubmitContractConfig) -> Dict:
+        """Generate processing parameters for contract data analysis.
+        
+        Parameters
+        ----------
+        submit_config : SubmitContractConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Dict
+            Processing configuration with 'run' key containing list of diagrams.
+        """
+        return processing_params(self, submit_config)
+    
+    def catalog_files(self, submit_config: SubmitContractConfig) -> pd.DataFrame:
+        """Generate file catalog for contract outputs.
+        
+        Parameters
+        ----------
+        submit_config : SubmitContractConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: filepath, exists, file_size, good_size
+        """
+        return catalog_files(self, submit_config)
+    
+    def bad_files(self, submit_config: SubmitContractConfig) -> List[str]:
+        """Identify incomplete or corrupted contract files.
+        
+        Parameters
+        ----------
+        submit_config : SubmitContractConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        List[str]
+            List of problematic file paths.
+        """
+        return bad_files(self, submit_config)
 
 
 def input_params(
@@ -153,9 +217,4 @@ def processing_params(
     return proc_params
 
 
-def get_task_factory():
-    return ContractTask.from_dict
-
-
-def get_submit_factory() -> t.Callable[..., SubmitContractConfig]:
-    return SubmitContractConfig.create
+# Factory functions removed - now handled by plugin registry in tasks/__init__.py
