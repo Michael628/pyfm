@@ -272,7 +272,7 @@ def submit_job(param, step, cfgno_steps, max_cases):
         # Submitted batch job 10059729
         jobid = reply[len(reply) - 1].split()[3]
     elif scheduler == "INTERACTIVE":
-        jobid = os.environ["SLURM_JOBID"]
+        jobid = "0000"
     elif scheduler == "Cobalt":
         # ** Project 'semileptonic'; job rerouted to queue 'prod-short'
         # ['1607897']
@@ -305,8 +305,12 @@ def nanny_loop(YAML):
     """Check job periodically and submit to the queue"""
 
     date = subprocess.check_output("date", shell=True).rstrip().decode()
-    hostname = subprocess.check_output("hostname", shell=True).rstrip().decode()
-    print(date, "Spawn job process", os.getpid(), "started on", hostname)
+    try:
+        hostname = subprocess.check_output("hostname", shell=True).rstrip().decode()
+        print(date, "Spawn job process", os.getpid(), "started on", hostname)
+    except subprocess.CalledProcessError:
+        print(date, "Spawn job process", os.getpid(), "started on", "localhost")
+
     sys.stdout.flush()
 
     param = utils.load_param(YAML)
