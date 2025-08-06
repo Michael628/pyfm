@@ -11,7 +11,9 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOME}/work/deps/install/scalar/lib
 
 executable=../bin/HadronsMILC
 
-# export OPT="--shm 1024 --device-mem 1024"
+PPN=$((${BASETASKS} / ${BASENODES}))
+
+export OPT=""
 runargs=" --grid 4.4.4.4 $OPT"
 
 OFFSET=0
@@ -31,6 +33,7 @@ for inXML in ${INPUTLIST}; do
 	echo ${APP} >>${output}
 	cmd="${APP}"
 
+	echo ${cmd} >>${output}
 	${cmd} >>${output} &
 done
 
