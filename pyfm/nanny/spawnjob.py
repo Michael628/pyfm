@@ -167,12 +167,16 @@ def make_inputs(param, step, cfgno_steps):
             else:
                 sched_file = ""
 
-            xml_dict = hadmods.xml_wrapper(
-                runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
-            )
+            if "xml_file" in input_params:
+                with open(input_params["xml_file"], "r") as f:
+                    input_string = f.read()
+            else:
+                xml_dict = hadmods.xml_wrapper(
+                    runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
+                )
 
-            xml_dict["grid"]["modules"] = {"module": input_params}
-            input_string = dxml(xml_dict)
+                xml_dict["grid"]["modules"] = {"module": input_params}
+                input_string = dxml(xml_dict)
         else:
             input_string = input_params
 

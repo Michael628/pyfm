@@ -9,6 +9,13 @@ This directory contains a complete example workspace for running lattice QCD cal
 - **`params.yaml`** - Master configuration file containing all parameters for smear, hadrons, and contract jobs including masses, lattice dimensions, solver parameters, and file paths
 - **`todo`** - Task queue file listing pending jobs in format: `{series}.{config} {job_type} {job_id} ...`
 
+  Convention for the todo file:
+
+  - smear 0 : Job has not been started
+  - smearQ 2345 : JobID 12345 is in queue, running, or has not been checked by nanny
+  - smearX 12345 : JobID 12345 completed successfully
+  - smearXXfix 12345 : JobID 12345 did not complete successfully
+
 ### Execution Scripts
 
 - **`smear.sh`** - Execution script for gauge field smearing jobs (creates fat and long links with APBC and KS phases)
@@ -100,4 +107,3 @@ The `params.yaml` file controls all aspects of this workflow, while the `todo` f
 - **Mass**: `002426` = quark mass value (m=0.002426)
 - **Tsource**: `t0`, `t1` = source time slice
 - **Method**: `ama` (random wall CG solves), `ranLL` (low-mode contribution to random wall solves)
-

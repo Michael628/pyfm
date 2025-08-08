@@ -133,7 +133,7 @@ class MesonLoader:
     """
 
     mesonfiles: t.List[str]
-    times: t.Tuple
+    time_intervals: t.Tuple
     shift_mass: bool = False
     evalfile: str = ""
     oldmass: float = 0
@@ -213,16 +213,18 @@ class MesonLoader:
 
     def __iter__(self):
         self.mesonlist = [None for _ in range(len(self.mesonfiles))]
-        self.iter_count = -1
+        self.iter_step = -1
         return self
 
     def __next__(self):
         """Each iteration returns"""
-        if self.iter_count < len(self.times[0]) - 1:
-            self.iter_count += 1
+        nintervals = len(self.time_intervals[0])
+        if self.iter_step < nintervals - 1:
+            self.iter_step += 1
 
+            npoint = len(self.mesonfiles)
             current_times = [
-                self.times[i][self.iter_count] for i in range(len(self.mesonfiles))
+                self.time_intervals[i][self.iter_step] for i in range(npoint)
             ]
 
             for i, (time, file) in enumerate(zip(current_times, self.mesonfiles)):
@@ -314,7 +316,7 @@ def execute(
     diagram_config: config.DiagramConfig,
     run_config: config.RunContractConfig,
 ):
-    def generate_time_sets():
+    def generate_time_intervals():
         """Breaks meson field time extent into `comm_size` blocks and
         returns unique list of blocks for each `rank`.
 
@@ -330,7 +332,6 @@ def execute(
         slice_indices = list(
             itertools.product(range(workers), repeat=diagram_config.npoint)
         )
-
         if diagram_config.symmetric:  # filter for only upper-triangular slices
             slice_indices = list(filter(lambda x: list(x) == sorted(x), slice_indices))
             workers = int((len(slice_indices) + workers - 1) / workers)
@@ -349,7 +350,7 @@ def execute(
     def conn_2pt():
         corr = {}
 
-        times = generate_time_sets()
+        times = generate_time_intervals()
         run_config_replacements = run_config.string_dict()
         diagram_config_replacements = diagram_config.string_dict()
 
@@ -366,7 +367,9 @@ def execute(
             )
 
             mat_gen = MesonLoader(
-                mesonfiles=mesonfiles, times=times, **diagram_config.meson_params
+                mesonfiles=mesonfiles,
+                time_intervals=times,
+                **diagram_config.meson_params,
             )
 
             cij = xp.zeros((run_config.time, run_config.time), dtype=xp.complex128)
@@ -398,7 +401,7 @@ def execute(
     def sib_conn_3pt():
         corr = {}
 
-        times = generate_time_sets()
+        times = generate_time_intervals()
 
         run_config_replacements = run_config.string_dict()
         diagram_config_replacements = diagram_config.string_dict()
@@ -418,7 +421,9 @@ def execute(
             )
 
             mat_gen = MesonLoader(
-                mesonfiles=mesonfiles, times=times, **diagram_config.meson_params
+                mesonfiles=mesonfiles,
+                time_intervals=times,
+                **diagram_config.meson_params,
             )
 
             cij = xp.zeros(
@@ -451,7 +456,7 @@ def execute(
     def qed_conn_4pt(subdiagram: config.Diagrams) -> pd.DataFrame:
         corr = pd.DataFrame()
 
-        times = generate_time_sets()
+        times = generate_time_intervals()
         run_config_replacements = run_config.string_dict()
         diagram_config_replacements = diagram_config.string_dict()
 
@@ -478,7 +483,9 @@ def execute(
                 )
 
                 mat_gen = MesonLoader(
-                    mesonfiles=mesonfiles, times=times, **diagram_config.meson_params
+                    mesonfiles=mesonfiles,
+                    time_intervals=times,
+                    **diagram_config.meson_params,
                 )
 
                 cij = xp.zeros((run_config.time,) * 4, dtype=xp.complex128)

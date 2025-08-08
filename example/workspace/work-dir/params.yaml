@@ -105,6 +105,9 @@ submit:
       ppn: 1
       nodes: 1
       geom: [1,1,1,1]
+    tau:
+      nodes: 1
+      geom: [1,1,1,1] # geom list product should equal nodes*ppn
     hadrons:
       nodes: 1
       geom: [1,1,1,1] # geom list product should equal nodes*ppn
@@ -133,6 +136,14 @@ job_setup:
       eigs: 100
       dt: 1
       noise: 1
+  tau: 
+    run: hadrons.sh
+    io: 'tau-l4444-hadrons'
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: raw
+    tasks:
+      xml_file: 'in/example-tau-l4444-hadrons-a.20.xml'
   hadrons: 
     run: hadrons.sh
     io: 'test-l4444-hadrons'
