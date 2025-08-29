@@ -117,14 +117,17 @@ class LMITask(TaskBase):
         params["high_modes_component"] = hc
 
         if mc := kwargs.get("meson", None):
-            params["meson_component"] = cls.OpList.from_dict(mc)
+            mc = cls.OpList.from_dict(mc)
+            params["meson_component"] = mc
 
         # if hc := kwargs.get("high_modes", None):
         #     hc = cls.HighModes.from_dict(hc)
 
         params["epack_component"] = None
         if has_eigs:
-            masses = {"masses": hc.mass} if hc else {}
+            masses = set(hc.mass) if hc else set()
+            masses |= set(mc.mass) if mc else set()
+            masses = {"masses": list(masses)} if masses else {}
             params["epack_component"] = eig.EigHadronsComponent.from_dict(
                 kwargs["epack"] | masses
             )
