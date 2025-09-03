@@ -1,6 +1,8 @@
 import typing as t
+from typing import Union, List, Optional, Dict
 
 from pydantic.dataclasses import dataclass
+import pandas as pd
 import pyfm
 from pyfm import utils
 import os
@@ -56,13 +58,6 @@ class Outfile:
         }
 
         return cls(**params)
-
-
-@dataclass
-class TaskBase:
-    @classmethod
-    def from_dict(cls, kwargs: t.Dict[str, t.Any]) -> "TaskBase":
-        return cls(**kwargs)
 
 
 @dataclass

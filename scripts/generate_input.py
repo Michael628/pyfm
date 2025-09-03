@@ -1,5 +1,6 @@
 from pyfm import utils, setup_logging
 from pyfm.nanny.spawnjob import make_inputs
+from pyfm.config_builders import TaskConfigFactory
 import argparse
 
 if __name__ == "__main__":

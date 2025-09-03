@@ -191,19 +191,23 @@ def buffer_avg(buff: gv.BufferDict, col_names: list[str] | None = None) -> pd.Da
                       as column names.
     """
 
-    nlevels = len(next(iter(buff.keys())))
     if col_names is None:
+        levels = next(iter(buff.keys()))
+        nlevels = 1 if isinstance(levels, str) else len(levels)
         col_names = [f"level_{i}" for i in range(nlevels)]
     counts = pd.Series({k: len(v) for k, v in buff.items()}, name="ncfgs").rename_axis(
         index=col_names
     )
     avg_data = ds.avg_data(buff)
+    print(avg_data)
     df = (
         pd.DataFrame(dict(avg_data))
         .rename_axis(index="t")
         .rename_axis(columns=col_names)
-        .melt(ignore_index=False, value_name="corr")
-        .merge(counts, right_index=True, left_on=col_names)
+    )
+    print(df[30:60])
+    df = df.melt(ignore_index=False, value_name="corr").merge(
+        counts, right_index=True, left_on=col_names
     )
     return df
 
@@ -276,6 +280,7 @@ def signal_noise_nts(
     signal = buffer_avg(buff, col_names)
     noise = buffer_avg(stdjackknife(buff), col_names)
 
+    print(signal)
     nts = noise.copy().assign(
         **{corr_col: lambda x: x[corr_col].divide(signal[corr_col])}
     )

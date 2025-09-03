@@ -135,6 +135,8 @@ job_setup:
       noise: 1
   hadrons: 
     run: hadrons.slurm
+    job_type: hadrons
+    task_type: lmi
     io: 'test-l3248-hadrons'
     wall_time: "24:00:00"
     tasks:

@@ -1,10 +1,24 @@
 import typing as t
-from dataclasses import field
-from pydantic.dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Protocol, runtime_checkable, Union, List, Optional, Dict
+import pandas as pd
 
 from pyfm import utils, setup_logging
 from pyfm.nanny import tasks
-from pyfm.nanny import SubmitConfig, TaskBase
+from pyfm.nanny import SubmitConfig
+
+
+@runtime_checkable
+class TaskConfigProtocol(Protocol):
+    def input_params(
+        self, submit_config: SubmitConfig
+    ) -> Union[t.Tuple[List[Dict], Optional[List[str]]], Dict[str, Dict]]: ...
+
+    def processing_params(self, submit_config: SubmitConfig) -> Dict: ...
+
+    def catalog_files(self, submit_config: SubmitConfig) -> pd.DataFrame: ...
+
+    def bad_files(self, submit_config: SubmitConfig) -> List[str]: ...
 
 
 # ============Job Configuration===========
@@ -14,8 +28,8 @@ class JobConfig:
 
     Attributes
     ----------
-    tasks : TaskBase
-        Parameters for task `task_type`
+    tasks : TaskConfigProtocol
+        Task configuration implementing the TaskConfigProtocol interface
     io : string, optional
        Used in input/output file names
     job_type : string
@@ -30,17 +44,78 @@ class JobConfig:
 
     """
 
-    tasks: TaskBase
+    tasks: TaskConfigProtocol
     io: str
     job_type: str
     task_type: t.Optional[str] = None
     params: t.Dict = field(default_factory=dict)
 
+    def input_params(
+        self, submit_config: SubmitConfig
+    ) -> Union[t.Tuple[List[Dict], Optional[List[str]]], Dict[str, Dict]]:
+        return self.tasks.input_params(submit_config)
+
+    def processing_params(self, submit_config: SubmitConfig) -> Dict:
+        return self.tasks.processing_params(submit_config)
+
+    def catalog_files(self, submit_config: SubmitConfig) -> pd.DataFrame:
+        return self.tasks.catalog_files(submit_config)
+
+    def bad_files(self, submit_config: SubmitConfig) -> List[str]:
+        return self.tasks.bad_files(submit_config)
+
+    def has_good_output(self, submit_config: SubmitConfig) -> bool:
+        """Check if all expected output files are present and valid.
+
+        Parameters
+        ----------
+        submit_config : SubmitConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        bool
+            True if all files are present and valid, False otherwise.
+        """
+        return len(self.bad_files(submit_config)) == 0
+
+    def get_file_summary(self, submit_config: SubmitConfig) -> Dict[str, int]:
+        """Get a summary of file status for this job configuration.
+
+        Parameters
+        ----------
+        submit_config : SubmitConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        Dict[str, int]
+            Dictionary with counts: {'total': N, 'existing': N, 'good': N, 'bad': N}
+        """
+        df = self.catalog_files(submit_config)
+        bad_file_paths = set(self.bad_files(submit_config))
+
+        total = len(df)
+        existing = int(df["exists"].sum()) if "exists" in df.columns else 0
+        bad = len(bad_file_paths)
+        good = existing - bad
+
+        return {"total": total, "existing": existing, "good": good, "bad": bad}
+
     @classmethod
     def from_dict(cls, kwargs) -> "JobConfig":
-        """Creates a new instance of JobConfig from a dictionary."""
+        """Creates a new instance of JobConfig from a dictionary.
+
+        Raises
+        ------
+        TypeError
+            If the created task configuration doesn't implement TaskConfigProtocol.
+        """
 
         params = utils.deep_copy_dict(kwargs)
+
+        params.pop("run")
+        params.pop("wall_time")
 
         if "job_type" not in params:
             params["job_type"] = "hadrons"
@@ -52,9 +127,15 @@ class JobConfig:
 
         task_params = params.get("tasks", {})
         task_builder: t.Callable = tasks.get_task_factory(params["job_type"], task_type)
-        params["tasks"] = task_builder(task_params)
+        task_config = task_builder(task_params)
 
-        return cls(**params)
+        params["tasks"] = task_config
+        instance = cls(**params)
+
+        # Additional validation
+        instance.validate_task_config()
+
+        return instance
 
     def get_infile(self, submit_config: SubmitConfig) -> str:
         """Returns input file including extension. Formats string based on
@@ -79,7 +160,7 @@ class JobConfig:
         return f"{self.io}-{ext[self.job_type]}".format(**submit_config.string_dict())
 
 
-# ============Convenience functions===========
+# ============Legacy functions===========
 def get_job_config(param: t.Dict, step: str) -> JobConfig:
     try:
         return JobConfig.from_dict(param["job_setup"][step])
@@ -102,29 +183,3 @@ def get_submit_config(param: t.Dict, job_config: JobConfig, **kwargs) -> SubmitC
     setup_logging(submit_params.get("logging_level", "INFO"))
 
     return tasks.get_submit_factory(job_config.job_type)(**submit_params, **kwargs)
-
-
-def input_params(
-    job_config: JobConfig, *args, **kwargs
-) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
-    return tasks.input_params(
-        job_config.job_type, job_config.task_type, job_config.tasks, *args, **kwargs
-    )
-
-
-def processing_params(job_config: JobConfig, *args, **kwargs) -> t.Dict:
-    return tasks.processing_params(
-        job_config.job_type, job_config.task_type, job_config.tasks, *args, **kwargs
-    )
-
-
-def bad_files(job_config: JobConfig, *args, **kwargs) -> t.List[str]:
-    return tasks.bad_files(
-        job_config.job_type, job_config.task_type, job_config.tasks, *args, **kwargs
-    )
-
-
-def catalog_files(job_config: JobConfig, *args, **kwargs) -> t.List[str]:
-    return tasks.catalog_files(
-        job_config.job_type, job_config.task_type, job_config.tasks, *args, **kwargs
-    )

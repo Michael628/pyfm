@@ -1,24 +1,18 @@
 import itertools
-import os.path
 import re
 import typing as t
-from dataclasses import fields
+from typing import List, Dict
 
 import pandas as pd
-from pydantic.dataclasses import dataclass
-from pydantic import Field
 
 from pyfm import utils
-from pyfm.nanny import TaskBase
+from pyfm.config_builders import HadronsConfig
 from pyfm.nanny.tasks.hadrons.components import hadmods
-from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
-from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode, meson
-
-# TODO: Change modules into a dictionary instead of a list
-# TODO: Move functions into LMITask class and use `self` instead of task_config
+from pyfm.nanny.registry import register_task
 
 
 # ============LMI Task Configuration===========
+@register_task("hadrons", "lmi")
 @dataclass
 class LMITask(TaskBase):
     gauge_component: t.Optional[gauge.GaugeHadronsComponent] = None
@@ -72,12 +66,71 @@ class LMITask(TaskBase):
             res += self.high_modes_component.mass
 
         return list(set(res))
+    
+    def input_params(self, submit_config: SubmitHadronsConfig) -> t.Tuple[List[Dict], Optional[List[str]]]:
+        """Generate input parameters for LMI job execution.
+        
+        Parameters
+        ----------
+        submit_config : SubmitHadronsConfig
+            Configuration parameters for submitted job.
+            
+        Returns
+        -------
+        Tuple[List[Dict], Optional[List[str]]]
+            Tuple of (modules, schedule) for LMI execution.
+        """
+        return input_params(self, submit_config)
+    
+    def processing_params(self, submit_config: SubmitHadronsConfig) -> Dict:
+        """Generate processing parameters for LMI data analysis.
+
+        Parameters
+        ----------
+        config : HadronsConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        Dict
+            Processing configuration with 'run' key containing list of processing tasks.
+        """
+        return processing_params(config)
+
+    def catalog_files(self, config: HadronsConfig) -> pd.DataFrame:
+        """Generate file catalog for LMI outputs.
+
+        Parameters
+        ----------
+        config : HadronsConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: filepath, exists, file_size, good_size
+        """
+        return catalog_files(config)
+
+    def bad_files(self, config: HadronsConfig) -> List[str]:
+        """Identify incomplete or corrupted LMI files.
+
+        Parameters
+        ----------
+        config : HadronsConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        List[str]
+            List of problematic file paths.
+        """
+        return bad_files(config)
 
 
 # ============Functions for building params and checking outfiles===========
 def input_params(
-    task_config: LMITask,
-    submit_config: SubmitHadronsConfig,
+    config: HadronsConfig,
 ) -> t.Tuple[t.List[t.Dict], t.Optional[t.List[str]]]:
     def build_schedule(module_names: t.List[str]) -> t.List[str]:
         gammas = ["pion_local", "vec_local", "vec_onelink"]
@@ -119,7 +172,7 @@ def input_params(
             return -1
 
         def mass_order(x):
-            for i, mass in enumerate(submit_config.mass.keys()):
+            for i, mass in enumerate(config.mass.keys()):
                 if f"mass_{mass}" in x["name"]:
                     return i
             return -1
@@ -143,35 +196,31 @@ def input_params(
 
         return [m["name"] for m in sorted_modules]
 
-    outfile_dict = submit_config.files
+    if config.meson_component:
+        config.meson_component.filter_existing_operations(config)
 
-    submit_conf_dict = submit_config.string_dict()
-
-    if task_config.meson_component:
-        task_config.meson_component.filter_existing_operations(submit_config)
-
-    temp = task_config.gauge_component.input_params(submit_config)
+    temp = config.gauge_component.input_params(config)
     modules = list(temp.values())
 
-    for mass_label in task_config.mass:
+    for mass_label in config.mass:
         name = f"stag_mass_{mass_label}"
-        mass = str(submit_config.mass[mass_label])
+        mass = str(config.mass[mass_label])
         modules.append(
             hadmods.action(
                 name=name, mass=mass, gauge_fat="gauge_fat", gauge_long="gauge_long"
             )
         )
 
-    if task_config.epack_component is not None:
-        temp = task_config.epack_component.input_params(submit_config)
+    if config.epack_component is not None:
+        temp = config.epack_component.input_params(config)
         modules += temp.values()
 
-    if task_config.high_modes_component is not None:
-        temp = task_config.high_modes_component.input_params(submit_config)
+    if config.high_modes_component is not None:
+        temp = config.high_modes_component.input_params(config)
         modules += temp.values()
 
-    if task_config.meson_component:
-        temp = task_config.meson_component.input_params(submit_config)
+    if config.meson_component:
+        temp = config.meson_component.input_params(config)
         modules += temp.values()
 
     module_info = [m["id"] for m in modules]
@@ -181,16 +230,15 @@ def input_params(
 
 
 def catalog_files(
-    task_config: LMITask,
-    submit_config: SubmitHadronsConfig,
+    config: HadronsConfig,
 ) -> pd.DataFrame:
     """
     Generates a catalog of files based on the task and submission configurations.
 
     Args:
-        task_config (LMITask): The configuration for the LMI task, which includes
+        config (LMITask): The configuration for the LMI task, which includes
             components like epack, meson, and high modes.
-        submit_config (SubmitHadronsConfig): The submission configuration, which
+        config (HadronsConfig): The submission configuration, which
             includes file paths, eigenvalues, mass labels, and other parameters.
 
     Returns:
@@ -214,45 +262,45 @@ def catalog_files(
             corresponding output file path for each component.
         """
 
-        outfile_dict = submit_config.files
-        if task_config.epack_component:
-            if task_config.epack_component.save_eigs:
-                if task_config.epack_component.multifile:
+        outfile_dict = config.files
+        if config.epack_component:
+            if config.epack_component.save_eigs:
+                if config.epack_component.multifile:
                     yield (
-                        {"eig_index": list(range(int(submit_config.eigs)))},
+                        {"eig_index": list(range(int(config.eigs)))},
                         outfile_dict["eigdir"],
                     )
                 else:
                     yield {}, outfile_dict["eig"]
-            if task_config.epack_component.save_eigs:
+            if config.epack_component.save_eigs:
                 yield {}, outfile_dict["eval"]
 
-        if task_config.meson_component:
-            for op in task_config.meson_component.operations:
+        if config.meson_component:
+            for op in config.meson_component.operations:
                 res = {
                     "gamma": op.gamma.gamma_list,
-                    "mass": [submit_config.mass_out_label[m] for m in op.mass],
+                    "mass": [config.mass_out_label[m] for m in op.mass],
                 }
                 yield res, outfile_dict["meson_ll"]
 
-        if task_config.high_modes_component:
-            res = {"tsource": list(map(str, submit_config.tsource_range)), "dset": []}
-            if task_config.epack_component:
+        if config.high_modes_component:
+            res = {"tsource": list(map(str, config.tsource_range)), "dset": []}
+            if config.epack_component:
                 res["dset"].append("ranLL")
-            if not task_config.high_modes_component.skip_cg:
-                residuals = task_config.high_modes_component.cg_residual
+            if not config.high_modes_component.skip_cg:
+                residuals = config.high_modes_component.cg_residual
                 if len(residuals) == 1:
                     res["dset"].append("ama")
                 else:
                     res["dset"] += [f"ama_{r}" for r in residuals]
 
-            for op in task_config.high_modes_component.operations:
+            for op in config.high_modes_component.operations:
                 res["gamma_label"] = op.gamma.name.lower()
-                res["mass"] = [submit_config.mass_out_label[m] for m in op.mass]
+                res["mass"] = [config.mass_out_label[m] for m in op.mass]
                 yield res, outfile_dict["high_modes"]
 
     outfile_generator = generate_outfile_formatting()
-    replacements = submit_config.string_dict()
+    replacements = config.string_dict()
 
     df = utils.catalog_files(outfile_generator, replacements)
 
@@ -260,23 +308,21 @@ def catalog_files(
 
 
 def bad_files(
-    task_config: LMITask,
-    submit_config: SubmitHadronsConfig,
+    config: HadronsConfig,
 ) -> t.List[str]:
     """Get list of files that don't meet size requirements.
 
     Note: This function is deprecated. Use component-specific methods instead.
     """
-    df = catalog_files(task_config, submit_config)
+    df = catalog_files(config)
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 
 
 def processing_params(
-    task_config: LMITask,
-    submit_config: SubmitHadronsConfig,
+    config: HadronsConfig,
 ) -> t.Dict:
     proc_params = {"run": []}
-    outfile_dict = submit_config.files
+    outfile_dict = config.files
     infile_stem = outfile_dict["high_modes"].filename
     outfile = outfile_dict["high_modes"].filestem
     filekeys = utils.format_keys(infile_stem)
@@ -284,27 +330,25 @@ def processing_params(
     outfile = outfile.replace("_{series}", "")
     outfile = outfile.replace("_t{tsource}", "")
     outfile += ".h5"
-    replacements = {
-        k: v for k, v in submit_config.string_dict().items() if k in filekeys
-    }
-    replacements["tsource"] = list(map(str, submit_config.tsource_range))
+    replacements = {k: v for k, v in config.string_dict().items() if k in filekeys}
+    replacements["tsource"] = list(map(str, config.tsource_range))
 
     solver_labels = []
-    if task_config.epack_component:
+    if config.epack_component:
         solver_labels.append("ranLL")
-    if task_config.high_modes_component:
-        if not task_config.high_modes_component.skip_cg:
-            residuals = task_config.high_modes_component.cg_residual
+    if config.high_modes_component:
+        if not config.high_modes_component.skip_cg:
+            residuals = config.high_modes_component.cg_residual
             if len(residuals) == 1:
                 solver_labels.append("ama")
             else:
                 solver_labels += [f"ama_{r}" for r in residuals]
 
-        for op in task_config.high_modes_component.operations:
+        for op in config.high_modes_component.operations:
             gamma_label = op.gamma.name.lower()
             replacements["gamma_label"] = gamma_label
             for m, dset in itertools.product(op.mass, solver_labels):
-                mass_label = submit_config.mass_out_label[m]
+                mass_label = config.mass_out_label[m]
                 file_label = f"{gamma_label}_{mass_label}_{dset}"
                 proc_params["run"].append(file_label)
                 replacements["mass"] = mass_label
@@ -316,11 +360,11 @@ def processing_params(
                 }
                 array_params = {
                     "order": ["t"],
-                    "labels": {"t": f"0..{submit_config.time - 1}"},
+                    "labels": {"t": f"0..{config.time - 1}"},
                 }
 
                 proc_params[file_label] = {
-                    "logging_level": getattr(submit_config, "logging_level", "INFO"),
+                    "logging_level": getattr(config, "logging_level", "INFO"),
                     "load_files": {
                         "filestem": infile_stem,
                         "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
@@ -335,5 +379,4 @@ def processing_params(
     return proc_params
 
 
-def get_task_factory():
-    return LMITask.from_dict
+# Factory function removed - now handled by plugin registry in tasks/__init__.py

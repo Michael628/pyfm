@@ -13,7 +13,7 @@ import pandas as pd
 
 import pyfm as ps
 from pyfm import utils
-from pyfm.analysis.domain import WrappedDataPipe
+from pyana.domains.dataframe import WrappedDataPipe
 from pyfm.processing import config, processor
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]

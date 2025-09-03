@@ -6,17 +6,15 @@ import yaml
 import sys
 import os
 import subprocess
-import typing as t
-from pyfm.nanny import config, todo_utils, checkjobs, tasks
+from pyfm.nanny import config, todo_utils, checkjobs
 from pyfm import utils
 
 from functools import reduce
 
 from dict2xml import dict2xml as dxml
 
-from pyfm.nanny.tasks.contract import SubmitContractConfig, ContractTask
 from pyfm.nanny.tasks.hadrons.components import hadmods
-from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
+from pyfm.config_builders import TaskConfigFactory
 
 # Nanny script for managing job queues
 # C. DeTar 7/11/2022
@@ -129,9 +127,87 @@ def next_cfgno_steps(max_cases, todo_list):
     return step, cfgno_steps
 
 
+def make_inputs_with_factory(param, step, cfgno_steps):
+    """Create input files using the new TaskConfigFactory."""
+
+    ncases = len(cfgno_steps)
+    input_files = []
+
+    # Get job_type and task_type from job_setup in YAML
+    job_setup = param.get("job_setup", {}).get(step, {})
+    job_type = job_setup.get("job_type", "hadrons")  # Default to hadrons
+    task_type = job_setup.get("task_type", "lmi")  # Default to lmi
+
+    factory = TaskConfigFactory()
+
+    for i in range(ncases):
+        (cfgno_series, _) = cfgno_steps[i]
+        (series, cfgno) = cfgno_series.split(".")
+
+        # Create configuration using the new factory
+        try:
+            task_config = factory.create_config(
+                job_type, param, series, cfgno, task_type
+            )
+
+            # Use the new config's string_dict for templating
+            template_vars = task_config.string_dict()
+
+            # For now, fall back to old method for actual input generation
+            # This allows gradual migration
+            job_config = config.get_job_config(param, step)
+            submit_config = config.get_submit_config(
+                param, job_config, series=series, cfg=cfgno
+            )
+
+            # Continue with existing logic...
+            os.environ["ENS"] = submit_config.ens
+            input_file: str = job_config.get_infile(submit_config)
+            input_params, schedule = job_config.input_params(submit_config)
+
+            if job_config.job_type == "contract":
+                input_string = yaml.dump(input_params)
+            elif job_config.job_type == "hadrons":
+                assert isinstance(submit_config, HadronsConfig)
+
+                if schedule:
+                    os.makedirs("schedules/", exist_ok=True)
+                    sched_file = f"schedules/{input_file[: -len('.xml')]}.sched"
+                    with open(sched_file, "w") as f:
+                        f.write(str(len(schedule)) + "\n" + "\n".join(schedule))
+                else:
+                    sched_file = ""
+
+                xml_dict = hadmods.xml_wrapper(
+                    runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
+                )
+
+                xml_dict["grid"]["modules"] = {"module": input_params}
+                input_string = dxml(xml_dict)
+            else:
+                input_string = input_params
+
+            os.makedirs("in/", exist_ok=True)
+            with open(f"in/{input_file}", "w") as f:
+                f.write(input_string)
+
+            input_files.append(input_file)
+
+        except Exception as e:
+            print(
+                f"Warning: Failed to use new factory for {job_type}, falling back to old method: {e}"
+            )
+            # Fall back to old method
+            return make_inputs_legacy(param, step, cfgno_steps)
+
+    # Set environment variable for job scripts
+    os.environ["INPUTLIST"] = " ".join(input_files)
+    return input_files
+
+
 ######################################################################
-def make_inputs(param, step, cfgno_steps):
-    """Create input XML files for this job"""
+def make_inputs_legacy(param, step, cfgno_steps):
+    """Create input XML files for this job (legacy method)"""
 
     ncases = len(cfgno_steps)
     input_files = []
@@ -152,7 +228,7 @@ def make_inputs(param, step, cfgno_steps):
         input_file: str = job_config.get_infile(submit_config)
 
         # TODO: Move input file creation into runio module
-        input_params, schedule = config.input_params(job_config, submit_config)
+        input_params, schedule = job_config.input_params(submit_config)
 
         if job_config.job_type == "contract":
             input_string = yaml.dump(input_params)
@@ -186,7 +262,22 @@ def make_inputs(param, step, cfgno_steps):
 
         input_files.append(input_file)
 
+    # Set environment variable for job scripts
     os.environ["INPUTLIST"] = " ".join(input_files)
+    return input_files
+
+
+def make_inputs(param, step, cfgno_steps):
+    """Create input files for this job.
+
+    This function tries to use the new TaskConfigFactory first,
+    and falls back to the legacy method if needed.
+    """
+    try:
+        return make_inputs_with_factory(param, step, cfgno_steps)
+    except Exception as e:
+        print(f"Factory method failed, using legacy method: {e}")
+        return make_inputs_legacy(param, step, cfgno_steps)
 
 
 ######################################################################

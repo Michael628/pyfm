@@ -12,12 +12,15 @@ import typing as t
 
 from pydantic.dataclasses import dataclass
 
-from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
+from pyfm.nanny import TaskBase
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
+from pyfm.nanny.registry import register_task
 
 
+@register_task("hadrons", "seq_sib")
 @dataclass
-class SeqSIBTask(HadronsTaskBase):
+class SeqSIBTask(TaskBase):
     gauge_component: gauge.GaugeHadronsComponent
     highmode_component: highmode.HighModeHadronsComponent
     eig_component: t.Optional[eig.EigHadronsComponent] = None
@@ -135,7 +138,7 @@ def build_schedule(module_names: t.List[str]) -> t.List[str]:
 
 
 def bad_files(
-    task_config: HadronsTaskBase,
+    task_config: SeqSIBTask,
     submit_config: SubmitHadronsConfig,
 ) -> t.List[str]:
     logging.warning(
@@ -144,5 +147,4 @@ def bad_files(
     return []
 
 
-def get_task_factory():
-    return SeqSIBTask.from_dict
+# Factory function removed - now handled by plugin registry in tasks/__init__.py

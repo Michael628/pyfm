@@ -1,10 +1,8 @@
 import logging
 import sys
 import typing as t
-from pydantic.dataclasses import dataclass
 from dataclasses import fields
 from enum import Enum, auto
-from pyfm import utils
 
 
 class Gamma(Enum):
@@ -75,225 +73,47 @@ def setup_logging(logging_level: str):
     logging.getLogger().setLevel(logging_level)
 
 
-T = t.TypeVar("T", bound="ConfigBase")
+BuilderT = t.TypeVar("BuilderT")
 
 
-class ObserverInterface:
-    """Interface for observers that want to be notified of changes."""
+class ConfigBuilder(t.Generic[BuilderT]):
+    """Base builder for all configuration types."""
 
-    def update(self, **kwargs) -> None:
-        """Update the observer with the new state of the subject."""
-        raise NotImplementedError
+    def __init__(self):
+        self._config_data: t.Dict[str, t.Any] = {}
+        self._format_data: t.Dict[str, t.Callable] = {}
+        self._task_fields: t.List[str] = [field.name for field in fields(BuilderT)]
 
-
-class SubjectInterface:
-    """Interface for objects that can be observed."""
-
-    def register(self, observer: ObserverInterface) -> None:
-        """Register an observer to be notified of changes."""
-        raise NotImplementedError
-
-    def unregister(self, observer: ObserverInterface) -> None:
-        """Unregister an observer."""
-        raise NotImplementedError
-
-    def notify(self) -> None:
-        """Notify all registered observers of a change."""
-        raise NotImplementedError
-
-
-class ConfigBase:
-    @classmethod
-    def create(cls: t.Type[T], **kwargs) -> T:
-        """Creates a new instance of ConfigBase from a dictionary.
-
-        This method dynamically initializes an instance of the class by mapping
-        the provided keyword arguments (`kwargs`) to the class's dataclass fields
-        or other attributes. It also handles conflicts and ensures that no
-        existing class parameters are overwritten unintentionally.
-
-        Parameters
-        ----------
-        cls : Type[T]
-            The class type to instantiate. This should be a subclass of ConfigBase.
-        kwargs : dict
-            A dictionary of key-value pairs to initialize the instance.
-
-        Returns
-        -------
-        T
-            An instance of the class `cls` initialized with the provided `kwargs`.
-
-        Raises
-        ------
-        ValueError
-            If there are conflicts in the parameters (e.g., both `key` and `_key` are provided),
-            or if an attempt is made to overwrite an existing class parameter.
-
-        Notes
-        -----
-        - The method checks for dataclass fields stored in the class object.
-        - If a keyword argument matches a dataclass field (ignoring a leading underscore),
-          the value is assigned to the corresponding underscored attribute.
-        - Any additional attributes not matching the class's fields are added dynamically
-          to the created instance.
-        """
-
-        conflicts = [
-            k
-            for k in kwargs.keys()
-            if k in kwargs and f"_{k}" in kwargs and not k.startswith("_")
-        ]
-
-        if any(conflicts):
-            raise ValueError(
-                f"Conflict in parameters. Both {conflicts[0]} and _{conflicts[0]} passed to {cls} `create`."
+    def with_formatter(self, key: str, value: t.Any):
+        if key in self._format_data:
+            logging.debug(
+                f"Formatting {key} already in format_data with {self._format_data[key]}"
             )
+            logging.debug(f"Attempting to replace with {value}")
 
-        class_vars = [f.name for f in fields(cls)]
-        obj_vars = {}
-        new_vars = {}
-        for k, v in kwargs.items():
-            if k in class_vars:
-                obj_vars[k] = v
-            elif f"_{k}" in class_vars and not k.startswith("_"):
-                obj_vars[f"_{k}"] = v
-            elif k in cls.__dict__:
-                raise ValueError(
-                    f"Cannot overwrite existing {cls} param, `{k}`. Try relabeling `{k}`"
-                )
-            else:
-                new_vars[k] = v
+        if isinstance(value, list):
+            self._format_data[key] = [str(item) for item in value]
+        elif isinstance(value, bool):
+            self._format_data[key] = str(value).lower()
+        elif value is not None and not isinstance(value, dict):
+            self._format_data[key] = str(value)
 
-        obj = cls(**obj_vars)
+        return self
 
-        for k, v in new_vars.items():
-            setattr(obj, k, v)
-
-        return obj
-
-    def string_dict(self):
-        """Converts all attributes of the object to a dictionary of strings.
-
-        This method iterates over all attributes of the object, excluding those
-        with names starting with an underscore (`_`) or those that are dictionaries.
-        It converts the values of the attributes to strings or lists of strings,
-        depending on their type.
-
-        Returns
-        -------
-        dict
-            A dictionary where the keys are the attribute names and the values
-            are their string representations.
-
-        Notes
-        -----
-        - Attributes that are lists are converted to lists of strings.
-        - Boolean attributes are converted to lowercase string representations
-          ('true' or 'false').
-        - Attributes with `None` values are excluded from the output.
-        """
-        res = {}
-        for k, v in self.__dict__.items():
-            if k.startswith("_") or isinstance(v, t.Dict):
-                continue
-            elif isinstance(v, t.List):
-                res[k] = list(map(str, v))
-            elif isinstance(v, bool):
-                res[k] = str(v).lower()
-            else:
-                if v is not None:
-                    res[k] = str(v)
-
-        return res
-
-    @property
-    def public_dict(self):
-        """Converts object attributes to dictionary, removing attributes with leading underscore
-        Returns a dictionary keyed by the attribute labels
-        """
-        res = {}
-        for k, v in self.__dict__.items():
-            if not k.startswith("_") and v is not None:
-                res[k] = v
-
-        return res
-
-
-# ============Operator List===========
-@dataclass
-class OpList:
-    """Configuration for a list of gamma operations.
-
-    Attributes
-    ----------
-    op_list: list
-        Gamma operations to be performed, usually for meson fields or high mode solves.
-    """
-
-    @dataclass
-    class Op:
-        """Parameters for a gamma operation and associated masses."""
-
-        gamma: Gamma
-        mass: t.List[str]
-
-    op_list: t.List[Op]
-
-    @classmethod
-    def from_dict(cls, kwargs) -> "OpList":
-        """Creates a new instance of OpList from a dictionary.
-
-        Note
-        ----
-        Ignores input keys that do not match format.
-
-        Valid dictionary input formats:
-
-        kwargs = {
-            'gamma': ['op1','op2','op3'],
-            'mass': ['m1','m2']
-        }
-
-        or
-
-        kwargs = {
-            'op1': {
-            'mass': ['m1']
-            },
-            'op2': {
-            'mass': ['m2','m3']
-            }
-        }
-
-        """
-        if "mass" not in kwargs:
-            op_list = []
-            for key, val in kwargs.items():
-                if isinstance(val, dict) and "mass" in val:
-                    mass = val["mass"]
-                    if isinstance(mass, str):
-                        mass = [mass]
-                    gamma = Gamma[key.upper()]
-                    op_list.append(cls.Op(gamma=gamma, mass=mass))
+    def with_field(self, key: str, value: t.Any):
+        if key in _task_fields:
+            self._config_data[key] = value
         else:
-            assert "gamma" in kwargs
-            assert "mass" in kwargs
-            gammas = kwargs["gamma"]
-            mass = kwargs["mass"]
-            if isinstance(mass, str):
-                mass = [mass]
-            if isinstance(gammas, str):
-                gammas = [gammas]
-            op_list = [cls.Op(gamma=Gamma[g.upper()], mass=mass) for g in gammas]
+            self.with_formatter(key, value)
+        return self
 
-        return cls(op_list=op_list)
+    def with_run_params(self, series: str, cfg: str):
+        return self.with_field("series", series).with_field("cfg", cfg)
 
-    @property
-    def mass(self):
-        res: t.Set = set()
-        for op in self.op_list:
-            for m in op.mass:
-                res.add(m)
+    def get_formatter(self) -> t.Dict[str, str]:
+        """Generate string dictionary for formatting."""
+        return self._format_data
 
-        return list(res)
+    def build(self) -> BuilderT:
+        """Build the final configuration object. Must be implemented by subclasses."""
+        raise NotImplementedError("Subclasses must implement build()")

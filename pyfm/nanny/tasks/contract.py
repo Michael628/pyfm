@@ -1,71 +1,125 @@
-import logging
-import os
 import typing as t
-from dataclasses import field
+from typing import List, Dict, Tuple
 
 import pandas as pd
-from pydantic.dataclasses import dataclass
 
-from pyfm import config as c
 from pyfm import utils
-from pyfm.a2a.config import DiagramConfig
-from pyfm.nanny import SubmitConfig, TaskBase
+from pyfm.config_builders import ContractConfig
+from pyfm.nanny.registry import register_task
 
 
-@c.dataclass_with_getters
-class SubmitContractConfig(SubmitConfig):
-    _diagram_params: t.Dict[str, DiagramConfig] = field(default_factory=dict)
-    series: t.Optional[str] = None
-    cfg: t.Optional[str] = None
-    hardware: t.Optional[str] = None
-    logging_level: t.Optional[str] = None
+# from pyfm import config as c
+# from dataclasses import field
+# from pyfm.a2a.config import DiagramConfig
+# from pyfm.nanny import SubmitConfig
+# @c.dataclass_with_getters
+# class SubmitContractConfig(SubmitConfig):
+#     _diagram_params: t.Dict[str, DiagramConfig] = field(default_factory=dict)
+#     series: t.Optional[str] = None
+#     cfg: t.Optional[str] = None
+#     hardware: t.Optional[str] = None
+#     logging_level: t.Optional[str] = None
+#
+#     def __init__(self, **kwargs):
+#         params = kwargs.copy()
+#         self.hardware = params.pop("hardware", None)
+#         self.logging_level = params.pop("logging_level", None)
+#         self.series = params.pop("series", None)
+#         self.cfg = params.pop("cfg", None)
+#         self._diagram_params = {}
+#         for k, v in params.pop("_diagram_params", {}).items():
+#             self._diagram_params[k] = DiagramConfig.create(**v)
+#         super().__init__(**params)
+#
 
-    def __init__(self, **kwargs):
-        params = kwargs.copy()
-        self.hardware = params.pop("hardware", None)
-        self.logging_level = params.pop("logging_level", None)
-        self.series = params.pop("series", None)
-        self.cfg = params.pop("cfg", None)
-        self._diagram_params = {}
-        for k, v in params.pop("_diagram_params", {}).items():
-            self._diagram_params[k] = DiagramConfig.create(**v)
-        super().__init__(**params)
 
+@register_task("contract")
+class ContractTask:
+    def input_params(self, config: ContractConfig) -> Tuple[List[str], None]:
+        """Generate input parameters for contract job execution.
 
-@dataclass
-class ContractTask(TaskBase):
-    diagrams: t.List[str]
+        Parameters
+        ----------
+        config : ContractConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        Tuple[List[str], None]
+            Input YAML configuration and None for schedule.
+        """
+        return input_params(config)
+
+    def processing_params(self, config: ContractConfig) -> Dict:
+        """Generate processing parameters for contract data analysis.
+
+        Parameters
+        ----------
+        config : ContractConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        Dict
+            Processing configuration with 'run' key containing list of diagrams.
+        """
+        return processing_params(config)
+
+    def catalog_files(self, config: ContractConfig) -> pd.DataFrame:
+        """Generate file catalog for contract outputs.
+
+        Parameters
+        ----------
+        config : ContractConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        pd.DataFrame
+            DataFrame with columns: filepath, exists, file_size, good_size
+        """
+        return catalog_files(config)
+
+    def bad_files(self, config: ContractConfig) -> List[str]:
+        """Identify incomplete or corrupted contract files.
+
+        Parameters
+        ----------
+        config : ContractConfig
+            Configuration parameters for submitted job.
+
+        Returns
+        -------
+        List[str]
+            List of problematic file paths.
+        """
+        return bad_files(config)
 
 
 def input_params(
-    task_config: ContractTask,
-    submit_config: SubmitContractConfig,
+    config: ContractConfig,
 ) -> t.Tuple[t.List[str], None]:
-    input_yaml = submit_config.public_dict
+    input_yaml = config.__dict__
     input_yaml["diagrams"] = {}
-    for diagram in task_config.diagrams:
-        d_params = submit_config.diagram_params[diagram]
-        d_params.set_filenames(submit_config.files)
-        input_yaml["diagrams"][diagram] = d_params.string_dict()
+    for dlabel, diagram in config.diagrams.items():
+        diagram.set_filenames(config.files)
+        input_yaml["diagrams"][dlabel] = diagram.string_dict()
 
     return input_yaml, None
 
 
 def catalog_files(
-    task_config: ContractTask,
-    submit_config: SubmitContractConfig,
-) -> t.List[str]:
+    config: ContractConfig,
+) -> pd.DataFrame:
     def generate_outfile_formatting():
-        outfile_config = submit_config.files["contract"]
+        outfile_config = config.files["contract"]
         for diagram in task_config.diagrams:
-            diagram_replacements: t.Dict = submit_config.diagram_params[
-                diagram
-            ].string_dict()
+            diagram_replacements: t.Dict = config.diagram_params[diagram].string_dict()
             yield diagram_replacements, outfile_config
 
     outfile_generator = generate_outfile_formatting()
 
-    replacements = submit_config.string_dict()
+    replacements = config.string_dict()
 
     df = utils.catalog_files(outfile_generator, replacements)
 
@@ -73,19 +127,17 @@ def catalog_files(
 
 
 def bad_files(
-    task_config: ContractTask,
-    submit_config: SubmitContractConfig,
+    config: ContractConfig,
 ) -> t.List[str]:
-    df = catalog_files(task_config, submit_config)
+    df = catalog_files(task_config, config)
 
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
 
 
 def processing_params(
-    task_config: ContractTask,
-    submit_config: SubmitContractConfig,
+    config: ContractConfig,
 ) -> t.Dict:
-    outfile_dict = submit_config.files
+    outfile_dict = config.files
     infile_stem = outfile_dict["contract"].filename
     outfile = outfile_dict["contract"].filestem
     filekeys = utils.format_keys(infile_stem)
@@ -93,20 +145,16 @@ def processing_params(
     outfile = outfile.replace("correlators", "dataframes")
     outfile = outfile.replace("_{series}", "")
     outfile += ".h5"
-    replacements = {
-        k: v for k, v in submit_config.string_dict().items() if k in filekeys
-    }
+    replacements = {k: v for k, v in config.string_dict().items() if k in filekeys}
 
     for diagram_key in task_config.diagrams:
-        diagram = submit_config.diagram_params[diagram_key]
+        diagram = config.diagram_params[diagram_key]
 
         # TODO: Make processing_params general to 3, and 4pt functions
         assert diagram.npoint == 2, "Only 2-point diagrams are currently supported"
 
         diagram_dict = diagram.string_dict()
-        logging_level = (
-            submit_config.logging_level if submit_config.logging_level else "INFO"
-        )
+        logging_level = config.logging_level if config.logging_level else "INFO"
         replacements.update({k: v for k, v in diagram_dict.items() if k in filekeys})
         proc_params[diagram_key] = {
             "logging_level": logging_level,
@@ -130,7 +178,7 @@ def processing_params(
             "array_labels": {},
         }
 
-        t_labels = f"0..{submit_config.time - 1}"
+        t_labels = f"0..{config.time - 1}"
         # TODO: Make time_average bool determined by something else.
         time_average = True
         if time_average:
@@ -153,9 +201,4 @@ def processing_params(
     return proc_params
 
 
-def get_task_factory():
-    return ContractTask.from_dict
-
-
-def get_submit_factory() -> t.Callable[..., SubmitContractConfig]:
-    return SubmitContractConfig.create
+# Factory functions removed - now handled by plugin registry in tasks/__init__.py
