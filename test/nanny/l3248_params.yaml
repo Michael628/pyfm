@@ -1,0 +1,190 @@
+# Parameters for LMI running
+submit_params:
+  # logging_level: DEBUG
+  ens: '3248f211b580m002426m06730m8447'
+  time: 48
+
+contract_params:
+  hardware: 'cpu'
+  # logging_level: 'DEBUG'
+  diagram_params:
+    pion_local:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: conn_2pt
+      mesonfiles: 'meson_contract_ll'
+      gammas:
+      - 'G5_G5'
+      low_label: e1000
+      low_max: 2000
+      mass: '002426'
+      outfile: contract
+    vec_local:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: conn_2pt
+      mesonfiles: 'meson_contract_ll'
+      gammas:
+      - 'GX_GX'
+      - 'GY_GY'
+      - 'GZ_GZ'
+      low_label: e1000
+      low_max: 2000
+      mass: '002426'
+      outfile: contract
+    vec_onelink:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: conn_2pt
+      mesonfiles: 'meson_contract_ll'
+      gammas:
+      - 'GX_G1'
+      - 'GY_G1'
+      - 'GZ_G1'
+      low_label: e1000
+      low_max: 2000
+      mass: '002426'
+      outfile: contract
+
+smear_params:
+  space: 32
+  node_geometry: "1 1 1 1"
+
+hadrons_params:
+  mass:
+    u: 0.001524
+    l: 0.002426
+    d: 0.003328
+  tstart: 0
+  tstop: 1
+  dt: 1
+  noise: 1
+  eigs: 1000
+  sourceeigs: 1000
+  alpha: 0.009
+  beta: 24
+  npoly: 81
+  nstop: 1000
+  nk: 1030
+  nm: 1600
+  cg_residual: 1e-8
+  eigresid: 1e-8
+  blocksize: 500
+  overwrite_sources: False
+  run_id: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
+
+precess:    # (cfg - cfg0)/dcfg*tstep % dt
+  loose:
+    cfg0: 18
+    dcfg: 48
+    tstep: 4
+  fine:
+    cfg0: 18
+    dcfg: 48
+    tstep: 3
+    nt: 48 # must match lattice dimension
+
+nanny:
+  todo_file: todo
+  # todo_file: todo_checkGhms
+  max_cases: 1
+  max_queue: 200
+  wait:     5
+  check_interval: 30
+
+submit:
+  # scheduler: SLURM
+  scheduler: INTERACTIVE
+  job_name_pfx: LMI
+  layout:
+    ppn: 4
+    smear:
+      nodes: 1
+      geom: [1,1,2,2]
+    contract:
+      ppn: 1
+      nodes: 1
+      geom: [1,1,1,1]
+    hadrons:
+      nodes: 1
+      geom: [1,1,2,2] # Product should equal nodes*ppn
+
+# Template and I/O file name keys
+job_setup:
+  smear: 
+    run: smear.slurm
+    job_type: smear
+    tasks:
+      unsmeared_file: '/pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau/lat/v5/l{ens}{series}.{cfg}'
+      node_geometry: "1 1 2 2"
+    io: 'test-l3248-smear'
+    wall_time: "3:00:00"
+  contract:
+    run: contract.slurm
+    job_type: contract
+    tasks:
+      diagrams:
+      - pion_local
+      - vec_local
+      - vec_onelink
+    io: 'test-l3248-contract'
+    wall_time: "8:00:00"
+    params:
+      eigs: 1000
+      dt: 1
+      noise: 1
+  hadrons: 
+    run: hadrons.slurm
+    io: 'test-l3248-hadrons'
+    wall_time: "24:00:00"
+    tasks:
+      epack:
+        load: true
+        save_evals: false
+      meson:
+        gamma:
+        - local
+        - onelink
+        mass:
+        - 'l'
+      high_modes:
+        gamma:
+        - pion_local
+        - vec_local
+        - vec_onelink
+        mass:
+        - 'l'
+
+files:
+  home: /pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau
+  fat_links:
+    filestem: lat/scidac/fat{ens}{series}.ildg
+    good_size: 115964110000
+  long_links:
+    filestem: lat/scidac/lng{ens}{series}.ildg
+    good_size: 115964110000
+  gauge_links:
+    filestem: lat/scidac/l{ens}{series}.ildg
+    good_size: 48922360000
+  eig:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 8153732016768
+  eigdir:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 4076866904
+  eval:
+    filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 815
+  high_modes:
+    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
+    good_size: 13100
+  meson_contract_ll:
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{meson_mass}/mf_{series}
+    good_size: 36864000000
+  meson_ll:
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
+    good_size: 36864000000
+  contract:
+    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
+    good_size: 13100
+

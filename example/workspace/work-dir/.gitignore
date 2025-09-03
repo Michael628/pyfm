@@ -1,0 +1,10 @@
+out/*
+!out/test-l4444-hadrons-a.20
+in/*
+!in/test-l4444-hadrons-a.20.xml
+!in/example-tau-l4444-hadrons-a.20.xml
+!in/test-l4444-contract-a.20.yaml
+!in/test-l4444-smear-a.20.txt
+schedules/*
+eigen/*
+todo.bak

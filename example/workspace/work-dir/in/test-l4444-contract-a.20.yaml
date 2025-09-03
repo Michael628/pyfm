@@ -1,0 +1,49 @@
+cfg: '20'
+diagrams:
+  pion_local:
+    contraction_type: conn_2pt
+    gamma_label: pion_local
+    gammas:
+    - G5_G5
+    low_label: e100
+    low_max: '200'
+    mass: '002426'
+    meson_mass: '002426'
+    mesonfiles: /home/mlynch/work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}.{cfg}/{gamma}_0_0_0.h5
+    outfile: /home/mlynch/work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}.{cfg}.p
+    symmetric: 'true'
+  vec_local:
+    contraction_type: conn_2pt
+    gamma_label: vec_local
+    gammas:
+    - GX_GX
+    - GY_GY
+    - GZ_GZ
+    low_label: e100
+    low_max: '200'
+    mass: '002426'
+    meson_mass: '002426'
+    mesonfiles: /home/mlynch/work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}.{cfg}/{gamma}_0_0_0.h5
+    outfile: /home/mlynch/work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}.{cfg}.p
+    symmetric: 'true'
+  vec_onelink:
+    contraction_type: conn_2pt
+    gamma_label: vec_onelink
+    gammas:
+    - GX_G1
+    - GY_G1
+    - GZ_G1
+    low_label: e100
+    low_max: '200'
+    mass: '002426'
+    meson_mass: '002426'
+    mesonfiles: /home/mlynch/work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}.{cfg}/{gamma}_0_0_0.h5
+    outfile: /home/mlynch/work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}.{cfg}.p
+    symmetric: 'true'
+dt: 1
+eigs: 100
+ens: '4444'
+hardware: cpu
+noise: 1
+series: a
+time: 4

@@ -167,12 +167,16 @@ def make_inputs(param, step, cfgno_steps):
             else:
                 sched_file = ""
 
-            xml_dict = hadmods.xml_wrapper(
-                runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
-            )
+            if "xml_file" in input_params:
+                with open(input_params["xml_file"], "r") as f:
+                    input_string = f.read()
+            else:
+                xml_dict = hadmods.xml_wrapper(
+                    runid=submit_config.run_id, sched=sched_file, cfg=submit_config.cfg
+                )
 
-            xml_dict["grid"]["modules"] = {"module": input_params}
-            input_string = dxml(xml_dict)
+                xml_dict["grid"]["modules"] = {"module": input_params}
+                input_string = dxml(xml_dict)
         else:
             input_string = input_params
 
@@ -272,7 +276,7 @@ def submit_job(param, step, cfgno_steps, max_cases):
         # Submitted batch job 10059729
         jobid = reply[len(reply) - 1].split()[3]
     elif scheduler == "INTERACTIVE":
-        jobid = os.environ["SLURM_JOBID"]
+        jobid = "0000"
     elif scheduler == "Cobalt":
         # ** Project 'semileptonic'; job rerouted to queue 'prod-short'
         # ['1607897']
@@ -305,8 +309,12 @@ def nanny_loop(YAML):
     """Check job periodically and submit to the queue"""
 
     date = subprocess.check_output("date", shell=True).rstrip().decode()
-    hostname = subprocess.check_output("hostname", shell=True).rstrip().decode()
-    print(date, "Spawn job process", os.getpid(), "started on", hostname)
+    try:
+        hostname = subprocess.check_output("hostname", shell=True).rstrip().decode()
+        print(date, "Spawn job process", os.getpid(), "started on", hostname)
+    except subprocess.CalledProcessError:
+        print(date, "Spawn job process", os.getpid(), "started on", "localhost")
+
     sys.stdout.flush()
 
     param = utils.load_param(YAML)
