@@ -3,6 +3,7 @@ submit_params:
   # logging_level: DEBUG
   ens: '4444'
   time: 4
+  runid: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
 
 contract_params:
   hardware: 'cpu'
@@ -61,17 +62,17 @@ hadrons_params:
   noise: 1 # leave this as 1
   eigs: 100 # eigs <= sourceeigs. number of eigenvalues to use in calculation
   sourceeigs: 100 # number of eigenvalues in source file
-  alpha: 0.009 # parameter for lanczos eigensolver
-  beta: 24 # parameter for lanczos eigensolver
-  npoly: 11 # parameter for lanczos eigensolver
-  nstop: 100 # parameter for lanczos eigensolver
-  nk: 120 # parameter for lanczos eigensolver
-  nm: 160 # parameter for lanczos eigensolver
-  eigresid: 1e-8 # parameter for lanczos eigensolver
-  cg_residual: 1e-8
+  lanczos: 
+    alpha: 0.009 # parameter for lanczos eigensolver
+    beta: 24 # parameter for lanczos eigensolver
+    npoly: 11 # parameter for lanczos eigensolver
+    nstop: 100 # parameter for lanczos eigensolver
+    nk: 120 # parameter for lanczos eigensolver
+    nm: 160 # parameter for lanczos eigensolver
+    residual: 1e-8 # parameter for lanczos eigensolver
+  residual: 1e-8
   blocksize: 200 # number of fields to contract in meson field kernel
   overwrite_sources: False # skip CG solves if correlator already exists
-  run_id: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
 
 precess:    # (cfg - cfg0)/dcfg*tstep % dt
   loose:
@@ -143,16 +144,106 @@ job_setup:
     job_type: hadrons
     task_type: raw
     tasks:
-      xml_file: 'in/example-tau-l4444-hadrons-a.20.xml'
-  hadrons: 
+      xml_file: 'in/example-tau-l4444-hadrons.xml'
+  high_modes: 
+    job_type: hadrons
+    task_type: high_modes
     run: hadrons.sh
-    io: 'test-l4444-hadrons'
+    io: 'test-l4444-high-modes'
     wall_time: "24:00:00"
+    tasks:
+      action_name: "stag_mass_{mass}"
+      low_modes_name: "evecs_mass_{mass}"
+      solver_name: "stag_{solver}_mass_{mass}"
+      has_eigs: true
+      operations:
+        pion_local:
+          mass:
+          - 'l'
+          - 'u'
+        vec_local:
+          mass:
+          - 'l'
+          - 'u'
+        vec_onelink:
+          mass:
+          - 'l'
+  meson: 
+    job_type: hadrons
+    task_type: meson
+    run: hadrons.sh
+    io: 'test-l4444-meson'
+    wall_time: "24:00:00"
+    tasks:
+      action_name: "stag_mass_{mass}"
+      low_modes_name: "evecs_mass_{mass}"
+      operations:
+        gamma:
+        - local
+        - onelink
+        mass:
+        - 'l'
+  gauge: 
+    job_type: hadrons
+    task_type: gauge
+    run: hadrons.sh
+    io: 'test-l4444-gauge'
+    wall_time: "24:00:00"
+    tasks:
+      sp_cast: true
+  epack: 
+    run: hadrons.sh
+    io: 'test-l4444-epack'
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: epack
+    tasks:
+      action_name: "stag_mass_{mass}"
+      low_modes_name: "evecs_mass_{mass}"
+      load: false
+      save_evals: true
+      save_eigs: true
+      masses:
+        - 'l'
+        - 'u'
+        - 'd'
+  lmi: 
+    run: hadrons.sh
+    io: 'test-l4444-lmi'
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
     tasks:
       epack:
         load: false
         save_evals: true
         save_eigs: true
+      meson:
+        onelink:
+          mass:
+          - 'l'
+        local:
+          mass:
+          - 'u'
+          - 'd'
+      high_modes:
+        gamma:
+        - pion_local
+        - axial_vec_local
+        - axial_vec_onelink
+        mass:
+        - 'l'
+  lmi: 
+    run: hadrons.sh
+    io: 'test-l4444-lmi'
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: true
+        save_evals: false
+        save_eigs: false
       meson:
         gamma:
         - local
@@ -190,7 +281,7 @@ files:
   high_modes:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
     good_size: 3900
-  meson_ll:
+  meson:
     filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
     good_size: 1286000
   contract:

@@ -1,9 +1,9 @@
 """Main execution logic for A2A contractions."""
+
 import itertools
 import logging
 import os
 import pickle
-import sys
 import typing as t
 from time import perf_counter
 
@@ -14,10 +14,9 @@ try:
 except ImportError:
     import numpy as xp
 
-import pyfm
 from pyfm import utils
-from pyfm.a2a import config
-from pyfm.a2a.contractions import (
+from pyfm.domain import DiagramConfig, RunContractConfig, Diagrams
+from .contractions import (
     conn_2pt,
     make_contraction_key,
     qed_conn_4pt,
@@ -27,8 +26,8 @@ from pyfm.a2a.contractions import (
 
 def execute(
     contraction: t.Tuple[str],
-    diagram_config: config.DiagramConfig,
-    run_config: config.RunContractConfig,
+    diagram_config: DiagramConfig,
+    run_config: RunContractConfig,
 ):
     """Execute the appropriate contraction based on diagram configuration."""
     if hasattr(xp, "cuda"):
@@ -42,10 +41,10 @@ def execute(
         "conn_2pt": lambda: conn_2pt(contraction, diagram_config, run_config),
         "sib_conn_3pt": lambda: sib_conn_3pt(contraction, diagram_config, run_config),
         "qed_conn_photex_4pt": lambda: qed_conn_4pt(
-            contraction, diagram_config, run_config, config.Diagrams.photex
+            contraction, diagram_config, run_config, Diagrams.photex
         ),
         "qed_conn_selfen_4pt": lambda: qed_conn_4pt(
-            contraction, diagram_config, run_config, config.Diagrams.selfen
+            contraction, diagram_config, run_config, Diagrams.selfen
         ),
     }
 
@@ -61,14 +60,12 @@ def execute(
 
 def main(param_file: str):
     """Main execution function for A2A contractions."""
-    params = utils.load_param(param_file)
+    params = utils.io.load_param(param_file)
 
-    run_config = config.get_contract_config(params)
-
-    run_config_replacements = run_config.string_dict()
+    run_config = get_contract_config(params)
 
     logging_level = getattr(run_config, "logging_level", "INFO")
-    pyfm.setup_logging(logging_level)
+    utils.set_logging_level(logging_level)
 
     if run_config.hardware == "cpu":
         import numpy as xp
@@ -79,11 +76,8 @@ def main(param_file: str):
 
     diagrams = run_config.diagrams
     for diagram_config in diagrams:
-        diagram_config_replacements = diagram_config.string_dict()
         if diagram_config.evalfile:
-            diagram_config.format_evalfile(
-                **run_config_replacements, **diagram_config_replacements
-            )
+            diagram_config.format_evalfile()
 
         nmesons = diagram_config.npoint
 
@@ -139,11 +133,7 @@ def main(param_file: str):
             seeds = [list(sum(zip(seed, seed), ())) for seed in seeds]
             seeds = [seed[1:] + seed[:1] for seed in seeds]
 
-            outfile = diagram_config.outfile.format(
-                permkey=permkey,
-                **run_config_replacements,
-                **diagram_config_replacements,
-            )
+            outfile = diagram_config.outfile.format(permkey=permkey)
 
             if overwrite or not os.path.exists(outfile):
                 logging.info(
@@ -185,10 +175,3 @@ def main(param_file: str):
             if run_config.rank < 1:
                 os.makedirs(os.path.dirname(outfile), exist_ok=True)
                 pickle.dump(corr, open(outfile, "wb"))
-
-
-if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise ValueError("Must provide input yaml file.")
-
-    main(sys.argv[1])

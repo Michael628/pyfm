@@ -1,8 +1,7 @@
-import logging
-from pyfm import setup_logging, utils
-from pyfm.processing import processor, dataio
+from pyfm import utils
+from pyfm.utils import processor, dataio
 import argparse
-from pyfm.nanny import config
+from pyfm.domain.nanny import config
 import typing as t
 import pandas as pd
 
@@ -29,7 +28,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     logging_level = input("Enter logging level (INFO): ").strip().upper() or "INFO"
-    setup_logging(logging_level)
+    logger = utils.setup_logging(logging_level)
 
     shared_cfgs: t.Optional[t.Set[str]] = None
 
@@ -45,8 +44,8 @@ if __name__ == "__main__":
         )
         cfg_list = cfg_sort(cfg_list)
 
-        logging.info(f"Processing file {file_path}")
-        logging.debug(f"Configs in current file: {', '.join(cfg_list)}")
+        logger.info(f"Processing file {file_path}")
+        logger.debug(f"Configs in current file: {', '.join(cfg_list)}")
 
         if shared_cfgs is None:
             shared_cfgs = set(cfg_list)
@@ -58,11 +57,11 @@ if __name__ == "__main__":
 
             if args.intersection:
                 if len(excess_cfgs) > 0:
-                    logging.warning(
+                    logger.warning(
                         f"Extra configs in current file (will be excluded): {', '.join(excess_cfgs)}"
                     )
                 if len(missing_cfgs) > 0:
-                    logging.warning(
+                    logger.warning(
                         f"Missing configs in current file: {', '.join(missing_cfgs)}"
                     )
 
@@ -71,7 +70,7 @@ if __name__ == "__main__":
 
     if args.intersection:
         assert shared_cfgs is not None, "No configs found in file arg(s)!"
-        logging.info(
+        logger.info(
             f"{len(shared_cfgs)} configs found in all files: {', '.join(shared_cfgs)}"
         )
 
