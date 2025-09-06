@@ -134,14 +134,18 @@ def h5_to_frame(
 ) -> pd.DataFrame:
     df = []
     for k, v in h5_config.datasets.items():
-        dataset_label = (x for x in v if x in file)
-
-        try:
-            h5_dset = file[next(dataset_label)]
-            assert isinstance(h5_dset, h5py.Dataset)
-            data = h5_dset[:].view(np.complex128)
-        except StopIteration:
-            raise ValueError(f"dataset {k} not found in file.")
+        assert len(v) == 1, (
+            "Only supporting single h5 entry per h5 dataset configuration key"
+        )
+        dataset_label = v[0]
+        if dataset_label in file:
+            data = file[dataset_label][:].view(np.complex128)
+        else:
+            dataset_label, attr_label = dataset_label.rsplit("/", 1)
+            if dataset_label in file and attr_label in file[dataset_label].attrs:
+                data = file[dataset_label].attrs[attr_label][:].view(np.complex128)
+            else:
+                raise ValueError(f"dataset {k} not found in file.")
 
         frame = ndarray_to_frame(data, h5_config.array_config[k])
         frame[h5_config.name] = k
