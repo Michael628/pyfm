@@ -1,18 +1,15 @@
 import itertools
-import os.path
 import re
 import typing as t
-from dataclasses import fields
 
 import pandas as pd
 from pydantic.dataclasses import dataclass
-from pydantic import Field
 
 from pyfm import utils
 from pyfm.nanny import TaskBase
 from pyfm.nanny.tasks.hadrons.components import hadmods
-from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
-from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode, meson
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
+from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
 
 # TODO: Change modules into a dictionary instead of a list
 # TODO: Move functions into LMITask class and use `self` instead of task_config
@@ -42,14 +39,17 @@ class LMITask(TaskBase):
         params["high_modes_component"] = hc
 
         if mc := kwargs.get("meson", None):
-            params["meson_component"] = meson.MesonHadronsComponent.from_dict(mc)
+            mc = cls.OpList.from_dict(mc)
+            params["meson_component"] = mc
 
         # if hc := kwargs.get("high_modes", None):
         #     hc = cls.HighModes.from_dict(hc)
 
         params["epack_component"] = None
         if has_eigs:
-            masses = {"masses": hc.mass} if hc else {}
+            masses = set(hc.mass) if hc else set()
+            masses |= set(mc.mass) if mc else set()
+            masses = {"masses": list(masses)} if masses else {}
             params["epack_component"] = eig.EigHadronsComponent.from_dict(
                 kwargs["epack"] | masses
             )
@@ -277,10 +277,9 @@ def processing_params(
     infile_stem = outfile_dict["high_modes"].filename
     outfile = outfile_dict["high_modes"].filestem
     filekeys = utils.format_keys(infile_stem)
-    outfile = outfile.replace("correlators", "dataframes")
+    outfile = outfile.replace("correlators", "processed/{format}")
     outfile = outfile.replace("_{series}", "")
     outfile = outfile.replace("_t{tsource}", "")
-    outfile += ".h5"
     replacements = {
         k: v for k, v in submit_config.string_dict().items() if k in filekeys
     }
@@ -326,7 +325,7 @@ def processing_params(
                         "datasets": h5_datasets,
                         **array_params,
                     },
-                    "out_files": {"filestem": outfile, "type": "dataframe"},
+                    "out_files": {"filestem": outfile},
                 }
 
     return proc_params

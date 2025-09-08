@@ -9,9 +9,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Provide job step (matching params.yaml steps) to process all outputs for step."
     )
-    parser.add_argument("step", type=str, help="Job Step")
+    parser.add_argument("-s", "--step", type=str, help="Job Step")
     parser.add_argument(
-        "--param-file", type=str, default="params.yaml", help="Parameter file location"
+        "-p",
+        "--param-file",
+        type=str,
+        default="params.yaml",
+        help="Parameter file location",
+    )
+    parser.add_argument(
+        "-f", "--format", type=str, default="csv", help="Output file format"
     )
     parser.add_argument(
         "--logging-level", type=str, default="INFO", help="Set logging level"
@@ -42,15 +49,9 @@ if __name__ == "__main__":
         if "actions" in run_params:
             result[key] = pc.execute(result[key], run_params["actions"])
 
-        # TODO: move "type" param to flag --format that...gets passed to processing_params?
+        keys = utils.format_keys(out_files["filestem"])
+
+        if "format" in keys:
+            result[key]["format"] = args.format
         if out_files:
-            out_type = out_files["type"]
-            if out_type == "dictionary":
-                filestem = out_files["filestem"]
-                depth = int(out_files["depth"])
-                dio.write_dict(result[key], filestem, depth)
-            elif out_type == "dataframe":
-                filestem = out_files["filestem"]
-                dio.write_frame(result[key], filestem)
-            else:
-                raise NotImplementedError(f"No support for out file type {out_type}.")
+            dio.write(result[key], format=args.format, **out_files)

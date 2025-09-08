@@ -1,0 +1,199 @@
+# Parameters for LMI running
+submit_params:
+  # logging_level: DEBUG
+  ens: '4444'
+  time: 4
+
+contract_params:
+  hardware: 'cpu'
+  # logging_level: 'DEBUG'
+  diagram_params:
+    pion_local:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: conn_2pt
+      mesonfiles: 'meson_ll'
+      gammas:
+      - 'G5_G5'
+      low_label: e100
+      low_max: 200
+      mass: '002426'
+      outfile: contract
+    vec_local:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: conn_2pt
+      mesonfiles: 'meson_ll'
+      gammas:
+      - 'GX_GX'
+      - 'GY_GY'
+      - 'GZ_GZ'
+      low_label: e100
+      low_max: 200
+      mass: '002426'
+      outfile: contract
+    vec_onelink:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: conn_2pt
+      mesonfiles: 'meson_ll'
+      gammas:
+      - 'GX_G1'
+      - 'GY_G1'
+      - 'GZ_G1'
+      low_label: e100
+      low_max: 200
+      mass: '002426'
+      outfile: contract
+
+smear_params:
+  space: 4
+  node_geometry: "1 1 1 1"
+
+hadrons_params:
+  mass:
+    u: 0.001524
+    l: 0.002426
+    d: 0.003328
+  tstart: 0 # first source time slice
+  tstop: 3 # tstop = time - 1
+  dt: 1 # spacing between source time slices
+  noise: 1 # leave this as 1
+  eigs: 100 # eigs <= sourceeigs. number of eigenvalues to use in calculation
+  sourceeigs: 100 # number of eigenvalues in source file
+  alpha: 0.009 # parameter for lanczos eigensolver
+  beta: 24 # parameter for lanczos eigensolver
+  npoly: 11 # parameter for lanczos eigensolver
+  nstop: 100 # parameter for lanczos eigensolver
+  nk: 120 # parameter for lanczos eigensolver
+  nm: 160 # parameter for lanczos eigensolver
+  eigresid: 1e-8 # parameter for lanczos eigensolver
+  cg_residual: 1e-8
+  blocksize: 200 # number of fields to contract in meson field kernel
+  overwrite_sources: False # skip CG solves if correlator already exists
+  run_id: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
+
+precess:    # (cfg - cfg0)/dcfg*tstep % dt
+  loose:
+    cfg0: 18
+    dcfg: 48
+    tstep: 4
+  fine:
+    cfg0: 18
+    dcfg: 48
+    tstep: 3
+    nt: 4 # must match lattice dimension
+
+nanny:
+  todo_file: todo
+  # todo_file: todo_checkGhms
+  max_cases: 1
+  max_queue: 200
+  wait:     5
+  check_interval: 30
+
+submit:
+  # scheduler: SLURM
+  scheduler: INTERACTIVE
+  job_name_pfx: LMI
+  layout:
+    ppn: 1
+    smear:
+      nodes: 1
+      geom: [1,1,1,1]
+    contract:
+      ppn: 1
+      nodes: 1
+      geom: [1,1,1,1]
+    tau:
+      nodes: 1
+      geom: [1,1,1,1] # geom list product should equal nodes*ppn
+    hadrons:
+      nodes: 1
+      geom: [1,1,1,1] # geom list product should equal nodes*ppn
+
+# Template and I/O file name keys
+job_setup:
+  smear: 
+    run: smear.sh
+    job_type: smear
+    tasks:
+      unsmeared_file: '/home/mlynch/work/pyfm/example/work-dir/lat/v5/l{ens}{series}.{cfg}'
+      node_geometry: "1 1 1 1"
+    io: 'test-l4444-smear'
+    wall_time: "3:00:00"
+  contract:
+    run: contract.sh
+    job_type: contract
+    tasks:
+      diagrams:
+      - pion_local
+      - vec_local
+      - vec_onelink
+    io: 'test-l4444-contract'
+    wall_time: "8:00:00"
+    params:
+      eigs: 100
+      dt: 1
+      noise: 1
+  tau: 
+    run: hadrons.sh
+    io: 'tau-l4444-hadrons'
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: raw
+    tasks:
+      xml_file: 'in/example-tau-l4444-hadrons-a.20.xml'
+  hadrons: 
+    run: hadrons.sh
+    io: 'test-l4444-hadrons'
+    wall_time: "24:00:00"
+    tasks:
+      epack:
+        load: false
+        save_evals: true
+        save_eigs: true
+      meson:
+        gamma:
+        - local
+        - onelink
+        mass:
+        - 'l'
+      high_modes:
+        gamma:
+        - pion_local
+        - vec_local
+        - vec_onelink
+        mass:
+        - 'l'
+
+files:
+  home: /home/mlynch/work/pyfm/example/workspace/work-dir
+  fat_links:
+    filestem: lat/scidac/fat{ens}{series}.ildg
+    good_size: 76000
+  long_links:
+    filestem: lat/scidac/lng{ens}{series}.ildg
+    good_size: 76000
+  gauge_links:
+    filestem: lat/scidac/l{ens}{series}.ildg
+    good_size: 76000
+  eig:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 866000
+  eigdir:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 4076866904
+  eval:
+    filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 4400
+  high_modes:
+    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
+    good_size: 3900
+  meson_ll:
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
+    good_size: 1286000
+  contract:
+    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
+    good_size: 400
+

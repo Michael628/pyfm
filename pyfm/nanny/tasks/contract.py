@@ -90,7 +90,7 @@ def processing_params(
     outfile = outfile_dict["contract"].filestem
     filekeys = utils.format_keys(infile_stem)
     proc_params: t.Dict[str, t.Any] = {"run": task_config.diagrams}
-    outfile = outfile.replace("correlators", "dataframes")
+    outfile = outfile.replace("correlators", "processed/{format}")
     outfile = outfile.replace("_{series}", "")
     outfile += ".h5"
     replacements = {
@@ -115,7 +115,7 @@ def processing_params(
                 "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
                 "dict_labels": ["seedkey", "gamma"],
             },
-            "out_files": {"filestem": outfile, "type": "dataframe"},
+            "out_files": {"filestem": outfile},
         }
         index = ["series.cfg", "gamma"]
         actions = {}

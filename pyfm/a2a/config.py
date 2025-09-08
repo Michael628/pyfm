@@ -10,7 +10,7 @@ try:
 
     COMM = MPI.COMM_WORLD
 except ImportError:
-    pass
+    COMM = None
 
 
 class Diagrams(Enum):
@@ -127,8 +127,8 @@ class RunContractConfig(pyfm.ConfigBase):
     _overwrite_correlators: bool = True
     _hardware: str = "cpu"
     _logging_level: str = "INFO"
-    _comm_size: int = -1
-    _rank: int = -1
+    _comm_size: int = 1
+    _rank: int = 0
 
     @classmethod
     def create(cls, **kwargs):
@@ -139,8 +139,9 @@ class RunContractConfig(pyfm.ConfigBase):
             DiagramConfig.create(**v, run_vars=obj.string_dict())
             for k, v in diagrams.items()
         ]
-        obj.rank = COMM.Get_rank()
-        obj.comm_size = COMM.Get_size()
+        if COMM:
+            obj.rank = COMM.Get_rank()
+            obj.comm_size = COMM.Get_size()
 
         return obj
 

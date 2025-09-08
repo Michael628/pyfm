@@ -1,0 +1,19 @@
+prompt 0
+nx 4
+ny 4
+nz 4
+nt 4
+node_geometry 1 1 1 1
+ionode_geometry 1 1 1 1
+iseed 1234
+reload_parallel /home/mlynch/work/pyfm/example/work-dir/lat/v5/l4444a.20
+u0   1
+save_serial_ildg /home/mlynch/work/pyfm/example/workspace/work-dir/lat/scidac/l4444a.ildg.20
+ILDG_LFN l4444a.ildg.20
+coordinate_origin 0 0 0 0
+time_bc antiperiodic
+save_serial_ildg /home/mlynch/work/pyfm/example/workspace/work-dir/lat/scidac/lng4444a.ildg.20
+ILDG_LFN lng4444a.ildg.20
+save_serial_ildg /home/mlynch/work/pyfm/example/workspace/work-dir/lat/scidac/fat4444a.ildg.20
+ILDG_LFN fat4444a.ildg.20
+withKSphases 1

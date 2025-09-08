@@ -136,14 +136,18 @@ def h5_to_frame(
 ) -> pd.DataFrame:
     df = []
     for k, v in h5_config.datasets.items():
-        dataset_label = (x for x in v if x in file)
-
-        try:
-            h5_dset = file[next(dataset_label)]
-            assert isinstance(h5_dset, h5py.Dataset)
-            data = h5_dset[:].view(np.complex128)
-        except StopIteration:
-            raise ValueError(f"dataset {k} not found in file.")
+        assert len(v) == 1, (
+            "Only supporting single h5 entry per h5 dataset configuration key"
+        )
+        dataset_label = v[0]
+        if dataset_label in file:
+            data = file[dataset_label][:].view(np.complex128)
+        else:
+            dataset_label, attr_label = dataset_label.rsplit("/", 1)
+            if dataset_label in file and attr_label in file[dataset_label].attrs:
+                data = file[dataset_label].attrs[attr_label][:].view(np.complex128)
+            else:
+                raise ValueError(f"dataset {k} not found in file.")
 
         frame = ndarray_to_frame(data, h5_config.array_config[k])
         frame[h5_config.name] = k
@@ -464,7 +468,7 @@ def write_dict(df: pd.DataFrame, filestem: str, dict_depth: int) -> None:
     write_data(df, filestem, write_fn=writeconvert)
 
 
-def write_frame(df: pd.DataFrame, filestem: str) -> None:
+def write_hdf5(df: pd.DataFrame, filestem: str) -> None:
     """
     Writes a DataFrame to a file with a specified filestem using a custom write function.
 
@@ -478,6 +482,36 @@ def write_frame(df: pd.DataFrame, filestem: str) -> None:
     """
     write_data(
         df,
-        filestem,
+        os.path.splitext(filestem)[0] + ".h5",
         write_fn=lambda data, fname: data.to_hdf(fname, key="corr", mode="w"),
     )
+
+
+def write_csv(df: pd.DataFrame, filestem: str) -> None:
+    """
+    Writes a DataFrame to a file with a specified filestem using a custom write function.
+
+    Parameters:
+    df : pd.DataFrame
+        The DataFrame to be written to a file.
+    filestem : str
+        The base name for the output file.
+
+    See write_data for details.
+    """
+    write_data(
+        df,
+        os.path.splitext(filestem)[0] + ".csv",
+        write_fn=lambda data, fname: data.to_csv(fname),
+    )
+
+
+def write(df: pd.DataFrame, format: str, *args, **kwargs) -> None:
+    if format == "csv":
+        write_csv(df, *args, **kwargs)
+    elif format == "hdf5":
+        write_hdf5(df, *args, **kwargs)
+    elif format == "dict":
+        write_dict(df, *args, **kwargs)
+    else:
+        raise NotImplementedError(f"No support for format {format}.")

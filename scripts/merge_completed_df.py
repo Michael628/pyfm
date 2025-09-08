@@ -82,4 +82,4 @@ if __name__ == "__main__":
 
     assert isinstance(df_out, pd.DataFrame)
 
-    dataio.write_frame(df_out, args.outfile)
+    dataio.write_hdf5(df_out, args.outfile)
