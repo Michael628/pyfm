@@ -36,4 +36,4 @@ if __name__ == "__main__":
             pc.execute(df, actions={"drop": ["seedkey"]})
 
         logging.info(f"Writing processed file to: {path_out}")
-        dio.write_frame(df, path_out)
+        dio.write_hdf5(df, path_out)

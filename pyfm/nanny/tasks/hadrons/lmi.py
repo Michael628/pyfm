@@ -1,17 +1,14 @@
 import itertools
-import os.path
 import re
 import typing as t
-from dataclasses import fields
 
 import pandas as pd
 from pydantic.dataclasses import dataclass
-from pydantic import Field
 
 from pyfm import Gamma, utils
 from pyfm.nanny import TaskBase
 from pyfm.nanny.tasks.hadrons.components import hadmods
-from pyfm.nanny.tasks.hadrons import HadronsTaskBase, SubmitHadronsConfig
+from pyfm.nanny.tasks.hadrons import SubmitHadronsConfig
 from pyfm.nanny.tasks.hadrons.components import gauge, eig, highmode
 
 # TODO: Change modules into a dictionary instead of a list
@@ -388,10 +385,9 @@ def processing_params(
     infile_stem = outfile_dict["high_modes"].filename
     outfile = outfile_dict["high_modes"].filestem
     filekeys = utils.format_keys(infile_stem)
-    outfile = outfile.replace("correlators", "dataframes")
+    outfile = outfile.replace("correlators", "processed/{format}")
     outfile = outfile.replace("_{series}", "")
     outfile = outfile.replace("_t{tsource}", "")
-    outfile += ".h5"
     replacements = {
         k: v for k, v in submit_config.string_dict().items() if k in filekeys
     }
@@ -437,7 +433,7 @@ def processing_params(
                         "datasets": h5_datasets,
                         **array_params,
                     },
-                    "out_files": {"filestem": outfile, "type": "dataframe"},
+                    "out_files": {"filestem": outfile},
                 }
 
     return proc_params
