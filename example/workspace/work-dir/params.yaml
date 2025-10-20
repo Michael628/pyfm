@@ -1,50 +1,50 @@
-# Parameters for LMI running
+#Parameters for LMI running
 submit_params:
   # logging_level: DEBUG
-  ens: '4444'
+  ens: "4444"
   time: 4
-  runid: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
+  runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
 
 contract_params:
-  hardware: 'cpu'
+  hardware: "cpu"
   # logging_level: 'DEBUG'
   diagram_params:
     pion_local:
       gamma_label: pion_local
       symmetric: True
       contraction_type: conn_2pt
-      mesonfiles: 'meson_ll'
+      mesonfiles: "meson_ll"
       gammas:
-      - 'G5_G5'
+        - "G5_G5"
       low_label: e100
       low_max: 200
-      mass: '002426'
+      mass: "002426"
       outfile: contract
     vec_local:
       gamma_label: vec_local
       symmetric: True
       contraction_type: conn_2pt
-      mesonfiles: 'meson_ll'
+      mesonfiles: "meson_ll"
       gammas:
-      - 'GX_GX'
-      - 'GY_GY'
-      - 'GZ_GZ'
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
       low_label: e100
       low_max: 200
-      mass: '002426'
+      mass: "002426"
       outfile: contract
     vec_onelink:
       gamma_label: vec_onelink
       symmetric: True
       contraction_type: conn_2pt
-      mesonfiles: 'meson_ll'
+      mesonfiles: "meson_ll"
       gammas:
-      - 'GX_G1'
-      - 'GY_G1'
-      - 'GZ_G1'
+        - "GX_G1"
+        - "GY_G1"
+        - "GZ_G1"
       low_label: e100
       low_max: 200
-      mass: '002426'
+      mass: "002426"
       outfile: contract
 
 smear_params:
@@ -62,7 +62,7 @@ hadrons_params:
   noise: 1 # leave this as 1
   eigs: 100 # eigs <= sourceeigs. number of eigenvalues to use in calculation
   sourceeigs: 100 # number of eigenvalues in source file
-  lanczos: 
+  lanczos:
     alpha: 0.009 # parameter for lanczos eigensolver
     beta: 24 # parameter for lanczos eigensolver
     npoly: 11 # parameter for lanczos eigensolver
@@ -74,7 +74,7 @@ hadrons_params:
   blocksize: 200 # number of fields to contract in meson field kernel
   overwrite_sources: False # skip CG solves if correlator already exists
 
-precess:    # (cfg - cfg0)/dcfg*tstep % dt
+precess: # (cfg - cfg0)/dcfg*tstep % dt
   loose:
     cfg0: 18
     dcfg: 48
@@ -90,7 +90,7 @@ nanny:
   # todo_file: todo_checkGhms
   max_cases: 1
   max_queue: 200
-  wait:     5
+  wait: 5
   check_interval: 30
 
 submit:
@@ -101,115 +101,45 @@ submit:
     ppn: 1
     smear:
       nodes: 1
-      geom: [1,1,1,1]
+      geom: [1, 1, 1, 1]
     contract:
       ppn: 1
       nodes: 1
-      geom: [1,1,1,1]
+      geom: [1, 1, 1, 1]
     tau:
       nodes: 1
-      geom: [1,1,1,1] # geom list product should equal nodes*ppn
+      geom: [1, 1, 1, 1] # geom list product should equal nodes*ppn
     hadrons:
       nodes: 1
-      geom: [1,1,1,1] # geom list product should equal nodes*ppn
+      geom: [1, 1, 1, 1] # geom list product should equal nodes*ppn
 
 # Template and I/O file name keys
 job_setup:
-  smear: 
+  smear:
     run: smear.sh
     job_type: smear
     tasks:
-      unsmeared_file: '/home/mlynch/work/pyfm/example/work-dir/lat/v5/l{ens}{series}.{cfg}'
+      unsmeared_file: "/home/mlynch/work/pyfm/example/work-dir/lat/v5/l{ens}{series}.{cfg}"
       node_geometry: "1 1 1 1"
-    io: 'test-l4444-smear'
+    io: "test-l4444-smear"
     wall_time: "3:00:00"
   contract:
     run: contract.sh
     job_type: contract
     tasks:
       diagrams:
-      - pion_local
-      - vec_local
-      - vec_onelink
-    io: 'test-l4444-contract'
+        - pion_local
+        - vec_local
+        - vec_onelink
+    io: "test-l4444-contract"
     wall_time: "8:00:00"
     params:
       eigs: 100
       dt: 1
       noise: 1
-  tau: 
+  lmi:
     run: hadrons.sh
-    io: 'tau-l4444-hadrons'
-    wall_time: "24:00:00"
-    job_type: hadrons
-    task_type: raw
-    tasks:
-      xml_file: 'in/example-tau-l4444-hadrons.xml'
-  high_modes: 
-    job_type: hadrons
-    task_type: high_modes
-    run: hadrons.sh
-    io: 'test-l4444-high-modes'
-    wall_time: "24:00:00"
-    tasks:
-      action_name: "stag_mass_{mass}"
-      low_modes_name: "evecs_mass_{mass}"
-      solver_name: "stag_{solver}_mass_{mass}"
-      has_eigs: true
-      operations:
-        pion_local:
-          mass:
-          - 'l'
-          - 'u'
-        vec_local:
-          mass:
-          - 'l'
-          - 'u'
-        vec_onelink:
-          mass:
-          - 'l'
-  meson: 
-    job_type: hadrons
-    task_type: meson
-    run: hadrons.sh
-    io: 'test-l4444-meson'
-    wall_time: "24:00:00"
-    tasks:
-      action_name: "stag_mass_{mass}"
-      low_modes_name: "evecs_mass_{mass}"
-      operations:
-        gamma:
-        - local
-        - onelink
-        mass:
-        - 'l'
-  gauge: 
-    job_type: hadrons
-    task_type: gauge
-    run: hadrons.sh
-    io: 'test-l4444-gauge'
-    wall_time: "24:00:00"
-    tasks:
-      sp_cast: true
-  epack: 
-    run: hadrons.sh
-    io: 'test-l4444-epack'
-    wall_time: "24:00:00"
-    job_type: hadrons
-    task_type: epack
-    tasks:
-      action_name: "stag_mass_{mass}"
-      low_modes_name: "evecs_mass_{mass}"
-      load: false
-      save_evals: true
-      save_eigs: true
-      masses:
-        - 'l'
-        - 'u'
-        - 'd'
-  lmi: 
-    run: hadrons.sh
-    io: 'test-l4444-lmi'
+    io: "test-l4444-lmi"
     wall_time: "24:00:00"
     job_type: hadrons
     task_type: lmi
@@ -219,44 +149,23 @@ job_setup:
         save_evals: true
         save_eigs: true
       meson:
-        onelink:
-          mass:
-          - 'l'
-        local:
-          mass:
-          - 'u'
-          - 'd'
+        gamma:
+          - pion_local
+          - vec_local
+          - vec_onelink
+          - axial_vec_local
+          - axial_vec_onelink
+        mass:
+          - "l"
       high_modes:
         gamma:
-        - pion_local
-        - axial_vec_local
-        - axial_vec_onelink
+          - pion_local
+          - vec_local
+          - vec_onelink
+          - axial_vec_local
+          - axial_vec_onelink
         mass:
-        - 'l'
-  lmi: 
-    run: hadrons.sh
-    io: 'test-l4444-lmi'
-    wall_time: "24:00:00"
-    job_type: hadrons
-    task_type: lmi
-    tasks:
-      epack:
-        load: true
-        save_evals: false
-        save_eigs: false
-      meson:
-        gamma:
-        - local
-        - onelink
-        mass:
-        - 'l'
-      high_modes:
-        gamma:
-        - pion_local
-        - vec_local
-        - vec_onelink
-        mass:
-        - 'l'
+          - "l"
 
 files:
   home: /home/mlynch/work/pyfm/example/workspace/work-dir
@@ -287,4 +196,3 @@ files:
   contract:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
     good_size: 400
-
