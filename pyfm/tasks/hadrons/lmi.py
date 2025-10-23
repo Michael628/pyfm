@@ -4,17 +4,20 @@ import pandas as pd
 from pydantic.dataclasses import dataclass
 from dataclasses import replace
 
-from pyfm.domain import TaskRegistry, CompositeConfig, HadronsInput
-from . import gauge, meson, epack, highmode
+from pyfm.domain import CompositeConfig, HadronsInput
+from pyfm.tasks.register import register_task
+
+from pyfm.tasks.hadrons import gauge, meson, epack, highmode
 
 
-# ============LMI Task Configuration===========
 @dataclass(frozen=True)
 class LMIConfig(CompositeConfig):
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig | None = None
     meson_config: meson.MesonConfig | None = None
     high_modes_config: highmode.HighModeConfig | None = None
+
+    key: t.ClassVar[str] = "hadrons_lmi"
 
 
 def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
@@ -36,27 +39,43 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
     low_modes_name = "evecs_mass_{mass}"
     shift_gauge_name = "gauge"
     if key == "meson":
-        return {
-            "action_name": action_name,
-            "low_modes_name": low_modes_name,
-        } | sub_params
+        return (
+            params
+            | {
+                "action_name": action_name,
+                "low_modes_name": low_modes_name,
+            }
+            | sub_params
+        )
     elif key == "gauge":
-        return {
-            "action_name": action_name,
-        } | sub_params
+        return (
+            params
+            | {
+                "action_name": action_name,
+            }
+            | sub_params
+        )
     elif key == "epack":
-        return {
-            "action_name": action_name,
-            "low_modes_name": low_modes_name,
-        } | sub_params
+        return (
+            params
+            | {
+                "action_name": action_name,
+                "low_modes_name": low_modes_name,
+            }
+            | sub_params
+        )
     elif key == "high_modes":
-        return {
-            "shift_gauge_name": shift_gauge_name,
-            "action_name": action_name,
-            "solver_name": solver_name,
-            "low_modes_name": low_modes_name,
-            "skip_low_modes": "epack_config" in params,
-        } | sub_params
+        return (
+            params
+            | {
+                "shift_gauge_name": shift_gauge_name,
+                "action_name": action_name,
+                "solver_name": solver_name,
+                "low_modes_name": low_modes_name,
+                "skip_low_modes": "epack_config" in params,
+            }
+            | sub_params
+        )
     else:
         raise ValueError(f"Unknown subconfig: {subconfig}")
 
@@ -146,11 +165,8 @@ def build_aggregator_params(
 
 
 # Register SmearConfig as the config for 'smear' task type
-TaskRegistry.register_config("hadrons_lmi", LMIConfig)
-
-# Register all functions for the 'smear' task type
-TaskRegistry.register_functions(
-    "hadrons_lmi",
+register_task(
+    LMIConfig,
     create_outfile_catalog,
     build_input_params,
     build_aggregator_params,

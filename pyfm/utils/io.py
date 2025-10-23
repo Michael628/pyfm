@@ -6,7 +6,7 @@ from functools import partial
 import glob
 
 
-from .string import format_keys
+from pyfm.utils.string import format_keys
 
 from pyrsistent import freeze, thaw
 
@@ -14,7 +14,7 @@ import yaml
 from dict2xml import dict2xml as dxml
 import pandas as pd
 
-from .logging import get_logger
+from pyfm.utils.logging import get_logger
 
 
 procFn = t.Callable[[str, t.Any], t.Any]

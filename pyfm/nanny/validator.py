@@ -7,7 +7,7 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 
-from .setup import create_task
+from pyfm.nanny.setup import create_task
 
 
 @t.runtime_checkable

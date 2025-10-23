@@ -7,7 +7,7 @@ import pandas as pd
 
 from pyfm import utils
 
-from .converter import frame_to_dict
+from pyfm.dataio.converter import frame_to_dict
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]

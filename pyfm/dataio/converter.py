@@ -6,7 +6,7 @@ import h5py
 import numpy as np
 import pandas as pd
 
-from ..domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
+from pyfm.domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
 
 
 def frame_to_frame(data, **_):

@@ -8,11 +8,11 @@ from pyfm.domain import (
     Gamma,
     OpList,
     Outfile,
-    TaskRegistry,
     HadronsInput,
     MassDict,
     hadmods,
 )
+from pyfm.tasks.register import register_task
 
 
 @dataclass(frozen=True)
@@ -25,6 +25,8 @@ class MesonConfig(SimpleConfig):
     meson: Outfile
     overwrite: bool = False
     apply_g5: bool = True
+
+    key: t.ClassVar[str] = "hadrons_meson"
 
     @property
     def op_list(self) -> t.List[OpList.Op]:
@@ -137,9 +139,4 @@ def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
 
 
 # Register GaugeConfig as the config for 'hadrons_gauge' task type
-TaskRegistry.register_config("hadrons_meson", MesonConfig)
-
-# Register all functions for the 'meson' task type
-TaskRegistry.register_functions(
-    "hadrons_meson", build_input_params, create_outfile_catalog
-)
+register_task(MesonConfig, build_input_params, create_outfile_catalog)

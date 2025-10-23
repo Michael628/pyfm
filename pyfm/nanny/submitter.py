@@ -1,13 +1,10 @@
-#! /usr/bin/env python3
-
-# Python 3 version
-
 import sys
 import os
 import subprocess
 from pyfm import utils
 
-from . import check_jobs, write_input_file
+from pyfm.nanny.validator import check_jobs
+from pyfm.nanny.inputgen import write_input_file
 
 from functools import reduce
 
@@ -98,8 +95,6 @@ def make_inputs(param, step, cfgno_steps):
 
         infile = write_input_file(step, param, series, cfgno)
 
-        # if job_config.job_type == "contract":
-        #     input_string = yaml.dump(input_params)
         input_files.append(infile)
 
     # Set environment variable for job scripts

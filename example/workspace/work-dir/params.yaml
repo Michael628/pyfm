@@ -1,6 +1,10 @@
 #Parameters for LMI running
 submit_params:
-  # logging_level: DEBUG
+  mass:
+    u: 0.001524
+    l: 0.002426
+    d: 0.003328
+  logging_level: DEBUG
   ens: "4444"
   time: 4
   runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
@@ -12,39 +16,51 @@ contract_params:
     pion_local:
       gamma_label: pion_local
       symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: "meson_ll"
+      contraction_type: two_point
+      mesons:
+        - file: "meson"
+          mass: "l"
+        - file: "meson"
+          mass: "l"
       gammas:
         - "G5_G5"
-      low_label: e100
-      low_max: 200
-      mass: "002426"
+      eig_range:
+        min: 0
+        max: 200
       outfile: contract
     vec_local:
       gamma_label: vec_local
       symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: "meson_ll"
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+        new_mass: "u"
+        evalfile: "eval"
       gammas:
         - "GX_GX"
         - "GY_GY"
         - "GZ_GZ"
-      low_label: e100
-      low_max: 200
-      mass: "002426"
+      eig_range:
+        min: 0
+        max: 200
       outfile: contract
     vec_onelink:
       gamma_label: vec_onelink
       symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: "meson_ll"
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+        new_mass: "d"
+        evalfile: "eval"
       gammas:
         - "GX_G1"
         - "GY_G1"
         - "GZ_G1"
-      low_label: e100
-      low_max: 200
-      mass: "002426"
+      eig_range:
+        min: 0
+        max: 200
       outfile: contract
 
 smear_params:
@@ -52,10 +68,6 @@ smear_params:
   node_geometry: "1 1 1 1"
 
 hadrons_params:
-  mass:
-    u: 0.001524
-    l: 0.002426
-    d: 0.003328
   tstart: 0 # first source time slice
   tstop: 3 # tstop = time - 1
   dt: 1 # spacing between source time slices
@@ -119,7 +131,7 @@ job_setup:
     run: smear.sh
     job_type: smear
     tasks:
-      unsmeared_file: "/home/mlynch/work/pyfm/example/work-dir/lat/v5/l{ens}{series}.{cfg}"
+      unsmeared_file: "/home/mlynch/Work/pyfm/example/work-dir/lat/v5/l{ens}{series}.{cfg}"
       node_geometry: "1 1 1 1"
     io: "test-l4444-smear"
     wall_time: "3:00:00"
@@ -137,7 +149,7 @@ job_setup:
       eigs: 100
       dt: 1
       noise: 1
-  lmi:
+  hadrons:
     run: hadrons.sh
     io: "test-l4444-lmi"
     wall_time: "24:00:00"
@@ -168,7 +180,7 @@ job_setup:
           - "l"
 
 files:
-  home: /home/mlynch/work/pyfm/example/workspace/work-dir
+  home: /home/mlynch/Work/pyfm/example/workspace/work-dir
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg
     good_size: 76000

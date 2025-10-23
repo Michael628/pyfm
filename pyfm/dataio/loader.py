@@ -9,7 +9,7 @@ import pandas as pd
 
 from pyfm.domain import LoadDictConfig, LoadH5Config
 
-from .converter import data_to_frame
+from pyfm.dataio.converter import data_to_frame
 from pyfm.domain import WrappedDataPipe
 from pyfm import utils
 

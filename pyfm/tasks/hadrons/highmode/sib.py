@@ -1,6 +1,6 @@
 import typing as t
 from pyfm.domain import HadronsInput, OpList, hadmods
-from .domain import HighModeConfig
+from pyfm.tasks.hadrons.highmode.domain import HighModeConfig
 
 
 def build_quarks(

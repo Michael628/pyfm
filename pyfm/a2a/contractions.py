@@ -19,14 +19,9 @@ try:
 except ImportError:
     pass
 
-from .domain import Diagrams, DiagramConfig, RunContractConfig
-from .meson_loader import MesonLoader
-from .time_operations import convert_to_numpy
-
-
-def make_contraction_key(contraction: t.Tuple[str], diagram_config: DiagramConfig):
-    con_key = "_".join(contraction)
-    return con_key
+from pyfm.domain import DiagramConfig, ContractConfig
+from pyfm.a2a.mesonloader import iter_meson_fields
+from pyfm.a2a.time_operations import convert_to_numpy
 
 
 def contract(
@@ -76,7 +71,7 @@ def contract(
     return cij
 
 
-def generate_time_sets(diagram_config: DiagramConfig, run_config: RunContractConfig):
+def generate_time_sets(diagram_config: DiagramConfig, contract_config: ContractConfig):
     """Breaks meson field time extent into `comm_size` blocks and
     returns unique list of blocks for each `rank`.
 
@@ -87,7 +82,7 @@ def generate_time_sets(diagram_config: DiagramConfig, run_config: RunContractCon
         One list for each meson field
     """
 
-    workers = run_config.comm_size
+    workers = contract_config.comm_size
 
     slice_indices = list(
         itertools.product(range(workers), repeat=diagram_config.npoint)
@@ -97,11 +92,11 @@ def generate_time_sets(diagram_config: DiagramConfig, run_config: RunContractCon
         slice_indices = list(filter(lambda x: list(x) == sorted(x), slice_indices))
         workers = int((len(slice_indices) + workers - 1) / workers)
 
-    offset = int(run_config.rank * workers)
+    offset = int(contract_config.rank * workers)
 
     slice_indices = list(zip(*slice_indices[offset : offset + workers]))
 
-    tspacing = int(diagram_config.time / run_config.comm_size)
+    tspacing = int(contract_config.time / contract_config.comm_size)
 
     return tuple(
         [slice(int(ti * tspacing), int((ti + 1) * tspacing)) for ti in times]
@@ -112,30 +107,30 @@ def generate_time_sets(diagram_config: DiagramConfig, run_config: RunContractCon
 def conn_2pt(
     contraction: t.Tuple[str],
     diagram_config: DiagramConfig,
-    run_config: RunContractConfig,
+    contract_config: ContractConfig,
 ):
     """Execute 2-point contraction."""
     corr = {}
 
-    times = generate_time_sets(diagram_config, run_config)
+    times = generate_time_sets(diagram_config, contract_config)
 
     for gamma in diagram_config.gammas:
         mesonfiles = tuple(
-            m_path.format(
+            meson_outfile.file.filename.format(
                 w_index=contraction[i],
                 v_index=contraction[i + 1],
                 gamma=gamma,
             )
-            for i, m_path in zip([0, 2], diagram_config.mesonfiles)
+            for i, meson_outfile in zip([0, 2], diagram_config.mesons)
         )
 
-        mat_gen = MesonLoader(
-            mesonfiles=mesonfiles, times=times, **diagram_config.meson_params
+        cij = xp.zeros(
+            (contract_config.time, contract_config.time), dtype=xp.complex128
         )
 
-        cij = xp.zeros((diagram_config.time, diagram_config.time), dtype=xp.complex128)
-
-        for (t1, m1), (t2, m2) in mat_gen:
+        for (t1, m1), (t2, m2) in iter_meson_fields(
+            diagram_config, mesonfiles, times, contraction
+        ):
             logging.info(f"Contracting {gamma}: {t1},{t2}")
 
             cij[t1, t2] = contract(m1, m2)
@@ -144,14 +139,14 @@ def conn_2pt(
 
         logging.debug("Contraction completed")
 
-        if run_config.comm_size > 1:
+        if contract_config.comm_size > 1:
             temp = None
-            if run_config.rank == 0:
+            if contract_config.rank == 0:
                 temp = xp.empty_like(cij)
             COMM.Barrier()
             COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
 
-            if run_config.rank == 0:
+            if contract_config.rank == 0:
                 corr[gamma] = convert_to_numpy(temp)
         else:
             corr[gamma] = convert_to_numpy(cij)
@@ -163,12 +158,12 @@ def conn_2pt(
 def sib_conn_3pt(
     contraction: t.Tuple[str],
     diagram_config: DiagramConfig,
-    run_config: RunContractConfig,
+    contract_config: ContractConfig,
 ):
     """Execute 3-point contraction."""
     corr = {}
 
-    times = generate_time_sets(diagram_config, run_config)
+    times = generate_time_sets(diagram_config, contract_config)
 
     for gamma in diagram_config.gammas:
         mesonfiles = tuple(
@@ -182,16 +177,14 @@ def sib_conn_3pt(
             )
         )
 
-        mat_gen = MesonLoader(
-            mesonfiles=mesonfiles, times=times, **diagram_config.meson_params
-        )
-
         cij = xp.zeros(
-            (diagram_config.time, diagram_config.time, diagram_config.time),
+            (contract_config.time, contract_config.time, contract_config.time),
             dtype=xp.complex128,
         )
 
-        for (t1, m1), (t2, m2), (t3, m3) in mat_gen:
+        for (t1, m1), (t2, m2), (t3, m3) in iter_meson_fields(
+            diagram_config, mesonfiles, times, contraction
+        ):
             logging.info(f"Contracting {gamma}: {t1},{t2},{t3}")
             cij[t1, t2, t3] = contract(m1, m2, m3, open_indices=[0, 1, 2])
 
@@ -200,14 +193,14 @@ def sib_conn_3pt(
 
         logging.debug("Contraction completed.")
 
-        if run_config.comm_size > 1:
+        if contract_config.comm_size > 1:
             temp = None
-            if run_config.rank == 0:
+            if contract_config.rank == 0:
                 temp = xp.empty_like(cij)
             COMM.Barrier()
             COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
 
-            if run_config.rank == 0:
+            if contract_config.rank == 0:
                 corr[gamma] = convert_to_numpy(temp)
         else:
             corr[gamma] = convert_to_numpy(cij)
@@ -218,20 +211,19 @@ def sib_conn_3pt(
 def qed_conn_4pt(
     contraction: t.Tuple[str],
     diagram_config: DiagramConfig,
-    run_config: RunContractConfig,
-    subdiagram: Diagrams,
+    contract_config: ContractConfig,
 ) -> pd.DataFrame:
     """Execute 4-point QED contraction."""
     corr = pd.DataFrame()
 
-    times = generate_time_sets(diagram_config, run_config)
+    times = generate_time_sets(diagram_config, contract_config)
 
     for gamma in diagram_config.gammas:
         for i in range(diagram_config.n_em):
             emlabel = f"{diagram_config.emseedstring}_{i}"
-            if subdiagram == Diagrams.photex:
+            if subdiagram == diagram_config.contraction_type.PHOTEX:
                 ops = [gamma, emlabel, gamma, emlabel]
-            elif subdiagram == Diagrams.selfen:
+            elif subdiagram == diagram_config.contraction_type.SELFEN:
                 ops = [gamma, emlabel, emlabel, gamma]
             else:
                 raise ValueError("Invalid qed diagram.")
@@ -244,13 +236,11 @@ def qed_conn_4pt(
                 for i, g, m_path in zip([0, 2, 4, 6], ops, diagram_config.mesonfiles)
             )
 
-            mat_gen = MesonLoader(
-                mesonfiles=mesonfiles, times=times, **diagram_config.meson_params
-            )
+            cij = xp.zeros((contract_config.time,) * 4, dtype=xp.complex128)
 
-            cij = xp.zeros((diagram_config.time,) * 4, dtype=xp.complex128)
-
-            for (t1, m1), (t2, m2), (t3, m3), (t4, m4) in mat_gen:
+            for (t1, m1), (t2, m2), (t3, m3), (t4, m4) in iter_meson_fields(
+                diagram_config, mesonfiles, times, contraction
+            ):
                 logging.info(f"Contracting ({gamma},{emlabel}): {t1}, {t2}, {t3}, {t4}")
                 cij[t1, t2, t3, t4] = contract(
                     m1, m2, m3, m4, open_indices=[0, 1, 2, 3]
@@ -261,14 +251,14 @@ def qed_conn_4pt(
 
             logging.debug("Contraction completed.")
 
-            if run_config.comm_size > 1:
+            if contract_config.comm_size > 1:
                 temp = None
-                if run_config.rank == 0:
+                if contract_config.rank == 0:
                     temp = xp.empty_like(cij)
                 COMM.Barrier()
                 COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
 
-                if run_config.rank == 0:
+                if contract_config.rank == 0:
                     corr[gamma] = convert_to_numpy(temp)
             else:
                 corr[gamma] = convert_to_numpy(cij)

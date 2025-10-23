@@ -1,12 +1,12 @@
-from .strategy import (
+from pyfm.tasks.hadrons.highmode.strategy import (
     build_input_params,
     create_outfile_catalog,
     build_aggregator_params,
 )
 
-from pyfm.domain import TaskRegistry
+from pyfm.tasks.register import register_task
 
-from .domain import HighModeConfig
+from pyfm.tasks.hadrons.highmode.domain import HighModeConfig
 
 __all__ = [
     "HighModeConfig",
@@ -16,12 +16,6 @@ __all__ = [
 ]
 
 # Register HighModeConfig as the config for 'hadrons_high_modes' task type
-TaskRegistry.register_config("hadrons_high_modes", HighModeConfig)
-
-# Register all functions for the 'high_modes' task type
-TaskRegistry.register_functions(
-    "hadrons_high_modes",
-    build_input_params,
-    create_outfile_catalog,
-    build_aggregator_params,
+register_task(
+    HighModeConfig, build_input_params, create_outfile_catalog, build_aggregator_params
 )

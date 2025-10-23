@@ -38,6 +38,8 @@ class HighModeConfig(SimpleConfig):
     correlator_strategy: CorrelatorStrategy = CorrelatorStrategy.TWOPOINT
     residual: t.List[float] = Field(default=[1e-8])
 
+    key: t.ClassVar[str] = "hadrons_high_modes"
+
     def __post_init__(self):
         has_nonlocal_ops = any([not op.gamma.local for op in self.operations.op_list])
         if has_nonlocal_ops and self.shift_gauge_name is None:

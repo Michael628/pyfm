@@ -1,9 +1,9 @@
 import typing as t
 from enum import Enum, auto
 
-from .outfiles import Outfile
-from .conftypes import CompositeConfig, SimpleConfig
-from dataclasses import fields
+from pyfm.domain.outfiles import Outfile
+from pyfm.domain.ops import MassDict
+from pyfm.domain.conftypes import CompositeConfig, SimpleConfig
 from pydantic.dataclasses import dataclass
 
 
@@ -15,135 +15,124 @@ except ImportError:
     COMM = None
 
 
-class Diagrams(Enum):
-    photex = auto()
-    selfen = auto()
-
-
-class MassShift(t.NamedTuple):
-    original: float
-    updated: float
-    milc_mass: bool = True
-
-
-@dataclass(freeze=True)
-class MesonLoaderConfig(SimpleConfig):
-    wmax_index: int
-    vmax_index: int
-    mass_shift: MassShift | None = None
-
-
-@dataclass_with_getters
-class DiagramConfig(SimpleConfig):
-    contraction_type: str
-    gammas: t.List[str]
-    symmetric: bool = False
-    high_count: int | None = None
-    low_max: int | None = None
-    mesonKey: str | None = None
-    perms: t.List[str] | None = None
-    n_em: int | None = None
-    has_high: bool = False
-    has_low: bool = False
-    npoint: int = -1
-    evalfile: str | None = None
-    outfile: str | None = None
-    mesonfiles: t.List[str] | str | None = None
-
-    def __post_init__(self):
-        npoint = {"conn_2pt": 2, "sib_conn_3pt": 3, "qed_conn_4pt": 4}
-        self._npoint = npoint[self.contraction_type]
-
-        self._meson_params = {
-            "wmax_index": self.low_max,
-            "vmax_index": self.low_max,
-            "milc_mass": True,
-        }
-
-        if self.meson_mass and self.mass != self.meson_mass:
-            self._meson_params["shift_mass"] = True
-            self._meson_params["oldmass"] = float(f"0.{self.meson_mass}")
-            self._meson_params["newmass"] = float(f"0.{self.mass}")
-        else:
-            self.meson_mass = self.mass
-
-    def set_filenames(self, outfile_config: t.Dict[str, Outfile]) -> None:
-        """Uses 'outfile_config' argument to replace provided parameters with
-        filenames if the existing parameter matches a field in `outfile_config`."""
-
-        def get_filename(s: str):
-            if s in outfile_config:
-                return outfile_config[s].filename
-            else:
-                return s
-
-        self.mesonfiles = (
-            get_filename(self.mesonfiles)
-            if isinstance(self.mesonfiles, str)
-            else [get_filename(m) for m in self.mesonfiles]
-        )
-
-        if self.evalfile:
-            self.evalfile = get_filename(self.evalfile)
-
-        self.outfile = get_filename(self.outfile)
-
-    @classmethod
-    def create(cls, **kwargs):
-        obj_vars = kwargs.copy()
-
-        obj = super().create(**obj_vars)
-        # obj.outfile = obj_vars.pop('outfile')
-        assert isinstance(obj.outfile, str)
-
-        # obj.evalfile = obj_vars.pop('evalfile',None)
-        if obj.evalfile:
-            assert isinstance(obj.evalfile, str)
-
-        # mesonfiles = obj_vars.pop('mesonfiles')
-        if isinstance(obj.mesonfiles, str):
-            obj.mesonfiles = [obj.mesonfiles]
-
-        assert isinstance(obj.mesonfiles, t.List)
-
-        if len(obj.mesonfiles) == 1:
-            obj.mesonfiles = obj.mesonfiles * obj.npoint
-        assert obj.npoint == len(obj.mesonfiles)
-
-        return obj
+class ContractType(Enum):
+    TWOPOINT = auto()
+    SIB = auto()
+    PHOTEX = auto()
+    SELFEN = auto()
 
     @property
-    def meson_params(self):
-        return self._meson_params
+    def npoint(self) -> int:
+        match self:
+            case ContractType.TWOPOINT:
+                return 2
 
-    def format_evalfile(self, **kwargs) -> None:
-        self.meson_params["evalfile"] = self.evalfile.format(**kwargs)
+    @classmethod
+    def from_dict(cls, name: str) -> "ContractType":
+        if not isinstance(name, str):
+            raise ValueError(
+                f"Parameter passed to contraction type must be string, received: {name}"
+            )
+        name = name.upper().replace("_", "")
+        if val := getattr(cls, name, None):
+            return val
+        raise ValueError(f"Invalid contraction type ({name}). options are: {list(cls)}")
 
 
 @dataclass(frozen=True)
-class RunContractConfig(CompositeConfig):
-    _diagrams: t.Optional[t.List[DiagramConfig]] = None
-    _overwrite_correlators: bool = True
-    _hardware: str = "cpu"
-    _logging_level: str = "INFO"
-    _comm_size: int = 1
-    _rank: int = 0
+class MesonLoaderConfig(SimpleConfig):
+    class MassShift(t.NamedTuple):
+        original: str
+        updated: str | None = None
+        milc_mass: bool = True
 
-    @classmethod
-    def create(cls, **kwargs):
-        obj_vars = kwargs.copy()
-        diagrams = obj_vars.pop("diagrams")
-        obj = super().create(**obj_vars)
-        obj.diagrams = [
-            DiagramConfig.create(**v, run_vars=obj.string_dict())
-            for k, v in diagrams.items()
-        ]
+        @classmethod
+        def from_dict(cls, kwargs) -> "MassShift":
+            return cls(**kwargs)
+
+    mass: MassDict
+    file: Outfile
+    mass_shift: MassShift
+    evalfile: Outfile | None = None
+
+    key: t.ClassVar[str] = "contract_mesonloader"
+
+    def __post_init__(self):
+        for label in [self.mass_shift.original, self.mass_shift.updated]:
+            if label is not None and label not in self.mass:
+                raise ValueError(
+                    f"Provided mass label ({label}) not present in mass param."
+                )
+
+        if self.mass_shift.updated is not None and self.evalfile is None:
+            raise ValueError(
+                f"No eigenvalue file provided when shifting mass to {self.mass_shift.updated}"
+            )
+
+    @property
+    def mass_label(self) -> str:
+        if self.mass_shift.updated is not None:
+            return self.mass.to_string(self.mass_shift.updated, True)
+        else:
+            return self.mass.to_string(self.mass_shift.original, True)
+
+
+@dataclass(frozen=True)
+class DiagramConfig(CompositeConfig):
+    class MesonIndex(t.NamedTuple):
+        max: int = -1
+        min: int = 0
+
+        @classmethod
+        def from_dict(cls, kwargs) -> "MassShift":
+            return cls(**kwargs)
+
+    contraction_type: ContractType
+    mesons: t.List[MesonLoaderConfig]
+    outfile: Outfile
+    gammas: t.List[str]
+    eig_range: MesonIndex | None = None
+    stoch_range: MesonIndex | None = None
+    symmetric: bool = False
+    perms: t.List[str] | None = None
+    stoch_seed_indices: t.List[str] | None = None
+    efield_indices: t.List[str] | None = None
+
+    key: t.ClassVar[str] = "contract_diagram"
+
+    def __post_init__(self):
+        if self.eig_range is None and self.stoch_range is None:
+            raise ValueError("Must provide either eig_range or stoch_range")
+
+        if self.stoch_range is not None and self.stoch_seed_indices is None:
+            raise ValueError("Must provide stoch_seed_indices when using stoch_range")
+
+        if self.contraction_type.npoint != len(self.mesons):
+            if len(self.mesons) == 1:
+                _ = [self.mesons.append(self.mesons[0]) for _ in range(self.npoint - 1)]
+
+    @property
+    def npoint(self) -> int:
+        return self.contraction_type.npoint
+
+
+@dataclass(frozen=True)
+class ContractConfig(CompositeConfig):
+    diagrams: t.Dict[str, DiagramConfig]
+    time: int
+    overwrite: bool = True
+    hardware: str = "cpu"
+
+    key: t.ClassVar[str] = "contract"
+
+    @property
+    def comm_size(self) -> int:
         if COMM:
-            obj.rank = COMM.Get_rank()
-            obj.comm_size = COMM.Get_size()
+            return COMM.Get_size()
+        return 1
 
-        return obj
-
-
-def get_contract_config(params: t.Dict) -> RunContractConfig:
-    return RunContractConfig.create(**params)
+    @property
+    def rank(self) -> int:
+        if COMM:
+            return COMM.Get_rank()
+        return 0

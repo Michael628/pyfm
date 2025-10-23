@@ -7,7 +7,6 @@ from pydantic import Field
 from pyfm import utils
 
 from pyfm.domain import (
-    TaskRegistry,
     SimpleConfig,
     Outfile,
     HadronsInput,
@@ -15,6 +14,8 @@ from pyfm.domain import (
     LanczosParams,
     hadmods,
 )
+
+from pyfm.tasks.register import register_task
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,8 @@ class EpackConfig(SimpleConfig):
     save_eigs: bool = False
     save_evals: bool = True
     mass_shifts: t.List[str] = Field(default_factory=list)
+
+    key: t.ClassVar[str] = "hadrons_epack"
 
     @property
     def masses(self) -> t.List[str]:
@@ -129,9 +132,4 @@ def create_outfile_catalog(config: EpackConfig) -> pd.DataFrame:
 
 
 # Register GaugeConfig as the config for 'hadrons_gauge' task type
-TaskRegistry.register_config("hadrons_epack", EpackConfig)
-
-# Register all functions for the 'epack' task type
-TaskRegistry.register_functions(
-    "hadrons_epack", build_input_params, create_outfile_catalog
-)
+register_task(EpackConfig, build_input_params, create_outfile_catalog)

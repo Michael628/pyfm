@@ -1,13 +1,18 @@
 import typing as t
-from .setup import create_task, get_task_key
+import yaml
+
+from pyfm.nanny.setup import create_task
 from pyfm import utils
-from pyfm.domain import hadmods
+from pyfm.domain import hadmods, Outfile
 
 
 @t.runtime_checkable
 class InputGeneratorProtocol(t.Protocol):
     def build_input_params(self) -> t.Any: ...
     def format_string(self, to_format: str) -> str: ...
+
+    @property
+    def key(self) -> str: ...
 
 
 def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) -> str:
@@ -17,7 +22,7 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
     infile_template += "-{series}.{cfg}"
     infile_stem = task.format_string(infile_template)
 
-    task_key = get_task_key(job_step, yaml_data)
+    task_key = task.key
     if "smear" in task_key:
         infile = utils.io.write_plain_text(
             infile_stem, task.build_input_params(), ext="txt"
@@ -32,6 +37,10 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
         modules = list(hadrons_input.modules.values())
         xml_dict["grid"]["modules"] = {"module": modules}
         infile = utils.io.write_xml(infile_stem, xml_dict)
+    elif "contract" in task_key:
+        yaml.add_representer(Outfile, lambda d, x: d.represent_dict(x.__dict__))
+        input_params = yaml.dump(task.build_input_params())
+        infile = utils.io.write_plain_text(infile_stem, input_params, ext="yaml")
     # TODO: use for raw hadrons task
     # if "xml_file" in input_params:
     #     with open(input_params["xml_file"], "r") as f:

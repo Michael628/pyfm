@@ -3,6 +3,40 @@ from enum import Enum, auto
 from pydantic.dataclasses import dataclass
 
 
+@dataclass(frozen=True)
+class MassDict:
+    _items: t.Dict[str, float]
+
+    @classmethod
+    def from_dict(cls, kwargs) -> "MassDict":
+        default = {"zero": 0.0}
+        return cls(_items=default | kwargs)
+
+    def __contains__(self, key):
+        return key in self._items
+
+    def __getitem__(self, key):
+        return self._items[key]
+
+    def keys(self):
+        return self._items.keys()
+
+    def values(self):
+        return self._items.values()
+
+    def items(self):
+        return self._items.items()
+
+    def to_string(self, mass_label: str, remove_prefix: bool = False) -> str:
+        if remove_prefix:
+            return str(self[mass_label]).removeprefix("0.")
+        else:
+            return str(self[mass_label])
+
+    def _asdict(self) -> t.Dict:
+        return self._items
+
+
 class Gamma(Enum):
     G1_G1 = auto()
     G5_G5 = auto()

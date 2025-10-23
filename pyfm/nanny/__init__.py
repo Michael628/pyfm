@@ -1,12 +1,12 @@
-from .inputgen import write_input_file
-from .validator import (
+from pyfm.nanny.inputgen import write_input_file
+from pyfm.nanny.validator import (
     get_outfiles,
     has_good_output,
     get_bad_files,
     check_jobs,
     print_file_audit,
 )
-from .aggregator import aggregate_task_data
+from pyfm.nanny.aggregator import aggregate_task_data
 
 from pyfm.tasks import smear
 

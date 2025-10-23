@@ -17,13 +17,16 @@ class FormattableProtocol(t.Protocol):
 
 
 @t.runtime_checkable
-class ConfigProcessorProtocol(t.Protocol):
+class ConfigPreprocessorProtocol(t.Protocol):
     def preprocess_params(self, params: t.Dict, subconfig: str | None = None) -> t.Dict:
         """Perform any necessary modifications to config input parameters before they
         are passed to the config constructor.
         """
         ...
 
-    def postprocess_config(self) -> "ConfigProcessorProtocol":
+
+@t.runtime_checkable
+class ConfigPostprocessorProtocol(t.Protocol):
+    def postprocess_config(self) -> "ConfigPostProcessorProtocol":
         """Perform any necessary modifications to subconfigs after they have been built."""
-        pass
+        ...

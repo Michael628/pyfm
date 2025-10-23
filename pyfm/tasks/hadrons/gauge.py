@@ -5,11 +5,12 @@ from pydantic import Field
 from pyfm.domain import (
     Outfile,
     SimpleConfig,
-    TaskRegistry,
     HadronsInput,
     MassDict,
     hadmods,
 )
+
+from pyfm.tasks.register import register_task
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,8 @@ class GaugeConfig(SimpleConfig):
     action_name: str | None = None
     action_masses: t.List[str] = Field(default_factory=list)
     sp_masses: t.List[str] = Field(default_factory=list)
+
+    key: t.ClassVar[str] = "hadrons_gauge"
 
     def __post_init__(self):
         if len(self.action_masses) != 0:
@@ -64,21 +67,18 @@ def build_input_params(
         )
         schedule.append(name)
 
-    for mass_label in config.sp_masses:
-        iname = f"i{name}"
-        modules[iname] = hadmods.action_float(
-            name=iname,
-            mass=mass,
-            gauge_fat="gauge_fatf",
-            gauge_long="gauge_longf",
-        )
-        schedule.append(name)
+        if mass_label in config.sp_masses:
+            iname = f"i{name}"
+            modules[iname] = hadmods.action_float(
+                name=iname,
+                mass=mass,
+                gauge_fat="gauge_fatf",
+                gauge_long="gauge_longf",
+            )
+            schedule.append(iname)
 
     return HadronsInput(modules=modules, schedule=schedule)
 
 
 # Register GaugeConfig as the config for 'hadrons_gauge' task type
-TaskRegistry.register_config("hadrons_gauge", GaugeConfig)
-
-# Register all functions for the 'gauge' task type
-TaskRegistry.register_functions("hadrons_gauge", build_input_params)
+register_task(GaugeConfig, build_input_params)

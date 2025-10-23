@@ -2,15 +2,15 @@ import typing as t
 import re
 import pandas as pd
 import itertools
-from pyrsistent import thaw, m
+from pyrsistent import freeze, thaw
 
 from pyfm.domain import (
     HadronsInput,
     OpList,
     hadmods,
 )
-from .domain import HighModeConfig, CorrelatorStrategy
-from . import sib, twopoint
+from pyfm.tasks.hadrons.highmode.domain import HighModeConfig, CorrelatorStrategy
+from pyfm.tasks.hadrons.highmode import sib, twopoint
 
 from pyfm import utils
 
@@ -187,7 +187,7 @@ def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
 def build_aggregator_params(
     config: HighModeConfig,
 ) -> t.Dict:
-    proc_params = m()
+    proc_params = freeze({})
 
     outfile = (
         config.high_modes.filestem.replace("correlators", "processed/{format}")
@@ -197,8 +197,7 @@ def build_aggregator_params(
 
     infile_stem = config.high_modes.filename
 
-    e_rep = m().evolver()
-    e_rep["tsource"] = list(map(str, config.tsource_range))
+    e_rep = freeze({"tsource": list(map(str, config.tsource_range))}).evolver()
 
     solver_labels = config.get_solver_labels()
 

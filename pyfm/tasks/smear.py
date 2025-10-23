@@ -5,7 +5,8 @@ import pandas as pd
 
 from dataclasses import dataclass
 from pyfm import utils
-from pyfm.domain import SimpleConfig, Outfile, TaskRegistry
+from pyfm.domain import SimpleConfig, Outfile
+from pyfm.tasks.register import register_task
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,8 @@ class SmearConfig(SimpleConfig):
     long_links: Outfile
     fat_links: Outfile
     unsmeared_file: str
+
+    key: t.ClassVar[str] = "smear"
 
 
 def build_input_params(config: SmearConfig) -> str:
@@ -99,7 +102,4 @@ def create_outfile_catalog(config: SmearConfig) -> pd.DataFrame:
 
 
 # Register SmearConfig as the config for 'smear' task type
-TaskRegistry.register_config("smear", SmearConfig)
-
-# Register all functions for the 'smear' task type
-TaskRegistry.register_functions("smear", create_outfile_catalog, build_input_params)
+register_task(SmearConfig, create_outfile_catalog, build_input_params)

@@ -34,6 +34,7 @@ dependencies = [
     "toolz>=0.12.0",
     "opt_einsum>=3.3",
     "pydantic>=2.0",
+    "pyrsistent>=0.20.0",
 ]
 
 [project.urls]
@@ -43,10 +44,13 @@ Homepage = "https://github.com/Michael628/pyfm"
 packages = [
     "pyfm",
     "pyfm.a2a",
+    "pyfm.dataio",
+    "pyfm.domain",
     "pyfm.nanny",
-    "pyfm.nanny.tasks",
-    "pyfm.nanny.tasks.hadrons",
-    "pyfm.processing",
+    "pyfm.tasks",
+    "pyfm.tasks.hadrons",
+    "pyfm.tasks.hadrons.highmode",
+    "pyfm.utils",
 ]
 
 # Optional: If you have package data (non-Python files)

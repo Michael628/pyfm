@@ -1,5 +1,6 @@
 from pydantic.dataclasses import dataclass
 from dataclasses import fields
+from enum import Enum, auto
 from typing import Dict, Any
 import typing as t
 import inspect
@@ -23,24 +24,16 @@ class SimpleConfig(ConfigBase):
 
 @dataclass(frozen=True)
 class CompositeConfig(ConfigBase):
-    def format_string(self, to_format: str) -> str:
-        """Format the string using each format_string function in the subconfigs."""
-        formatted_string = to_format
-        for key in self.get_subconfigs().keys():
-            formatted_string = getattr(self, key).format_string(formatted_string)
-        return formatted_string
-
     @classmethod
-    def get_subconfigs(cls) -> t.Dict[str, Any]:
+    def get_subconfigs(cls) -> utils.ContainerType:
         subconfigs = {}
 
-        for field in fields(cls):
-            field_type = utils.extract_non_none_type(field.type)
-
-            try:
-                if inspect.isclass(field_type) and issubclass(field_type, SimpleConfig):
-                    subconfigs[field.name] = field_type
-            except TypeError:
-                pass
+        config_field_types = ((f.name, f.type) for f in fields(cls))
+        subconfig_iter = utils.iterate_container(
+            config_field_types,
+            cond=lambda x: (inspect.isclass(x) and issubclass(x, ConfigBase)),
+        )
+        for field in subconfig_iter:
+            subconfigs[field.name] = field
 
         return subconfigs

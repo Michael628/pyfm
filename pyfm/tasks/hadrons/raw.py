@@ -1,7 +1,7 @@
 import typing as t
 from dataclasses import dataclass
 
-from .. import common
+from pyfm.tasks import common
 from pyfm.utils import get_logger
 from pyfm.core.nanny.registry import register_task, register_builder
 from pyfm.domain.common import SimpleConfigBuilder

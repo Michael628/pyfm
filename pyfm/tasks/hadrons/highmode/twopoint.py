@@ -2,7 +2,7 @@ import typing as t
 import itertools
 
 from pyfm.domain import HadronsInput, OpList, hadmods, Gamma
-from .domain import HighModeConfig
+from pyfm.tasks.hadrons.highmode.domain import HighModeConfig
 
 
 class TwoPointOp(t.NamedTuple):
