@@ -13,11 +13,26 @@ from pyfm.tasks.hadrons import gauge, meson, epack, highmode
 @dataclass(frozen=True)
 class LMIConfig(CompositeConfig):
     gauge_config: gauge.GaugeConfig
-    epack_config: epack.EpackConfig | None = None
-    meson_config: meson.MesonConfig | None = None
-    high_modes_config: highmode.HighModeConfig | None = None
+    epack_config: epack.EpackConfig
+    meson_config: meson.MesonConfig
+    high_modes_config: highmode.HighModeConfig
+    skip_epack: bool = False
+    skip_meson: bool = False
+    skip_high_modes: bool = False
 
     key: t.ClassVar[str] = "hadrons_lmi"
+
+
+def __post_init__(self):
+    logger = utils.get_logger()
+    for k, skip in [
+        (k, getattr(self, f"skip_{k}")) for k in ["meson", "high_modes", "epack"]
+    ]:
+        if skip:
+            logger.debug(f"Skipping {k} step")
+
+    if self.skip_epack and not self.skip_meson:
+        raise ValueError("Epack parameters must be set to perform meson calculation")
 
 
 def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
@@ -25,10 +40,15 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
     are passed to the subtask constructor.
     """
 
+    # preprocessing top-level config
     if subconfig is None:
-        return params
+        # Skip configs where user provides no input
+        optional_configs = ["meson", "high_modes", "epack"]
+        skip_optional = {f"skip_{k}": True for k in optional_configs if k not in params}
+        return params | skip_optional
 
     key = subconfig.removesuffix("_config")
+
     sub_params = params.get(key, {})
 
     if key == "high_modes" or key == "meson" and "operations" not in sub_params:
@@ -91,7 +111,7 @@ def postprocess_config(config: LMIConfig) -> LMIConfig:
 
     def update_single_precision(config: LMIConfig) -> LMIConfig:
         new_config = config
-        if config.high_modes_config and config.high_modes_config.solver == "mpcg":
+        if not config.skip_high_modes and config.high_modes_config.solver == "mpcg":
             new_gauge_config = replace(
                 config.gauge_config, sp_masses=config.high_modes_config.masses
             )
@@ -101,18 +121,18 @@ def postprocess_config(config: LMIConfig) -> LMIConfig:
 
     def update_masses(config: LMIConfig) -> LMIConfig:
         masses = set()
-        if config.meson_config:
+        if not config.skip_meson:
             masses |= set(config.meson_config.masses)
-        if config.high_modes_config:
+        if not config.skip_high_modes:
             masses |= set(config.high_modes_config.masses)
-        if config.epack_config:
+        if not config.skip_epack:
             masses |= set(config.epack_config.masses)
         masses = list(masses)
 
         gauge_with_masses = replace(config.gauge_config, action_masses=masses)
         new_config = replace(config, gauge_config=gauge_with_masses)
 
-        if config.epack_config:
+        if not config.skip_epack:
             epack_with_masses = replace(new_config.epack_config, mass_shifts=masses)
             new_config = replace(new_config, epack_config=epack_with_masses)
 
@@ -126,15 +146,15 @@ def postprocess_config(config: LMIConfig) -> LMIConfig:
 
 def build_input_params(config: LMIConfig) -> HadronsInput:
     modules, schedule = gauge.build_input_params(config.gauge_config)
-    if config.epack_config:
+    if not config.skip_epack:
         m, s = epack.build_input_params(config.epack_config)
         modules |= m
         schedule += s
-    if config.meson_config:
+    if not config.skip_meson:
         m, s = meson.build_input_params(config.meson_config)
         modules |= m
         schedule += s
-    if config.high_modes_config:
+    if not config.skip_high_modes:
         m, s = highmode.build_input_params(config.high_modes_config)
         modules |= m
         schedule += s
