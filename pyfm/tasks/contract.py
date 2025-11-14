@@ -30,8 +30,7 @@ def meson_loader_preprocess_params(
 
 
 def meson_loader_build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.Any]:
-    mass_label = config.mass.to_string(config.mass_shift.original, True)
-    mass_map = PartialFormatter(mass=mass_label)
+    mass_map = PartialFormatter(mass=config.get_mass_label(include_shift=False))
     yaml_params = {
         "mass": config.mass._asdict(),
         "file": config.file.format_map(mass_map),
@@ -44,8 +43,7 @@ def meson_loader_build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.
 
 
 def diagram_build_input_params(config: DiagramConfig) -> t.Dict[str, t.Any]:
-    mass_label = "_m".join(set(m.mass_label for m in config.mesons))
-    mass_map = PartialFormatter(mass=mass_label)
+    mass_map = PartialFormatter(mass=config.mass_label)
     yaml_params = {
         "contraction_type": config.contraction_type.name,
         "gammas": config.gammas,
@@ -118,15 +116,89 @@ def contract_build_input_params(
     return input_yaml
 
 
+def diagram_build_aggregator_params(config: DiagramConfig) -> t.Dict:
+    agg_params = {"run": ["diagram"], "diagram": {}}
+
+    mass_map = PartialFormatter(mass=config.mass_label)
+    infile_stem = config.outfile.filename.format_map(mass_map)
+
+    outfile = (
+        config.outfile.filestem.format_map(mass_map)
+        .replace("correlators", "processed/{format}")
+        .replace("_{series}", "")
+    ) + ".h5"
+
+    agg_params["diagram"] = {
+        "logging_level": config.logging_level,
+        "load_files": {
+            "filestem": infile_stem,
+            "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
+            "dict_labels": ["perm", "gamma"],
+        },
+        "out_files": {"filestem": outfile},
+    }
+
+    actions = {}
+
+    index = ["series.cfg", "gamma"]
+    if config.has_high:
+        index.append("perm")
+    else:
+        actions["drop"] = "perm"
+
+    t_order = [f"t{i}" for i in range(1, config.npoint + 1)]
+    array_params = {
+        "array_order": t_order,
+        "array_labels": {},
+    }
+
+    t_labels = f"0..{config.time - 1}"
+    # TODO: Make time_average bool determined by something else.
+    time_average = True
+    if time_average:
+        actions["time_average"] = [
+            t_order[0],
+            t_order[-1],
+        ]  # Assumes averaging first and last time index
+        index += t_order[1:-1] + ["t"]
+    else:
+        index += array_params["array_order"]
+
+    actions["index"] = index
+
+    for t_index in array_params["array_order"]:
+        array_params["array_labels"][t_index] = t_labels
+
+    if actions:
+        agg_params["diagram"]["actions"] = actions
+
+    agg_params["diagram"]["load_files"] |= array_params
+
+    return agg_params
+
+
+def contract_build_aggregator_params(config: ContractConfig) -> t.Dict:
+    agg_params = {"run": []}
+
+    for dlabel, diagram in config.diagrams.items():
+
+        agg_params[dlabel] = diagram_build_aggregator_params(diagram)["diagram"]
+        agg_params["run"].append(dlabel)
+
+    return agg_params
+
+
 # Register ContractConfig as the config for 'contract' task type
 register_task(
     ContractConfig,
     build_input_params=contract_build_input_params,
+    build_aggregator_params=contract_build_aggregator_params,
     preprocess_params=contract_preprocess_params,
 )
 register_task(
     DiagramConfig,
     build_input_params=diagram_build_input_params,
+    build_aggregator_params=diagram_build_aggregator_params,
     preprocess_params=diagram_preprocess_params,
 )
 register_task(

@@ -69,9 +69,8 @@ class MesonLoaderConfig(SimpleConfig):
                 f"No eigenvalue file provided when shifting mass to {self.mass_shift.updated}"
             )
 
-    @property
-    def mass_label(self) -> str:
-        if self.mass_shift.updated is not None:
+    def get_mass_label(self, include_shift: bool = True) -> str:
+        if include_shift and self.mass_shift.updated is not None:
             return self.mass.to_string(self.mass_shift.updated, True)
         else:
             return self.mass.to_string(self.mass_shift.original, True)
@@ -87,6 +86,7 @@ class DiagramConfig(CompositeConfig):
         def from_dict(cls, kwargs) -> "MassShift":
             return cls(**kwargs)
 
+    time: int
     contraction_type: ContractType
     mesons: t.List[MesonLoaderConfig]
     outfile: Outfile
@@ -114,6 +114,18 @@ class DiagramConfig(CompositeConfig):
     @property
     def npoint(self) -> int:
         return self.contraction_type.npoint
+
+    @property
+    def has_low(self) -> bool:
+        return self.eig_range is not None
+
+    @property
+    def has_high(self) -> bool:
+        return self.stoch_range is not None
+
+    @property
+    def mass_label(self) -> str:
+        return "_m".join(set(m.get_mass_label() for m in self.mesons))
 
 
 @dataclass(frozen=True)

@@ -16,8 +16,8 @@ runargs=" --grid 4.4.4.4 $OPT"
 
 OFFSET=0
 for inXML in ${INPUTLIST}; do
-	input=in/${inXML}
-	output=out/${inXML%.xml}
+	input=${inXML}
+  output=out/$(basename "${input%.xml}") 
 	echo "Input file ${input}"
 	echo "Output file ${output}"
 	echo "Input = ${input}"

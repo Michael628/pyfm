@@ -97,7 +97,7 @@ def process_files(
         """
 
         if len(replacements) == 0:
-            yield {}, partial(fstring.format)
+            yield freeze({}), partial(fstring.format)
         else:
             keys, repls = zip(
                 *(
@@ -138,8 +138,7 @@ def process_files(
         fs = os.path.expanduser(filestem)
         for str_reps, repl_filename in string_replacement_gen(fs, str_repl):
             for reg_reps, regex_filename in file_regex_gen(repl_filename, regex_repl):
-                str_reps.update(reg_reps)
-                yield regex_filename, thaw(str_reps)
+                yield regex_filename, thaw(str_reps.update(reg_reps))
 
     for filename, reps in file_gen():
         try:

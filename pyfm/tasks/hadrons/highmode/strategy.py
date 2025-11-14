@@ -187,7 +187,7 @@ def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
 def build_aggregator_params(
     config: HighModeConfig,
 ) -> t.Dict:
-    proc_params = freeze({})
+    agg_params = freeze({})
 
     outfile = (
         config.high_modes.filestem.replace("correlators", "processed/{format}")
@@ -222,7 +222,7 @@ def build_aggregator_params(
                 "labels": {"t": f"0..{config.time - 1}"},
             }
 
-            proc_params = proc_params.set(
+            agg_params = agg_params.set(
                 file_label,
                 {
                     "logging_level": config.logging_level,
@@ -238,6 +238,6 @@ def build_aggregator_params(
                 },
             )
             e_rep = replacements.evolver()
-    proc_params = proc_params.set("run", run_list)
+    agg_params = agg_params.set("run", run_list)
 
-    return dict(thaw(proc_params))
+    return dict(thaw(agg_params))

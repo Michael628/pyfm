@@ -18,10 +18,8 @@ contract_params:
       symmetric: True
       contraction_type: two_point
       mesons:
-        - file: "meson"
-          mass: "l"
-        - file: "meson"
-          mass: "l"
+        file: "meson"
+        mass: "l"
       gammas:
         - "G5_G5"
       eig_range:
@@ -50,10 +48,12 @@ contract_params:
       symmetric: True
       contraction_type: two_point
       mesons:
-        file: "meson"
-        mass: "l"
-        new_mass: "d"
-        evalfile: "eval"
+        - file: "meson"
+          mass: "l"
+        - file: "meson"
+          mass: "l"
+          new_mass: "d"
+          evalfile: "eval"
       gammas:
         - "GX_G1"
         - "GY_G1"
@@ -160,15 +160,15 @@ job_setup:
         load: false
         save_evals: true
         save_eigs: true
-      meson:
-        gamma:
-          - pion_local
-          - vec_local
-          - vec_onelink
-          - axial_vec_local
-          - axial_vec_onelink
-        mass:
-          - "l"
+      # meson:
+      #   gamma:
+      #     - pion_local
+      #     - vec_local
+      #     - vec_onelink
+      #     - axial_vec_local
+      #     - axial_vec_onelink
+      #   mass:
+      #     - "l"
       high_modes:
         gamma:
           - pion_local
