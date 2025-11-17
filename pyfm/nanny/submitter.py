@@ -230,23 +230,23 @@ def nanny_loop(YAML):
 
     sys.stdout.flush()
 
-    param = utils.io.load_param(YAML)
+    yaml_params = utils.io.load_param(YAML)
 
     # Keep going until
     #   we see a file called "STOP" OR
     #   we have exhausted the list OR
     #   there are job submission or queue checking errors
 
-    check_count = int(param["nanny"]["check_interval"])
+    check_count = int(yaml_params["nanny"]["check_interval"])
     while True:
         if os.access("STOP", os.R_OK):
             print("Spawn job process stopped because STOP file is present")
             break
 
-        todo_file = param["nanny"]["todo_file"]
-        max_cases = param["nanny"]["max_cases"]
-        job_name_pfx = param["submit"]["job_name_pfx"]
-        scheduler = param["submit"]["scheduler"]
+        todo_file = yaml_params["nanny"]["todo_file"]
+        max_cases = yaml_params["nanny"]["max_cases"]
+        job_name_pfx = yaml_params["submit"]["job_name_pfx"]
+        scheduler = yaml_params["submit"]["scheduler"]
 
         lock_file = utils.todo.lock_file_name(todo_file)
 
@@ -254,7 +254,7 @@ def nanny_loop(YAML):
         nqueued = count_queue(scheduler, job_name_pfx)
 
         # Submit until we have the desired number of jobs in the queue
-        if nqueued < param["nanny"]["max_queue"]:
+        if nqueued < yaml_params["nanny"]["max_queue"]:
             utils.todo.wait_set_todo_lock(lock_file)
             todo_list = utils.todo.read_todo(todo_file)
             utils.todo.remove_todo_lock(lock_file)
@@ -266,15 +266,15 @@ def nanny_loop(YAML):
             # Check completion and purge scratch files for complete jobs
             if check_count == 0:
                 check_jobs(YAML)
-                check_count = int(param["nanny"]["check_interval"])
+                check_count = int(yaml_params["nanny"]["check_interval"])
 
             if ncases > 0:
                 # Make input
-                make_inputs(param, step, cfgno_steps)
+                make_inputs(yaml_params, step, cfgno_steps)
 
                 # Submit the job
 
-                status, jobid = submit_job(param, step, cfgno_steps, max_cases)
+                status, jobid = submit_job(yaml_params, step, cfgno_steps, max_cases)
 
                 # Job submissions succeeded
                 # Edit the todo_file, marking the lattice queued and
@@ -296,23 +296,8 @@ def nanny_loop(YAML):
 
         sys.stdout.flush()
 
-        subprocess.call(["sleep", str(param["nanny"]["wait"])])
+        subprocess.call(["sleep", str(yaml_params["nanny"]["wait"])])
         check_count -= 1
 
         # Reload parameters in case of hot changes
-        param = utils.io.load_param(YAML)
-
-
-############################################################
-def main():
-    # Set permissions
-    os.system("umask 022")
-
-    YAML = "params.yaml"
-
-    nanny_loop(YAML)
-
-
-############################################################
-if __name__ == "__main__":
-    main()
+        yaml_params = utils.io.load_param(YAML)
