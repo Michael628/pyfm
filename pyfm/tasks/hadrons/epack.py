@@ -25,7 +25,7 @@ class EpackConfig(SimpleConfig):
     eig: Outfile
     eigdir: Outfile
     eval: Outfile
-    load: bool
+    load: bool = True
     lanczos: LanczosParams | None = None
     action_name: str | None = None
     low_modes_name: str | None = None

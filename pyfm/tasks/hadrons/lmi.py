@@ -92,7 +92,7 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
                 "action_name": action_name,
                 "solver_name": solver_name,
                 "low_modes_name": low_modes_name,
-                "skip_low_modes": "epack_config" in params,
+                "skip_low_modes": "epack_config" not in params,
             }
             | sub_params
         )

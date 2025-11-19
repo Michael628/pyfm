@@ -170,8 +170,7 @@ def write_plain_text(file_stem: str, contents: str, ext: str | None = None) -> s
     return filename
 
 
-def write_schedule(input_file: str, schedule: t.List[str]) -> str:
-    input_stem = os.path.splitext(input_file)[0]
+def write_schedule(input_stem: str, schedule: t.List[str]) -> str:
     os.makedirs("schedules/", exist_ok=True)
     sched_file = f"schedules/{input_stem}.sched"
     with open(sched_file, "w") as f:
