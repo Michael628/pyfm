@@ -20,6 +20,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--logging-level", type=str, default="INFO", help="Set logging level"
     )
+    parser.add_argument(
+        "--average",
+        action="store_true",
+        help="Average over source times (if applicable)",
+        default=False,
+    )
     args = parser.parse_args()
 
     print("Job Step:", args.job)
@@ -27,4 +33,6 @@ if __name__ == "__main__":
     params = utils.io.load_param(args.param_file)
     utils.set_logging_level(args.logging_level)
 
-    aggregator.aggregate_task_data(args.job, params)
+    aggregator.aggregate_task_data(
+        args.job, params, format=args.format, average=args.average
+    )

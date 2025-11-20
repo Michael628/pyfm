@@ -5,6 +5,7 @@ from pyfm import utils
 
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
+from pyfm.nanny.setup import get_job_params, get_layout_params
 
 from functools import reduce
 
@@ -103,28 +104,30 @@ def make_inputs(param, step, cfgno_steps):
 
 
 ######################################################################
-def submit_job(param, step, cfgno_steps, max_cases):
+def submit_job(yaml_params, step, cfgno_steps, max_cases):
     """Submit the job"""
 
     ncases = len(cfgno_steps)
 
-    job_script = param["job_setup"][step]["run"]
-    wall_time = param["job_setup"][step]["wall_time"]
+    job_params = get_job_params(step, yaml_params)
+    job_script = job_params["run"]
+    wall_time = job_params["wall_time"]
 
-    layout = param["submit"]["layout"]
-    basenodes = layout[step]["nodes"]
-    ppj = reduce((lambda x, y: x * y), layout[step]["geom"])
-    ppn = layout["ppn"] if "ppn" not in layout[step].keys() else layout[step]["ppn"]
+    layout_params = get_layout_params(step, yaml_params)
+    basenodes = layout_params["nodes"]
+    ppj = reduce((lambda x, y: x * y), layout_params["geom"])
+    ppn = layout_params["ppn"]
+
     jpn = int(ppn / ppj)
     basetasks = basenodes * ppn if basenodes > 1 or jpn <= 1 else ppj
     nodes = (
         basenodes * ncases if jpn <= 1 else int((basenodes * ncases + jpn - 1) / jpn)
     )
     NP = str(nodes * ppn)
-    geom = ".".join([str(i) for i in layout[step]["geom"]])
+    geom = ".".join([str(i) for i in layout_params["geom"]])
 
     # Append the number of cases to the step tag, as in A -> A3
-    job_name = param["submit"]["job_name_pfx"] + "-" + step + str(ncases)
+    job_name = yaml_params["submit"]["job_name_pfx"] + "-" + step + str(ncases)
     os.environ["NP"] = NP
     os.environ["PPN"] = str(ppn)
     os.environ["PPJ"] = str(ppj)
@@ -141,7 +144,7 @@ def submit_job(param, step, cfgno_steps, max_cases):
         sys.exit(1)
 
     # Job submission command depends on locale
-    scheduler = param["submit"]["scheduler"]
+    scheduler = yaml_params["submit"]["scheduler"]
     if scheduler == "LSF":
         cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
     elif scheduler == "PBS":

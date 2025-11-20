@@ -24,7 +24,7 @@ class MesonConfig(SimpleConfig):
     operations: OpList
     meson: Outfile
     overwrite: bool = False
-    apply_g5: bool = True
+    apply_g5: bool = False
 
     key: t.ClassVar[str] = "hadrons_meson"
 

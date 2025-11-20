@@ -9,20 +9,62 @@ from pyfm.builder import build_config
 from pyfm.tasks import get_task_handler, register_task
 
 
+# TODO: Consolidate layou, and job params into a config object
+def get_layout_params(
+    job_step: str, yaml_params: t.Dict[str, t.Any]
+) -> t.Dict[str, t.Any]:
+    if "submit" not in yaml_params or "layout" not in yaml_params["submit"]:
+        raise ValueError("No `submit` parameters provided.")
+
+    layout = yaml_params.get("submit").get("layout")
+    if job_step not in layout:
+        raise ValueError(f"No layout parameters provided for `{job_step}`.")
+    return layout | layout[job_step]
+
+
+def get_job_params(
+    job_step: str, yaml_params: t.Dict[str, t.Any]
+) -> t.Dict[str, t.Any]:
+    job_defaults = {
+        "job_type": "hadrons",
+        "task_type": "lmi",
+    }
+    if "job_setup" not in yaml_params:
+        raise ValueError("No `job_setup` parameters provided.")
+    if job_step not in yaml_params["job_setup"]:
+        raise ValueError(f"No `job_setup` parameters provided for `{job_step}`.")
+
+    job_params = job_defaults | yaml_params.get("job_setup").get(job_step)
+
+    job_type, task_type = job_params["job_type"], job_params["task_type"]
+
+    if job_type != "hadrons":
+        job_params["task_type"] = task_type = None
+
+    if get_task_handler(job_type, task_type) is None:
+        raise ValueError(f"No task handler found for {job_type}, {task_type}")
+
+    return job_params
+
+
 def get_task_params(
     job_step: str, yaml_params: t.Dict[str, t.Any], defaults: t.Dict[str, t.Any] | None
 ) -> t.Dict[str, t.Any]:
     if defaults is None:
         defaults = {}
 
-    job_params = yaml_params.get("job_setup", {}).get(job_step, {})
-    job_type = job_params.get("job_type", "")
+    job_params = get_job_params(job_step, yaml_params)
+
+    job_type = job_params["job_type"]
 
     task_params = (
         defaults
         |
-        # Load common submit parameters
+        # Load common shared parameters (legacy)
         yaml_params.get("submit_params", {})
+        |
+        # Load common shared parameters
+        yaml_params.get("shared_params", {})
         |
         # Load job-type parameters
         yaml_params.get(f"{job_type}_params", {})
@@ -45,20 +87,24 @@ def create_task(
     """Create a new ConfigHandler. If the relevant task type is found, the returned object will have
     methods corresponding to all functions assigned to the task in the corresponding task file.
     """
-    job_type = yaml_params.get("job_setup", {}).get(job_step, {}).get("job_type", "")
-    task_type = yaml_params.get("job_setup", {}).get(job_step, {}).get("task_type", "")
-
-    handler = get_task_handler(job_type, task_type)
-
-    config_type = handler.get_config_type()
-
-    param_defaults = {"logging_level": "INFO"}
+    param_defaults = {
+        "logging_level": "INFO",
+    }
     if series:
         param_defaults["series"] = series
     if cfg:
         param_defaults["cfg"] = cfg
 
     task_params = get_task_params(job_step, yaml_params, defaults=param_defaults)
+
+    job_type, task_type = map(
+        get_job_params(job_step, yaml_params).get, ["job_type", "task_type"]
+    )
+
+    handler = get_task_handler(job_type, task_type)
+    assert handler is not None, f"No get_task_handler found for {job_type}, {task_type}"
+
+    config_type = handler.get_config_type()
 
     file_params = yaml_params.get("files", {})
     handler.config = build_config(
@@ -74,6 +120,6 @@ def create_task(
     def format_string(config: ConfigBase, to_format: str) -> str:
         return config.format_string(to_format)
 
-    register_task(handler.config, format_string)
+    register_task(handler.get_config_type(), format_string)
 
     return handler

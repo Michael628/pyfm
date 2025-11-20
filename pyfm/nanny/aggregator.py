@@ -8,14 +8,19 @@ import pandas as pd
 
 @t.runtime_checkable
 class AggregatorProtocol(t.Protocol):
-    def build_aggregator_params(self) -> t.Any: ...
+    def build_aggregator_params(self, average: bool) -> t.Any: ...
     def format_string(self, to_format: str) -> str: ...
 
 
-def aggregate_task_data(job_step: str, yaml_data: t.Dict, format: str = "csv") -> None:
+def aggregate_task_data(
+    job_step: str, yaml_data: t.Dict, format: str = "csv", average: bool = False
+) -> None:
     task: AggregatorProtocol = create_task(job_step, yaml_data)
 
-    agg_params = task.build_aggregator_params()
+    agg_params = task.build_aggregator_params(average)
+
+    if not agg_params:
+        raise ValueError(f"No aggregator parameters provided for task: {job_step}.")
 
     result = {}
     for key in agg_params["run"]:
@@ -36,6 +41,6 @@ def aggregate_task_data(job_step: str, yaml_data: t.Dict, format: str = "csv") -
         keys = utils.io.format_keys(out_files["filestem"])
 
         if "format" in keys:
-            result[key]["format"] = format
+            result[key]["format"] = f"{format}"
         if out_files:
             dio.write_files(result[key], format=format, **out_files)

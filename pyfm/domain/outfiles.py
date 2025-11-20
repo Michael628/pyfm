@@ -28,7 +28,7 @@ class Outfile:
                 "meson": "cfg_gamma_h5",
                 "eig": "cfg_bin",
                 "a2a_vec": "cfg_bin",
-                "old_contract": "cfg_pickle",
+                "contract_legacy": "cfg_pickle",
                 "contract": "cfg_h5",
                 "modes": "cfg_h5",
                 "eval": "cfg_h5",

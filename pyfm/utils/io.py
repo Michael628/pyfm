@@ -249,5 +249,15 @@ def catalog_files(
         return pd.concat(df, ignore_index=True)
 
 
+def get_processed_filename(filename: str, remove: t.List[str], suffix: str = "") -> str:
+
+    subdir = "processed/{format}" + suffix
+    result: str = filename.replace("correlators", subdir)
+    for r in remove:
+        result = re.sub(f"_[a-z]?{{{r}}}", "", result)
+
+    return result
+
+
 def get_bad_files(df: pd.DataFrame) -> t.List[str]:
     return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])

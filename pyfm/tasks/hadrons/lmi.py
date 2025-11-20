@@ -92,7 +92,7 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
                 "action_name": action_name,
                 "solver_name": solver_name,
                 "low_modes_name": low_modes_name,
-                "skip_low_modes": "epack_config" not in params,
+                "skip_low_modes": "epack" not in params,
             }
             | sub_params
         )
@@ -174,13 +174,11 @@ def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
     return pd.concat(df)
 
 
-def build_aggregator_params(
-    config: LMIConfig,
-) -> t.Dict:
+def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
     return (
-        {}
-        if not config.high_modes_config
-        else highmode.build_aggregator_params(config.high_modes_config)
+        highmode.build_aggregator_params(config.high_modes_config, average)
+        if not config.skip_high_modes
+        else {}
     )
 
 

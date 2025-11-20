@@ -318,27 +318,7 @@ def drop(df, _: str, *args):
 
 
 def index(df, _: str, *args) -> pd.DataFrame:
-    """
-    Reorganizes the given DataFrame by resetting and setting specified indices.
 
-    Parameters:
-    - df (pd.DataFrame): The input DataFrame to be indexed.
-    - data_col (str): A column name (currently unused in this function).
-    - indices (List[str]): A list of column names to set as the new index.
-
-    Returns:
-    - pd.DataFrame: The DataFrame with the specified indices set and sorted.
-
-    Notes:
-    - If "series.cfg" is in the indices list but not in the DataFrame's index or columns,
-      it is constructed by concatenating the "series" and "cfg" columns with a "." separator.
-    - The function ensures that any existing indices are reset before setting new ones.
-    - The DataFrame is sorted by the new index after setting it.
-
-    Raises:
-    - AssertionError: If any element in `indices` is not a string.
-    - AssertionError: If "series" or "cfg" is not found in the DataFrame when "series.cfg" needs to be built.
-    """
     indices = list(args)
 
     assert all([isinstance(i, str) for i in indices])
@@ -347,7 +327,6 @@ def index(df, _: str, *args) -> pd.DataFrame:
         return df
 
     series_cfg = "series_cfg"
-    # HACK: force series.cfg to become series_cfg
     if "series.cfg" in indices:
         i = indices.index("series.cfg")
         indices[i] = series_cfg
@@ -356,7 +335,6 @@ def index(df, _: str, *args) -> pd.DataFrame:
     logging.debug(f"Current df index: {df.index.names}")
     logging.debug(f"Current df columns: {df.columns}")
     logging.debug(f"Setting index as {indices}")
-    # End HACK
 
     build_seriescfg = series_cfg in indices
     build_seriescfg &= series_cfg not in df.index.names
@@ -402,17 +380,18 @@ def sum(df: pd.DataFrame, data_col, *sum_indices) -> pd.DataFrame:
 
 
 def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
-    """Averages `data_col` column in `df` over columns or indices specified in `avg_indices`,
-    one at a time.
-    """
 
     df_out = df
     for col in avg_indices:
-        if col in df.index.names:
-            df_out = df_out.reset_index(col)
+        # Move all non-data columns to the index to avoid expensive reset_index()
+        other_cols = [x for x in df_out.columns if x != data_col]
+        cols_to_set = [c for c in other_cols if c not in df_out.index.names]
+        if cols_to_set:
+            df_out = df_out.set_index(cols_to_set, append=True)
 
-        groups = [x for x in df_out.columns if x not in [data_col, col]]
-        df_out = df_out.drop(columns=[col]).groupby(by=groups, as_index=False).mean()
+        # Group by all index levels except the one being averaged
+        levels_to_keep = [name for name in df_out.index.names if name != col]
+        df_out = df_out.groupby(level=levels_to_keep).mean()
 
     return df_out
 

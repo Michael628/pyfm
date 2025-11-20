@@ -22,9 +22,6 @@ class TaskOutputProtocol(t.Protocol):
 def get_outfiles(
     job_step: str, yaml_data: t.Dict, series: str, cfg: str
 ) -> pd.DataFrame | None:
-    import pdb
-
-    pdb.set_trace()
 
     task = create_task(job_step, yaml_data, series, cfg)
     if isinstance(task, TaskOutputProtocol):

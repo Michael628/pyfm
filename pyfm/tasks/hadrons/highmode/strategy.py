@@ -186,22 +186,29 @@ def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
 
 def build_aggregator_params(
     config: HighModeConfig,
+    average: bool,
 ) -> t.Dict:
     agg_params = freeze({})
 
-    outfile = (
-        config.high_modes.filestem.replace("correlators", "processed/{format}")
-        .replace("_{series}", "")
-        .replace("_t{tsource}", "")
-    ) + ".h5"
+    suffix = "_avg" if average else ""
+    outfile = utils.io.get_processed_filename(
+        config.high_modes.filestem, remove=["series", "tsource"], suffix=suffix
+    )
 
-    infile_stem = config.high_modes.filename
+    infile = config.high_modes.filename
 
     e_rep = freeze({"tsource": list(map(str, config.tsource_range))}).evolver()
 
     solver_labels = config.get_solver_labels()
 
     run_list = []
+
+    actions: t.Dict[str, t.Any] = {"index": ["series_cfg", "gamma", "t"]}
+
+    if average:
+        actions["average"] = ["tsource"]
+        actions["real"] = True
+
     for op in config.op_list:
         gamma_label = op.gamma.name.lower()
         e_rep["gamma_label"] = gamma_label
@@ -225,9 +232,10 @@ def build_aggregator_params(
             agg_params = agg_params.set(
                 file_label,
                 {
+                    "actions": actions,
                     "logging_level": config.logging_level,
                     "load_files": {
-                        "filestem": infile_stem,
+                        "filestem": infile,
                         "regex": {"series": "[a-z]", "cfg": "[0-9]+"},
                         "replacements": thaw(replacements),
                         "name": "gamma",
