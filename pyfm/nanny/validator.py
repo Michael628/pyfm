@@ -21,40 +21,43 @@ class TaskOutputProtocol(t.Protocol):
 
 def get_outfiles(
     job_step: str, yaml_data: t.Dict, series: str, cfg: str
-) -> pd.DataFrame:
+) -> pd.DataFrame | None:
+    import pdb
+
+    pdb.set_trace()
+
     task = create_task(job_step, yaml_data, series, cfg)
     if isinstance(task, TaskOutputProtocol):
         return task.create_outfile_catalog()
     else:
-        utils.get_logger().warning(
+        utils.get_logger().debug(
             "create_outfile_catalog not implemented for task. Skipping validation."
         )
-        return pd.DataFrame()
+        return None
 
 
-def print_file_audit(
+def audit_outfiles(
     job_step: str, yaml_data: t.Dict, series: str, cfg: str, verbose: bool = False
-) -> pd.DataFrame:
+) -> pd.DataFrame | None:
+    logger = utils.get_logger()
+
     df = get_outfiles(job_step, yaml_data, series, cfg)
 
-    for _, row in df.iterrows():
-        if not row["exists"]:
-            print(f"File {row['filepath']} does not exist")
-        elif not row["file_size"] >= row["good_size"]:
-            print(f"File {row['filepath']} is not complete")
-        elif verbose:
-            print(f"File {row['filepath']} is complete")
+    if df is not None:
+        for i, row in df.iterrows():
+            if not row["exists"]:
+                logger.info(f"File {row['filepath']} does not exist")
+            elif not row["file_size"] >= row["good_size"]:
+                logger.info(f"File {row['filepath']} is not complete")
+            elif verbose:
+                logger.info(f"File {row['filepath']} is complete")
+            elif i >= 5:
+                logger.info("...")
+                break
+    else:
+        logger.warn(f"No output files given for step: {job_step}.")
 
     return df
-
-
-def get_bad_files(df: pd.DataFrame) -> t.List[str]:
-    df = df[df["exists"] != True] or df[df["file_size"] < df["good_size"]]
-    return list(df["filepath"])
-
-
-def has_good_output(df: pd.DataFrame) -> bool:
-    return len(get_bad_files(df)) == 0
 
 
 ### Residual old code from Carleton
@@ -141,6 +144,8 @@ def next_finished(param, todo_list, entry_list):
     """Find the next well-formed entry marked "Q" whose job is no longer
     in the queue
     """
+    logger = utils.get_logger()
+
     a = ()
     nskip = 0
     while len(entry_list) > 0:
@@ -148,10 +153,14 @@ def next_finished(param, todo_list, entry_list):
         a = todo_list[cfgno]
         index, cfgno, step = utils.todo.find_next_queued_task(a)
         if index == 0:
+            logger.debug(f"{cfgno} has no assigned tasks.")
             continue
 
         if step == "":
             nskip = 5
+            logger.warning(
+                f"{cfgno} is being checked by another process. Skipping ahead by {nskip} configs."
+            )
 
         # Skip entries to Avoid collisions with other check-completed processes
         if nskip > 0:
@@ -174,31 +183,25 @@ def next_finished(param, todo_list, entry_list):
 
 
 ######################################################################
-def good_output(step: str, cfgno: str, param: t.Dict) -> bool:
+def has_good_output(step: str, cfgno: str, param: t.Dict) -> bool:
     (series, cfg) = cfgno.split(".")
 
-    df = get_outfiles(step, param, series, cfg)
-    # Use the new JobConfig method for cleaner code
-    if has_good_output(df):
+    df = audit_outfiles(step, param, series, cfg)
+    bad_file_mask = (df["exists"] == False) | (df["file_size"] < df["good_size"])
+    has_good_files = df is not None and df[bad_file_mask].empty
+    if has_good_files:
         return True
-    else:
-        bad_files = get_bad_files(df)
-        if bad_files:
-            utils.get_logger().warning(
-                f"File `{bad_files[0]}` not found or not of correct file size."
-            )
-        return False
+    return False
 
 
 ######################################################################
-def check_jobs(YAML):
+def check_jobs(yaml_params: t.Dict):
     """Process all entries marked Q in the todolist"""
 
-    # Read primary parameter file
-    param = utils.io.load_param(YAML)
+    logger = utils.get_logger()
 
     # Read the to-do file
-    todo_file = param["nanny"]["todo_file"]
+    todo_file = yaml_params["nanny"]["todo_file"]
     lock_file = utils.todo.lock_file_name(todo_file)
 
     # First, just get a list of entries
@@ -214,8 +217,8 @@ def check_jobs(YAML):
         utils.todo.wait_set_todo_lock(lock_file)
         todo_list = utils.todo.read_todo(todo_file)
 
-        index, cfgno, step = next_finished(param, todo_list, entry_list)
-        if index == 0:
+        index, cfgno, step = next_finished(yaml_params, todo_list, entry_list)
+        if index == 0 or step == "":
             utils.todo.remove_todo_lock(lock_file)
             continue
 
@@ -225,12 +228,12 @@ def check_jobs(YAML):
         utils.todo.write_todo(todo_file, todo_list)
         utils.todo.remove_todo_lock(lock_file)
 
-        if step not in param["job_setup"].keys():
-            print("ERROR: unrecognized step key", step)
+        if step not in yaml_params["job_setup"].keys():
+            logger.error("Unrecognized step key", step)
             sys.exit(1)
 
         # Check that the job completed successfully
-        status = good_output(step, cfgno, param)
+        status = has_good_output(step, cfgno, yaml_params)
         sys.stdout.flush()
 
         # Update the entry in the to-do file
@@ -238,12 +241,13 @@ def check_jobs(YAML):
         todo_list = utils.todo.read_todo(todo_file)
         if status:
             todo_list[cfgno][index] = step + "X"
-            print("Job step", step, "is COMPLETE")
+            logger.info(f"Job step {step} is COMPLETE")
         else:
             todo_list[cfgno][index] = step + "XXfix"
-            print("Marking todo entry XXfix.  Fix before rerunning.")
+            logger.info("Marking todo entry XXfix.  Fix before rerunning.")
         utils.todo.write_todo(todo_file, todo_list)
         utils.todo.remove_todo_lock(lock_file)
 
         # Take a cat nap (avoids hammering the login node)
         subprocess.check_call(["sleep", "1"])
+    logger.info("Reached end of todo file. Exiting job checker.")

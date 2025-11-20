@@ -265,7 +265,7 @@ def nanny_loop(YAML):
 
             # Check completion and purge scratch files for complete jobs
             if check_count == 0:
-                check_jobs(YAML)
+                check_jobs(yaml_params)
                 check_count = int(yaml_params["nanny"]["check_interval"])
 
             if ncases > 0:

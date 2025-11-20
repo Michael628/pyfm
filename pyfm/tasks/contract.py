@@ -15,7 +15,11 @@ from pyfm.domain import (
     PartialFormatter,
 )
 
+from pyfm import utils
+
 from pyfm.tasks.register import register_task
+
+import pandas as pd
 
 
 def meson_loader_preprocess_params(
@@ -188,16 +192,34 @@ def contract_build_aggregator_params(config: ContractConfig) -> t.Dict:
     return agg_params
 
 
+def diagram_create_outfile_catalog(config: DiagramConfig) -> pd.DataFrame:
+    def generate_outfile_formatting():
+        """Generator for meson field file formatting parameters."""
+        res = {"mass": config.mass_label}
+        yield res, config.outfile
+
+    outfile_generator = generate_outfile_formatting()
+
+    return utils.io.catalog_files(outfile_generator)
+
+
+def contract_create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
+    df = [diagram_create_outfile_catalog(d) for d in config.diagrams.values()]
+    return pd.concat(df)
+
+
 # Register ContractConfig as the config for 'contract' task type
 register_task(
     ContractConfig,
     build_input_params=contract_build_input_params,
     build_aggregator_params=contract_build_aggregator_params,
+    create_outfile_catalog=contract_create_outfile_catalog,
     preprocess_params=contract_preprocess_params,
 )
 register_task(
     DiagramConfig,
     build_input_params=diagram_build_input_params,
+    create_outfile_catalog=diagram_create_outfile_catalog,
     build_aggregator_params=diagram_build_aggregator_params,
     preprocess_params=diagram_preprocess_params,
 )

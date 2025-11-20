@@ -8,6 +8,8 @@ import os
 import subprocess
 import time
 
+from pyfm import utils
+
 
 ######################################################################
 def lock_file_name(todo_file):
@@ -20,7 +22,7 @@ def wait_set_todo_lock(lock_file):
     """Set lock file"""
 
     while os.access(lock_file, os.R_OK):
-        print("Lock file present. Sleeping.")
+        utils.get_logger().warn("Lock file present. Sleeping.")
         sys.stdout.flush()
         time.sleep(600)
 
@@ -42,7 +44,7 @@ def read_todo(todo_file):
         with open(todo_file) as todo:
             todo_lines = todo.readlines()
     except IOError:
-        print("Can't open", todo_file)
+        utils.get_logger().error(f"Can't open {todo_file}")
         sys.exit(1)
 
     for line in todo_lines:
@@ -51,7 +53,7 @@ def read_todo(todo_file):
         a = line.split()
         for i in range(len(a)):
             if isinstance(a[i], bytes):
-                a[i] = a[i].decode('ASCII')
+                a[i] = a[i].decode("ASCII")
         key = a[0]
         todo_list[key] = a
 
@@ -78,7 +80,7 @@ def write_todo(todo_file, todo_list):
         todo = open(todo_file, "w")
 
     except IOError:
-        print("Can't open", todo_file, "for writing")
+        utils.get_logger().error(f"Can't open {todo_file} for writing")
         sys.exit(1)
 
     for line in sorted(todo_list, key=key_todo_entries):
@@ -99,13 +101,13 @@ def find_next_unfinished_task(a):
     step = ""
 
     for i in range(1, len(a), 2):
-        if ('Q' in a[i]) or ('C' in a[i]) or ('fix' in a[i]):
+        if ("Q" in a[i]) or ("C" in a[i]) or ("fix" in a[i]):
             # If any entry for this cfg has a Q, we don't try to run
             # a subsequent step because of dependencies.
             # If it is being checked, (marked 'C'),  we also skip it.
             # If it is marked 'fix', we also skip it.
             break
-        if not ('X' in a[i]) and not ('C' in a[i]):
+        if not ("X" in a[i]) and not ("C" in a[i]):
             # Found an unfinised task
             index = i
             cfgno = a[0]
@@ -127,11 +129,11 @@ def find_next_queued_task(a):
     step = ""
 
     for i in range(1, len(a), 2):
-        if 'Q' in a[i]:
+        if "Q" in a[i]:
             index = i
             step = a[i]
             break
-        elif 'C' in a[i]:
+        elif "C" in a[i]:
             # If we find a 'C', this entry is being checked by another process
             # Empty "step" flags this
             index = i
