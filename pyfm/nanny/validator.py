@@ -148,21 +148,11 @@ def next_finished(param, todo_list, entry_list):
     while len(entry_list) > 0:
         cfgno = entry_list.pop(0)
         a = todo_list[cfgno]
-        index, cfgno, step = utils.todo.find_next_queued_task(a)
-        if index == 0:
+        if n := utils.todo.find_next_queued_task(a):
+            index, cfgno, step = n
+            step = "_".join(step.split("_")[:-1])
+        else:
             logger.debug(f"{cfgno} has no assigned tasks.")
-            continue
-
-        if step == "":
-            nskip = 5
-            logger.warning(
-                f"{cfgno} is being checked by another process. Skipping ahead by {nskip} configs."
-            )
-
-        # Skip entries to Avoid collisions with other check-completed processes
-        if nskip > 0:
-            nskip -= 1  # Count down from nonzero
-            a = ()
             continue
 
         print("--------------------------------------------------------------")
@@ -221,7 +211,7 @@ def check_jobs(yaml_params: t.Dict):
 
         step = step[:-1]
         # Mark that we are checking this item and rewrite the to-do list
-        todo_list[cfgno][index] = step + "C"
+        todo_list[cfgno][index] = step + "_C"
         utils.todo.write_todo(todo_file, todo_list)
         utils.todo.remove_todo_lock(lock_file)
 

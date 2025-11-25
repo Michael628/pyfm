@@ -47,15 +47,18 @@ class ConfigBuilder:
             if field.name not in self._input_params:
                 continue
             value = self._input_params[field.name]
-            match field.container:
-                case field.container.SIMPLE:
-                    value = value.format_map(formatter)
-                case field.container.LIST:
-                    value = [v.format_map(formatter) for v in value]
-                case field.container.DICT:
-                    value = {k: v.format_map(formatter) for k, v in value.items()}
-                case _:
-                    continue
+            try:
+                match field.container:
+                    case field.container.SIMPLE:
+                        value = value.format_map(formatter)
+                    case field.container.LIST:
+                        value = [v.format_map(formatter) for v in value]
+                    case field.container.DICT:
+                        value = {k: v.format_map(formatter) for k, v in value.items()}
+                    case _:
+                        continue
+            except KeyError as e:
+                raise ValueError(f"Couldn't find key in parameters: {e}")
             self._input_params[field.name] = value
 
         return self

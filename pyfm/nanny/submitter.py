@@ -47,13 +47,13 @@ def count_queue(scheduler, myjob_name_pfx):
 
 
 ######################################################################
-def next_cfgno_steps(max_cases, todo_list):
+def next_cfgno_steps(max_cases, todo_list, required_step: str | None = None):
     """Get next sets of cfgnos / job steps from the to-do file"""
 
     # Return a list of cfgnos and indices to be submitted in the next job
     # All subjobs in a single job must do the same step
 
-    step = "none"
+    step = None
     cfgno_steps = []
     for line in sorted(todo_list, key=utils.todo.key_todo_entries):
         a = todo_list[line]
@@ -62,17 +62,15 @@ def next_cfgno_steps(max_cases, todo_list):
             print(a)
             sys.exit(1)
 
-        index, cfgno, new_step = utils.todo.find_next_unfinished_task(a)
-        if index > 0:
-            if step == "none":
+        if n := utils.todo.find_next_unfinished_task(a, required_step):
+            index, cfgno, new_step = n
+            if step is None:
                 step = new_step
             elif step != new_step:
-                # Ensure only one step per job
+                # Ensure only one step type per bundled job
                 break
             cfgno_steps.append([cfgno, index])
-            # We don't bundle the S (links) or H (contraction) steps
-            if step in ["S", "H", "I"]:
-                break
+
         # Stop when we have enough for a bundle
         if len(cfgno_steps) >= max_cases:
             break
@@ -112,6 +110,7 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
     job_params = get_job_params(step, yaml_params)
     job_script = job_params["run"]
     wall_time = job_params["wall_time"]
+    queue_barrier = job_params.get("barrier", True)
 
     layout_params = get_layout_params(step, yaml_params)
     basenodes = layout_params["nodes"]
@@ -206,22 +205,23 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
     date = subprocess.check_output("date", shell=True).rstrip().decode()
     print(date, "Submitted job", jobid, "for", cfgnos, "step", step)
 
-    return (0, jobid)
+    return 0, jobid, queue_barrier
 
 
 ######################################################################
-def mark_queued_todo_entries(step, cfgno_steps, jobid, todo_list):
+def mark_queued_todo_entries(step, cfgno_steps, jobid, todo_list, barrier: bool = True):
     """Update the todo_file, change status to "Q" and mark the job number"""
 
+    barrier_mark = "Q" if barrier else "Qcont"
     for k in range(len(cfgno_steps)):
         c, i = cfgno_steps[k]
 
-        todo_list[c][i] = step + "Q"
+        todo_list[c][i] = f"{step}_{barrier_mark}"
         todo_list[c][i + 1] = jobid
 
 
 ######################################################################
-def nanny_loop(YAML):
+def nanny_loop(YAML, require_step: str | None = None):
     """Check job periodically and submit to the queue"""
 
     date = subprocess.check_output("date", shell=True).rstrip().decode()
@@ -263,7 +263,7 @@ def nanny_loop(YAML):
             utils.todo.remove_todo_lock(lock_file)
 
             # List a set of cfgnos
-            step, cfgno_steps = next_cfgno_steps(max_cases, todo_list)
+            step, cfgno_steps = next_cfgno_steps(max_cases, todo_list, require_step)
             ncases = len(cfgno_steps)
 
             # Check completion and purge scratch files for complete jobs
@@ -277,7 +277,9 @@ def nanny_loop(YAML):
 
                 # Submit the job
 
-                status, jobid = submit_job(yaml_params, step, cfgno_steps, max_cases)
+                status, jobid, barrier = submit_job(
+                    yaml_params, step, cfgno_steps, max_cases
+                )
 
                 # Job submissions succeeded
                 # Edit the todo_file, marking the lattice queued and
@@ -285,7 +287,9 @@ def nanny_loop(YAML):
                 if status == 0:
                     utils.todo.wait_set_todo_lock(lock_file)
                     todo_list = utils.todo.read_todo(todo_file)
-                    mark_queued_todo_entries(step, cfgno_steps, jobid, todo_list)
+                    mark_queued_todo_entries(
+                        step, cfgno_steps, jobid, todo_list, barrier
+                    )
                     utils.todo.write_todo(todo_file, todo_list)
                     utils.todo.remove_todo_lock(lock_file)
                 else:

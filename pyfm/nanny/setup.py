@@ -118,7 +118,10 @@ def create_task(
         handler.config = handler.postprocess_config()
 
     def format_string(config: ConfigBase, to_format: str) -> str:
-        return config.format_string(to_format)
+        try:
+            return config.format_string(to_format)
+        except KeyError as e:
+            raise ValueError(f"Couldn't find key in parameters: {e}")
 
     register_task(handler.get_config_type(), format_string)
 
