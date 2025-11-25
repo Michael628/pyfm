@@ -3,6 +3,7 @@
 
 # For Python 3 version
 
+import typing as t
 import sys
 import os
 import subprocess
@@ -90,53 +91,49 @@ def write_todo(todo_file, todo_list):
 
 
 ######################################################################
-def find_next_unfinished_task(a):
-    """Examine todo line "a" to see if more needs to be done"""
+def find_next_task(
+    line: list[str], condition_fn: t.Callable[[str], bool]
+) -> t.Tuple | None:
+    """Examine todo line to see if condition is met"""
 
     # Format
     # a.1170 SX 0 EX 2147965 LQ 2150955 A 0 H 0
 
-    index = 0
-    cfgno = a[0]
-    step = ""
+    cfgno = line[0]
 
-    for i in range(1, len(a), 2):
-        if ("Q" in a[i]) or ("C" in a[i]) or ("fix" in a[i]):
-            # If any entry for this cfg has a Q, we don't try to run
-            # a subsequent step because of dependencies.
-            # If it is being checked, (marked 'C'),  we also skip it.
-            # If it is marked 'fix', we also skip it.
-            break
-        if not ("X" in a[i]) and not ("C" in a[i]):
-            # Found an unfinised task
-            index = i
-            cfgno = a[0]
-            step = a[i]
-            break
+    for index, step in ((i, line[i]) for i in range(1, len(line), 2)):
 
-    return index, cfgno, step
+        if condition_fn(step):
+            return index, cfgno, step
+        elif step.endswith("Q") or step.endswith("XXfix"):
+            # Do not search past barrier designations
+            return None
+
+    return None
+
+
+def find_next_unfinished_task(
+    line: list[str], require_step: str | None = None
+) -> t.Tuple | None:
+    """Examine todo line looking for unfinished task that is ready to run."""
+
+    # Format
+    # a.1170 SX 0 EX 2147965 LQ 2150955 A 0 H 0
+
+    skip_states = ["X", "XXfix", "Q", "Qcont", "C"]
+    cond = lambda x: not any(x.endswith(state) for state in skip_states) and (
+        require_step is None or x.startswith(require_step)
+    )
+    return find_next_task(line, cond)
 
 
 ######################################################################
 def find_next_queued_task(a):
-    """Examine todo line "a" to see if more needs to be done"""
+    """Examine todo line to see if there are any queued tasks"""
 
     # Format
     # a.1170 SX 0 EX 2147965 LQ 2150955 A 0 H 0
 
-    index = 0
-    cfgno = a[0]
-    step = ""
+    cond = lambda x: x.endswith("Q") or x.endswith("Qcont")
 
-    for i in range(1, len(a), 2):
-        if "Q" in a[i]:
-            index = i
-            step = a[i]
-            break
-        elif "C" in a[i]:
-            # If we find a 'C', this entry is being checked by another process
-            # Empty "step" flags this
-            index = i
-            break
-
-    return index, cfgno, step
+    return find_next_task(line, cond)
