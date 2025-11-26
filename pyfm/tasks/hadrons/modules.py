@@ -261,7 +261,7 @@ def prop_contract(
     name: str,
     source: str,
     sink: str,
-    sink_func: str,
+    sink_fn: str,
     source_shift: str,
     source_gammas: str,
     sink_gammas: str,
@@ -277,7 +277,7 @@ def prop_contract(
         "options": {
             "source": source,
             "sink": sink,
-            "sinkFunc": sink_func,
+            "sinkFunc": sink_fn,
             "sourceShift": source_shift,
             "sourceGammas": source_gammas,
             "sinkSpinTaste": {
@@ -326,7 +326,7 @@ def qed_meson_field(
     name: str,
     action: str,
     block: str,
-    em_func: str,
+    em_fn: str,
     n_em_fields: str,
     em_seed_string: str,
     low_modes: str,
@@ -345,7 +345,7 @@ def qed_meson_field(
             "mom": {
                 "elem": "0 0 0",
             },
-            "EmFunc": em_func,
+            "EmFunc": em_fn,
             "nEmFields": n_em_fields,
             "EmSeedString": em_seed_string,
             "lowModes": low_modes,
@@ -356,7 +356,7 @@ def qed_meson_field(
     }
 
 
-def em_func(name: str, gauge: str, zm_scheme: str) -> t.Dict:
+def em_fn(name: str, gauge: str, zm_scheme: str) -> t.Dict:
     return {
         "id": {"name": name, "type": "MGauge::StochEmFunc"},
         "options": {"gauge": gauge, "zmScheme": zm_scheme},

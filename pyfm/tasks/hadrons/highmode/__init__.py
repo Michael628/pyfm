@@ -20,7 +20,6 @@ def preprocess_params(params: t.Dict) -> t.Dict:
 
 
 __all__ = [
-    "HighModeConfig",
     "build_input_params",
     "create_outfile_catalog",
     "build_aggregator_params",

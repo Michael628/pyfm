@@ -5,7 +5,7 @@ from pyfm.domain import (
     ConfigHandler,
     ConfigPostprocessorProtocol,
 )
-from pyfm.builder import build_config
+from pyfm.core.builder import build_config
 from pyfm.tasks import get_task_handler, register_task
 
 

@@ -4,12 +4,9 @@ import pandas as pd
 import itertools
 from pyrsistent import freeze, thaw
 
-from pyfm.domain import (
-    HadronsInput,
-    OpList,
-    hadmods,
-)
-from pyfm.tasks.hadrons.highmode.domain import HighModeConfig, CorrelatorStrategy
+from pyfm.tasks.hadrons.types import HadronsInput, HighModeConfig, CorrelatorStrategy
+import pyfm.tasks.hadrons.modules as hadmods
+from pyfm.domain import OpList
 from pyfm.tasks.hadrons.highmode import sib, twopoint
 
 from pyfm import utils
@@ -25,7 +22,7 @@ def create_file_catalog(config: HighModeConfig) -> pd.DataFrame:
 
         for op in config.op_list:
             res["gamma_label"] = op.gamma.name.lower()
-            res["mass"] = [config.mass[m] for m in op.mass]
+            res["mass"] = [config.mass.to_string(m, True) for m in op.mass]
             yield res, config.high_modes
 
     outfile_generator = generate_outfile_formatting()

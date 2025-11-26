@@ -3,14 +3,14 @@ from pyfm import utils
 import pandas as pd
 from pydantic.dataclasses import dataclass
 
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import (
     SimpleConfig,
     Gamma,
     OpList,
     Outfile,
-    HadronsInput,
     MassDict,
-    hadmods,
 )
 from pyfm.tasks.register import register_task
 

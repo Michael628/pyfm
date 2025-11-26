@@ -1,8 +1,10 @@
 import typing as t
 import itertools
 
-from pyfm.domain import HadronsInput, OpList, hadmods, Gamma
-from pyfm.tasks.hadrons.highmode.domain import HighModeConfig
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
+from pyfm.domain import OpList, Gamma
+from pyfm.tasks.hadrons.types import HighModeConfig
 
 
 class TwoPointOp(t.NamedTuple):
@@ -129,7 +131,7 @@ def build_contractions(
                 name=name,
                 source=quark,
                 sink=antiquark,
-                sink_func="sink",
+                sink_fn="sink",
                 source_shift=f"noise_t{tsource}_shift",
                 source_gammas=op_set.quark.gamma.gamma_string,
                 sink_gammas=op_set.sink.gamma.gamma_string,

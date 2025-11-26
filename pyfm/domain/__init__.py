@@ -9,23 +9,10 @@ from pyfm.domain.protocols import (
     ConfigPostprocessorProtocol,
 )
 from pyfm.domain.ops import Gamma, OpList, MassDict
-from pyfm.domain import hadmods
-from pyfm.domain.hadtypes import LanczosParams, HadronsInput
-from pyfm.domain.datapipe import WrappedDataPipe
+from pyfm.domain.datapipe import DataPipe, WrappedDataPipe
 from pyfm.domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
 
-from pyfm.domain.a2atypes import (
-    ContractType,
-    DiagramConfig,
-    ContractConfig,
-    MesonLoaderConfig,
-)
-
 __all__ = [
-    "hadmods",
-    "DiagramConfig",
-    "ContractConfig",
-    "ContractType",
     "ConfigBuilder",
     "PartialFormatter",
     "ConfigBase",
@@ -39,9 +26,8 @@ __all__ = [
     "ConfigPreprocessorProtocol",
     "ConfigPostprocessorProtocol",
     "MassDict",
-    "LanczosParams",
-    "HadronsInput",
     "Gamma",
     "OpList",
+    "DataPipe",
     "WrappedDataPipe",
 ]
