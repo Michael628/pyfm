@@ -1,5 +1,7 @@
 import typing as t
-from pyfm.domain import HadronsInput, OpList, hadmods
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
+from pyfm.domain import OpList
 from pyfm.tasks.hadrons.highmode.domain import HighModeConfig
 
 

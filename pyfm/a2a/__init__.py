@@ -22,7 +22,7 @@ from pyfm.a2a.mesonloader import (
 )
 from pyfm.a2a.time_operations import convert_to_numpy, time_average
 from pyfm.a2a.register import register_a2a, get_a2a_handler
-from pyfm.domain import DiagramConfig, ContractConfig
+from pyfm.a2a.types import DiagramConfig, ContractConfig
 
 # Maintain backward compatibility by exposing all functions at module level
 __all__ = [

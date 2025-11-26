@@ -1,6 +1,6 @@
 import typing as t
 
-from pyfm.domain import ContractConfig
+from pyfm.a2a.types import ContractConfig
 
 from pyfm.tasks.register import register_task
 

@@ -2,12 +2,12 @@ import typing as t
 from pydantic.dataclasses import dataclass
 from pydantic import Field
 
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import (
     Outfile,
     SimpleConfig,
-    HadronsInput,
     MassDict,
-    hadmods,
 )
 
 from pyfm.tasks.register import register_task

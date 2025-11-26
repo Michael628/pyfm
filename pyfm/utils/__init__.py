@@ -1,6 +1,4 @@
-# from pyfm.utils import processor
 from pyfm.utils import io
-from pyfm.utils import todo
 from pyfm.utils import string
 from pyfm.utils.logging import get_logger, set_logging_level
 from pyfm.utils.typecheck import (
@@ -15,7 +13,6 @@ from pyfm.utils.typecheck import (
 
 __all__ = [
     "io",
-    "todo",
     "string",
     "satisfies_protocol",
     "extract_non_none_type",

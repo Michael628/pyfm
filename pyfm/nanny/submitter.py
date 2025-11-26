@@ -6,6 +6,7 @@ from pyfm import utils
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
 from pyfm.nanny.setup import get_job_params, get_layout_params
+import pyfm.nanny.todo as todo
 
 from functools import reduce
 
@@ -55,14 +56,14 @@ def next_cfgno_steps(max_cases, todo_list, required_step: str | None = None):
 
     step = None
     cfgno_steps = []
-    for line in sorted(todo_list, key=utils.todo.key_todo_entries):
+    for line in sorted(todo_list, key=todo.key_todo_entries):
         a = todo_list[line]
         if len(a) < 2:
             print("ERROR: bad todo line format")
             print(a)
             sys.exit(1)
 
-        if n := utils.todo.find_next_unfinished_task(a, required_step):
+        if n := todo.find_next_unfinished_task(a, required_step):
             index, cfgno, new_step = n
             if step is None:
                 step = new_step
@@ -251,16 +252,16 @@ def nanny_loop(YAML, require_step: str | None = None):
         job_name_pfx = yaml_params["submit"]["job_name_pfx"]
         scheduler = yaml_params["submit"]["scheduler"]
 
-        lock_file = utils.todo.lock_file_name(todo_file)
+        lock_file = todo.lock_file_name(todo_file)
 
         # Count queued jobs with our job name
         nqueued = count_queue(scheduler, job_name_pfx)
 
         # Submit until we have the desired number of jobs in the queue
         if nqueued < yaml_params["nanny"]["max_queue"]:
-            utils.todo.wait_set_todo_lock(lock_file)
-            todo_list = utils.todo.read_todo(todo_file)
-            utils.todo.remove_todo_lock(lock_file)
+            todo.wait_set_todo_lock(lock_file)
+            todo_list = todo.read_todo(todo_file)
+            todo.remove_todo_lock(lock_file)
 
             # List a set of cfgnos
             step, cfgno_steps = next_cfgno_steps(max_cases, todo_list, require_step)
@@ -285,13 +286,13 @@ def nanny_loop(YAML, require_step: str | None = None):
                 # Edit the todo_file, marking the lattice queued and
                 # indicating the jobid
                 if status == 0:
-                    utils.todo.wait_set_todo_lock(lock_file)
-                    todo_list = utils.todo.read_todo(todo_file)
+                    todo.wait_set_todo_lock(lock_file)
+                    todo_list = todo.read_todo(todo_file)
                     mark_queued_todo_entries(
                         step, cfgno_steps, jobid, todo_list, barrier
                     )
-                    utils.todo.write_todo(todo_file, todo_list)
-                    utils.todo.remove_todo_lock(lock_file)
+                    todo.write_todo(todo_file, todo_list)
+                    todo.remove_todo_lock(lock_file)
                 else:
                     # Job submission failed
                     if status == 1:

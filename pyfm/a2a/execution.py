@@ -13,7 +13,7 @@ except ImportError:
     import numpy as xp
 
 from pyfm import utils
-from pyfm.domain import DiagramConfig, ContractConfig, ContractType
+from pyfm.a2a.types import DiagramConfig, ContractConfig, ContractType
 from pyfm.a2a.contractions import (
     conn_2pt,
     qed_conn_4pt,
