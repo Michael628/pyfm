@@ -8,6 +8,7 @@ from pyfm import utils
 import pandas as pd
 
 from pyfm.nanny.setup import create_task
+import pyfm.nanny.todo as todo
 
 
 @t.runtime_checkable
@@ -137,7 +138,7 @@ def job_still_queued(param, job_id):
 ######################################################################
 
 
-def next_finished(param, todo_list, entry_list):
+def next_finished(param, todo_list, entry_list) -> t.Tuple[int, str, str] | None:
     """Find the next well-formed entry marked "Q" whose job is no longer
     in the queue
     """
@@ -148,7 +149,7 @@ def next_finished(param, todo_list, entry_list):
     while len(entry_list) > 0:
         cfgno = entry_list.pop(0)
         a = todo_list[cfgno]
-        if n := utils.todo.find_next_queued_task(a):
+        if n := todo.find_next_queued_task(a):
             index, cfgno, step = n
             step = "_".join(step.split("_")[:-1])
         else:
@@ -164,9 +165,10 @@ def next_finished(param, todo_list, entry_list):
         if job_still_queued(param, job_id):
             index = 0  # To signal no checking
             continue
-        break
 
-    return index, cfgno, step
+        return index, cfgno, step
+
+    return None
 
 
 ######################################################################
@@ -189,31 +191,33 @@ def check_jobs(yaml_params: t.Dict):
 
     # Read the to-do file
     todo_file = yaml_params["nanny"]["todo_file"]
-    lock_file = utils.todo.lock_file_name(todo_file)
+    lock_file = todo.lock_file_name(todo_file)
 
     # First, just get a list of entries
-    utils.todo.wait_set_todo_lock(lock_file)
-    todo_list = utils.todo.read_todo(todo_file)
-    utils.todo.remove_todo_lock(lock_file)
-    entry_list = sorted(todo_list, key=utils.todo.key_todo_entries)
+    todo.wait_set_todo_lock(lock_file)
+    todo_list = todo.read_todo(todo_file)
+    todo.remove_todo_lock(lock_file)
+    entry_list = sorted(todo_list, key=todo.key_todo_entries)
 
     # Run through the entries. The entry_list is static, but the
     # to-do file could be changing due to other proceses
     while len(entry_list) > 0:
         # Reread the to-do file (it might have changed)
-        utils.todo.wait_set_todo_lock(lock_file)
-        todo_list = utils.todo.read_todo(todo_file)
+        todo.wait_set_todo_lock(lock_file)
+        todo_list = todo.read_todo(todo_file)
 
-        index, cfgno, step = next_finished(yaml_params, todo_list, entry_list)
-        if index == 0 or step == "":
-            utils.todo.remove_todo_lock(lock_file)
+        n = next_finished(yaml_params, todo_list, entry_list)
+        if n is None:
+            todo.remove_todo_lock(lock_file)
             continue
 
-        step = step[:-1]
+        index, cfgno, step = n
+
+        # step = step[:-1]
         # Mark that we are checking this item and rewrite the to-do list
         todo_list[cfgno][index] = step + "_C"
-        utils.todo.write_todo(todo_file, todo_list)
-        utils.todo.remove_todo_lock(lock_file)
+        todo.write_todo(todo_file, todo_list)
+        todo.remove_todo_lock(lock_file)
 
         if step not in yaml_params["job_setup"].keys():
             logger.error("Unrecognized step key", step)
@@ -224,16 +228,16 @@ def check_jobs(yaml_params: t.Dict):
         sys.stdout.flush()
 
         # Update the entry in the to-do file
-        utils.todo.wait_set_todo_lock(lock_file)
-        todo_list = utils.todo.read_todo(todo_file)
+        todo.wait_set_todo_lock(lock_file)
+        todo_list = todo.read_todo(todo_file)
         if status:
-            todo_list[cfgno][index] = step + "X"
+            todo_list[cfgno][index] = f"{step}_X"
             logger.info(f"Job step {step} is COMPLETE")
         else:
-            todo_list[cfgno][index] = step + "XXfix"
+            todo_list[cfgno][index] = f"{step}_XXfix"
             logger.info("Marking todo entry XXfix.  Fix before rerunning.")
-        utils.todo.write_todo(todo_file, todo_list)
-        utils.todo.remove_todo_lock(lock_file)
+        todo.write_todo(todo_file, todo_list)
+        todo.remove_todo_lock(lock_file)
 
         # Take a cat nap (avoids hammering the login node)
         subprocess.check_call(["sleep", "1"])

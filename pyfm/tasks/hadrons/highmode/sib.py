@@ -1,6 +1,8 @@
 import typing as t
-from pyfm.domain import HadronsInput, OpList, hadmods
-from pyfm.tasks.hadrons.highmode.domain import HighModeConfig
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
+from pyfm.domain import OpList
+from pyfm.tasks.hadrons.types import HighModeConfig
 
 
 def build_quarks(
@@ -81,7 +83,7 @@ def build_contractions(
             name=name,
             source=quark1,
             sink=quark2,
-            sink_func="sink",
+            sink_fn="sink",
             source_shift=f"noise_t{tsource}_shift",
             source_gammas="",
             sink_gammas=op.gamma.gamma_string,

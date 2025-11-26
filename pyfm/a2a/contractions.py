@@ -19,7 +19,7 @@ try:
 except ImportError:
     pass
 
-from pyfm.domain import DiagramConfig, ContractConfig
+from pyfm.a2a.types import DiagramConfig, ContractConfig
 from pyfm.a2a.mesonloader import iter_meson_fields
 from pyfm.a2a.time_operations import convert_to_numpy
 

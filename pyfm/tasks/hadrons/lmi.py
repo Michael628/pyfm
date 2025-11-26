@@ -4,10 +4,13 @@ import pandas as pd
 from pydantic.dataclasses import dataclass
 from dataclasses import replace
 
-from pyfm.domain import CompositeConfig, HadronsInput
+
+from pyfm.tasks.hadrons.types import HadronsInput
+from pyfm.domain import CompositeConfig
 from pyfm.tasks.register import register_task
 
-from pyfm.tasks.hadrons import gauge, meson, epack, highmode
+from . import gauge, meson, epack, highmode
+from .types import HighModeConfig
 
 
 @dataclass(frozen=True)
@@ -15,7 +18,7 @@ class LMIConfig(CompositeConfig):
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig
     meson_config: meson.MesonConfig
-    high_modes_config: highmode.HighModeConfig
+    high_modes_config: HighModeConfig
     skip_epack: bool = False
     skip_meson: bool = False
     skip_high_modes: bool = False

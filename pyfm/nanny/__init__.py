@@ -7,7 +7,6 @@ from pyfm.nanny.validator import (
 from pyfm.nanny.aggregator import aggregate_task_data
 from pyfm.nanny.submitter import nanny_loop
 
-from pyfm.tasks import smear
 
 __all__ = [
     "check_jobs",

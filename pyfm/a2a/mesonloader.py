@@ -32,7 +32,7 @@ try:
 except ImportError:
     import numpy as xp
 
-from pyfm.domain import DiagramConfig, MesonLoaderConfig
+from pyfm.a2a.types import DiagramConfig, MesonLoaderConfig
 
 
 _MESON_CACHE: dict[tuple[str, slice], tuple[slice, xp.ndarray]] = {}

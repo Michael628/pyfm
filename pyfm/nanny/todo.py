@@ -128,7 +128,7 @@ def find_next_unfinished_task(
 
 
 ######################################################################
-def find_next_queued_task(a):
+def find_next_queued_task(line: list[str]) -> t.Tuple | None:
     """Examine todo line to see if there are any queued tasks"""
 
     # Format

@@ -5,17 +5,15 @@ from pydantic.dataclasses import dataclass
 from pydantic import Field
 
 from pyfm import utils
-
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import (
     SimpleConfig,
     Outfile,
-    HadronsInput,
     MassDict,
-    LanczosParams,
-    hadmods,
 )
-
 from pyfm.tasks.register import register_task
+from pyfm.tasks.hadrons.types import LanczosParams
 
 
 @dataclass(frozen=True)

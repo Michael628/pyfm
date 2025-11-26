@@ -3,7 +3,8 @@ import yaml
 
 from pyfm.nanny.setup import create_task
 from pyfm import utils
-from pyfm.domain import hadmods, Outfile
+from pyfm.domain import Outfile
+from pyfm.tasks.hadrons import hadmods
 
 
 @t.runtime_checkable

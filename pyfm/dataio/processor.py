@@ -127,18 +127,18 @@ def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
 
 def group_apply(
     df: pd.DataFrame,
-    func: t.Callable,
+    apply_fn: t.Callable,
     data_col: str,
     ungrouped_cols: t.List,
     invert: bool = False,
 ) -> pd.DataFrame:
-    """Applies `func` to `data_col` in `df` grouped by `ungrouped_cols`.
+    """Applies `apply_fn` to `data_col` in `df` grouped by `ungrouped_cols`.
 
     Parameters
     ----------
     df : pd.DataFrame
 
-    func : t.Callable
+    apply_fn : t.Callable
 
     data_col : str
 
@@ -162,7 +162,9 @@ def group_apply(
         grouped = ungrouped_cols
         ungrouped = [x for x in all_cols if x not in grouped] + [data_col]
 
-    df_out = df.reset_index().groupby(by=grouped, dropna=False)[ungrouped].apply(func)
+    df_out = (
+        df.reset_index().groupby(by=grouped, dropna=False)[ungrouped].apply(apply_fn)
+    )
 
     # while None in df_out.index.names:
     #     df_out = df_out.droplevel(df_out.index.names.index(None))
@@ -390,8 +392,10 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
             df_out = df_out.set_index(cols_to_set, append=True)
 
         # Group by all index levels except the one being averaged
-        levels_to_keep = [name for name in df_out.index.names if name != col]
-        df_out = df_out.groupby(level=levels_to_keep).mean()
+        levels_to_keep = [
+            name for name in df_out.index.names if name not in [None, col]
+        ]
+        df_out = df_out.groupby(level=levels_to_keep, as_index=False).mean()
 
     return df_out
 
@@ -478,7 +482,7 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
     assert "t" not in df.index.names
     tvar = "t"
 
-    def apply_func(x):
+    def apply_fn(x):
         nt = int(np.sqrt(len(x)))
         assert nt**2 == len(x)
         corr = x[data_col].to_numpy().reshape((nt, nt))
@@ -486,7 +490,7 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
             {data_col: a2a.time_average(corr)}, index=pd.Index(range(nt), name=tvar)
         )
 
-    df_out = group_apply(df, apply_func, data_col, list(avg_indices))
+    df_out = group_apply(df, apply_fn, data_col, list(avg_indices))
 
     return df_out
 
@@ -513,13 +517,13 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
 #
 
 
-def call(df, func_name, data_col, *args, **kwargs):
-    func = globals().get(func_name, None)
-    if callable(func):
-        logging.debug(f"Calling {func_name} with args: {args}, kwargs: {kwargs}")
-        return func(df, data_col, *args, **kwargs)
+def call(df, fn_name, data_col, *args, **kwargs):
+    fn = globals().get(fn_name, None)
+    if callable(fn):
+        logging.debug(f"Calling {fn_name} with args: {args}, kwargs: {kwargs}")
+        return fn(df, data_col, *args, **kwargs)
     else:
-        raise AttributeError(f"Function '{func_name}' not found or is not callable.")
+        raise AttributeError(f"Function '{fn_name}' not found or is not callable.")
 
 
 def execute(df: pd.DataFrame, actions: t.Dict) -> pd.DataFrame:

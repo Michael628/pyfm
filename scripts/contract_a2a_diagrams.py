@@ -6,8 +6,9 @@ import argparse
 
 from sympy.utilities.iterables import multiset_permutations
 
-from pyfm.domain import ContractConfig, LoadDictConfig
-from pyfm.builder import build_config
+from pyfm.a2a.types import ContractConfig
+from pyfm.domain import LoadDictConfig
+from pyfm.core.builder import build_config
 from pyfm.dataio import data_to_frame, write_files
 
 from pyfm.a2a import get_a2a_handler, execute
