@@ -58,13 +58,12 @@ def process_files(
             # Build regex objects to catch each replacement
             regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
 
-            file_pattern = os.path.basename(filestem(**regex_repl))
+            file_pattern = filestem(**regex_repl)
             pattern_parser: re.Pattern = re.compile(file_pattern)
 
             for file in files:
-                base = os.path.basename(file)
                 try:
-                    regex_repl = freeze(next(pattern_parser.finditer(base)).groupdict())
+                    regex_repl = freeze(next(pattern_parser.finditer(file)).groupdict())
                 except StopIteration:
                     continue
 
@@ -128,7 +127,7 @@ def process_files(
                 f"Adding wildcards to keys in replacements: {', '.join(sorted(missing_keys))}"
             )
             for k in missing_keys:
-                regex_repl[k] = ".*"
+                regex_repl[k] = ".*?"
         else:
             raise ValueError(f"Missing keys {', '.join(sorted(missing_keys))}")
 

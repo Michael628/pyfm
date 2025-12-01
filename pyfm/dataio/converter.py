@@ -123,9 +123,9 @@ def hdf5_to_frame(
 ) -> pd.DataFrame:
     df = []
     for k, v in h5_config.datasets.items():
-        assert len(v) == 1, (
-            "Only supporting single h5 entry per h5 dataset configuration key"
-        )
+        assert (
+            len(v) == 1
+        ), "Only supporting single h5 entry per h5 dataset configuration key"
         dataset_label = v[0]
         if dataset_label in file:
             data = file[dataset_label][:].view(np.complex128)

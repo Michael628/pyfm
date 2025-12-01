@@ -8,6 +8,7 @@ import pandas as pd
 from pyfm import a2a
 
 ACTION_ORDER = [
+    "preprocess_custom",
     "build_high",
     "average",
     "sum",
@@ -19,11 +20,21 @@ ACTION_ORDER = [
     "normalize",
     "index",
     "drop",
+    "custom",
+    "postprocess_custom",
 ]
 
 MaskGroup = t.Tuple[t.Optional[t.NamedTuple], pd.Series]
 MaskedDFGroup = t.Tuple[t.Optional[t.NamedTuple], pd.DataFrame]
 BufferTuple = namedtuple("BufferTuple", ["columns", "buffer"])
+
+
+def custom(df: pd.DataFrame, data_col: str, fn: t.Callable, *args, **kwargs):
+    return fn(df, data_col, *args, **kwargs)
+
+
+# Do the same thing regardless of preprocessing or postprocessing, only difference is order
+preprocess_custom = postprocess_custom = custom
 
 
 def norm_dist(df: pd.DataFrame) -> pd.DataFrame:
