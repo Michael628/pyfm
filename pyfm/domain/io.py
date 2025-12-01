@@ -1,5 +1,7 @@
 import typing as t
 import os
+import h5py
+from functools import partial
 
 from pydantic.dataclasses import dataclass
 
@@ -85,6 +87,28 @@ class LoadH5Config:
             array_config[k] = LoadArrayConfig.create(*args, **kwargs)
 
         return cls(name=name, datasets=dsets, array_config=array_config)
+
+    def search_for_dataset_label(self, file: h5py.File):
+        ds = {k: [] for k in self.datasets.keys()}
+
+        def visitor(name, obj, target, agg):
+            if not isinstance(target, t.List) or len(target) != 1:
+                raise ValueError("Target value is not a list[str] with a single entry.")
+
+            if isinstance(obj, h5py.Dataset):
+                # Check if the dataset's base name matches target
+                if name.split("/")[-1] == target[0]:
+                    agg.append(name)
+
+        for k, v in ds.items():
+            file.visititems(partial(visitor, target=self.datasets[k], agg=v))
+        h5_params = {
+            "name": self.name,
+            "datasets": ds,
+            "array_config": self.array_config.copy(),
+        }
+
+        return type(self)(**h5_params)
 
     def format_data_strings(self, repl: t.Dict[str, str]):
         h5_params = {

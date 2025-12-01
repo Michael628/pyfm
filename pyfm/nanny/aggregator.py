@@ -12,16 +12,7 @@ class AggregatorProtocol(t.Protocol):
     def format_string(self, to_format: str) -> str: ...
 
 
-def aggregate_task_data(
-    job_step: str, yaml_data: t.Dict, format: str = "csv", average: bool = False
-) -> None:
-    task: AggregatorProtocol = create_task(job_step, yaml_data)
-
-    agg_params = task.build_aggregator_params(average)
-
-    if not agg_params:
-        raise ValueError(f"No aggregator parameters provided for task: {job_step}.")
-
+def aggregate_data(agg_params: t.Dict[str, t.Any], format: str = "csv") -> None:
     result = {}
     for key in agg_params["run"]:
         run_params = agg_params[key]
@@ -44,3 +35,16 @@ def aggregate_task_data(
             result[key]["format"] = f"{format}"
         if out_files:
             dio.write_files(result[key], format=format, **out_files)
+
+
+def aggregate_task_data(
+    job_step: str, yaml_data: t.Dict, format: str = "csv", average: bool = False
+) -> None:
+    task: AggregatorProtocol = create_task(job_step, yaml_data)
+
+    agg_params = task.build_aggregator_params(average)
+
+    if not agg_params:
+        raise ValueError(f"No aggregator parameters provided for task: {job_step}.")
+
+    aggregate_data(agg_params, format)

@@ -44,18 +44,29 @@ def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
         pd.DataFrame: The loaded data as a pandas DataFrame.
 
     """
+
+    data = None
     try:
         return pd.read_hdf(filename)
     except (ValueError, NotImplementedError):
+        pass
+
+    with h5py.File(filename) as file:
         h5_config = LoadH5Config.create(**kwargs).format_data_strings(repl)
+        try:
+            data = data_to_frame(file, h5_config)
+        except ValueError:
+            h5_config = h5_config.search_for_dataset_label(file)
+            data = data_to_frame(file, h5_config)
 
-        file = h5py.File(filename)
+    if data is not None:
+        return data
+    else:
+        raise ValueError(f"File {filename} could not be loaded.")
 
-        return data_to_frame(file, h5_config)
 
-
-def get_file_loader(filestem: str):
-    ext = os.path.splitext(filestem)[1]
+def get_file_loader(file_path: str):
+    ext = os.path.splitext(file_path)[1]
 
     match ext:
         case ".p" | ".npy":
