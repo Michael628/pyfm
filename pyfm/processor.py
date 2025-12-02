@@ -382,6 +382,7 @@ def sum(df: pd.DataFrame, data_col, *sum_indices) -> pd.DataFrame:
 def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
 
     df_out = df
+    final_columns = [n for n in df.columns if n not in avg_indices and n != data_col]
     for col in avg_indices:
         # Move all non-data columns to the index to avoid expensive reset_index()
         other_cols = [x for x in df_out.columns if x != data_col]
@@ -390,10 +391,12 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
             df_out = df_out.set_index(cols_to_set, append=True)
 
         # Group by all index levels except the one being averaged
-        levels_to_keep = [name for name in df_out.index.names if name != col]
+        levels_to_keep = [
+            name for name in df_out.index.names if name not in [None, col]
+        ]
         df_out = df_out.groupby(level=levels_to_keep).mean()
 
-    return df_out
+    return df_out if len(final_columns) == 0 else df_out.reset_index(final_columns)
 
 
 def permkey_split_old(
