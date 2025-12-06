@@ -82,8 +82,9 @@ def load_files(
     replacements: t.Dict | None = None,
     regex: t.Dict | None = None,
     wildcard_fill: bool = False,
+    aggregate: bool = False,
     **kwargs,
-) -> WrappedDataPipe:
+) -> WrappedDataPipe | pd.DataFrame:
     def file_loader_wrapper(file_loader, filename: str, repl: t.Dict) -> pd.DataFrame:
         utils.get_logger().debug(f"Loading file: {filename}")
         new_data: pd.DataFrame = file_loader(filename, repl)
@@ -119,4 +120,7 @@ def load_files(
 
         yield from ((GroupTuple(**g), r) for g, r in results)
 
-    return WrappedDataPipe(file_factory)
+    if aggregate:
+        return WrappedDataPipe(file_factory).agg()
+    else:
+        return WrappedDataPipe(file_factory)
