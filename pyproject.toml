@@ -10,7 +10,7 @@ authors = [
 ]
 description = "Nanny, postprocessing, and A2A contraction scripts"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.12"
 license = {text = "MIT"}
 classifiers = [
     "Programming Language :: Python :: 3",
@@ -18,20 +18,15 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "corrfitter>=8.2",
     "Cython>=0.29",
     "dict2xml>=1.7",
     "gvar>=11.9",
     "h5py>=2.10.0",
-    "lsqfit>=11.8",
-    "matplotlib>=3.3",
     "numpy>=1.20",
     "pandas>=1.2",
     "PyYAML>=5.4",
-    "scipy>=1.6",
     "sympy>=1.8",
     "tables>=3.6",
-    "toolz>=0.12.0",
     "opt_einsum>=3.3",
     "pydantic>=2.0",
     "pyrsistent>=0.20.0",
