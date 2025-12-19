@@ -20,6 +20,34 @@ from pyfm.utils.logging import get_logger
 procFn = t.Callable[[str, t.Any], t.Any]
 
 
+def preprocess_duplicate_keys(fstring: str, keys_to_check: t.Set[str]) -> str:
+    """
+    Replaces duplicate occurrences of the same formatting key with 'ALL'.
+
+    This prevents regex named group conflicts when a key appears multiple times.
+    For example: '/this/{mass}/corr_{mass}.h5' becomes '/this/{mass}/corr_{ALL}.h5'
+    if 'mass' is in keys_to_check.
+
+    Args:
+        fstring: The format string to preprocess
+        keys_to_check: Set of keys that will be used in regex replacements
+
+    Returns:
+        The preprocessed format string with duplicate occurrences replaced by {ALL}
+    """
+    for key in keys_to_check:
+        pattern = r"\{" + re.escape(key) + r"\}"
+        matches = list(re.finditer(pattern, fstring))
+
+        if len(matches) > 1:
+            # Replace all but the first occurrence with {ALL}
+            # Do this in reverse order to preserve string positions
+            for match in reversed(matches[1:]):
+                fstring = fstring[: match.start()] + "{ALL}" + fstring[match.end() :]
+
+    return fstring
+
+
 def process_files(
     filestem: str,
     processor: procFn,
@@ -53,10 +81,16 @@ def process_files(
         else:
             glob_repl = {k: "*" for k in regex.keys()}
 
+            # Fill in ALL placeholder (from duplicate key preprocessing)
+            glob_repl["ALL"] = "*"
+
             files = glob.glob(filestem(**glob_repl))
 
             # Build regex objects to catch each replacement
             regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
+
+            # Fill in ALL placeholder (from duplicate key preprocessing)
+            regex_repl["ALL"] = ".*"
 
             file_pattern = filestem(**regex_repl)
             pattern_parser: re.Pattern = re.compile(file_pattern)
@@ -135,6 +169,8 @@ def process_files(
 
     def file_gen():
         fs = os.path.expanduser(filestem)
+        # Preprocess to handle duplicate keys in regex replacements
+        fs = preprocess_duplicate_keys(fs, set(regex_repl.keys()))
         for str_reps, repl_filename in string_replacement_gen(fs, str_repl):
             for reg_reps, regex_filename in file_regex_gen(repl_filename, regex_repl):
                 yield regex_filename, thaw(str_reps.update(reg_reps))
