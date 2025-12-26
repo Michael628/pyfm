@@ -25,7 +25,7 @@ class SimpleConfig(ConfigBase):
 @dataclass(frozen=True)
 class CompositeConfig(ConfigBase):
     @classmethod
-    def get_subconfigs(cls) -> utils.ContainerType:
+    def get_subconfigs(cls) -> t.Dict[str, utils.ContainerType]:
         subconfigs = {}
 
         config_field_types = ((f.name, f.type) for f in fields(cls))

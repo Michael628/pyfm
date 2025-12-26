@@ -2,6 +2,7 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 from pydantic.dataclasses import dataclass
+from dataclasses import fields
 
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
@@ -138,5 +139,32 @@ def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
     return df
 
 
+def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+    """Preprocessing for MesonConfig.
+
+    Handles routing of task data to 'operations' field to avoid collision
+    between MassDict (from params['mass']) and OpList mass labels (from params['_tasks']['mass']).
+    """
+    # Extract task configs (contains gamma, mass lists for OpList)
+    task_data = params.get("_tasks", {})
+
+    # Get field names from MesonConfig, excluding 'mass'
+    # - 'mass' comes from top-level params (MassDict)
+    config_fields = {f.name for f in fields(MesonConfig) if f.name != "mass"}
+
+    return (
+        params
+        | {
+            "operations": {
+                k: v for k, v in task_data.items() if k not in config_fields
+            },
+            "_tasks": {},
+        }
+        | {k: v for k, v in task_data.items() if k in config_fields}
+    )
+
+
 # Register GaugeConfig as the config for 'hadrons_gauge' task type
-register_task(MesonConfig, build_input_params, create_outfile_catalog)
+register_task(
+    MesonConfig, build_input_params, create_outfile_catalog, preprocess_params
+)
