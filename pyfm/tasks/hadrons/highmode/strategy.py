@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import itertools
 from pyrsistent import freeze, thaw
+from dataclasses import fields
 
 from pyfm.tasks.hadrons.types import HadronsInput, HighModeConfig, CorrelatorStrategy
 import pyfm.tasks.hadrons.modules as hadmods
@@ -10,6 +11,31 @@ from pyfm.domain import OpList
 from pyfm.tasks.hadrons.highmode import sib, twopoint
 
 from pyfm import utils
+
+
+def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+    """Preprocessing for HighModeConfig.
+
+    Handles routing of task data to 'operations' field to avoid collision
+    between MassDict (from params['mass']) and OpList mass labels (from params['_tasks']['mass']).
+    """
+    # Extract task configs (contains gamma, mass lists for OpList)
+    task_data = params.get("_tasks", {})
+
+    # Get field names from MesonConfig, excluding 'mass'
+    # - 'mass' comes from top-level params (MassDict)
+    config_fields = {f.name for f in fields(HighModeConfig) if f.name != "mass"}
+
+    return (
+        params
+        | {
+            "operations": {
+                k: v for k, v in task_data.items() if k not in config_fields
+            },
+            "_tasks": {},
+        }
+        | {k: v for k, v in task_data.items() if k in config_fields}
+    )
 
 
 def create_file_catalog(config: HighModeConfig) -> pd.DataFrame:

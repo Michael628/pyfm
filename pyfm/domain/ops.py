@@ -2,6 +2,8 @@ import typing as t
 from enum import Enum, auto
 from pydantic.dataclasses import dataclass
 
+from pyfm import utils
+
 
 @dataclass(frozen=True)
 class MassDict:
@@ -148,27 +150,34 @@ class OpList:
         }
 
         """
-        if "mass" not in kwargs:
-            op_list = []
-            for key, val in kwargs.items():
-                if isinstance(val, dict) and "mass" in val:
-                    mass = val["mass"]
-                    if isinstance(mass, str):
-                        mass = [mass]
-                    gamma = Gamma[key.upper()]
-                    op_list.append(cls.Op(gamma=gamma, mass=tuple(mass)))
-        else:
-            if "gamma" not in kwargs:
-                raise ValueError(
-                    "No gamma provided. Required for using OpList.from_dict."
-                )
-            gammas = kwargs["gamma"]
+        if "mass" in kwargs and "gamma" in kwargs:
+
             mass = kwargs["mass"]
             if isinstance(mass, str):
                 mass = [mass]
+            elif not isinstance(mass, list):
+                raise ValueError("Mass must be a string or list of strings.")
+
+            gammas = kwargs["gamma"]
             if isinstance(gammas, str):
                 gammas = [gammas]
+            elif not isinstance(gammas, list):
+                raise ValueError("Gammas must be a string or list of strings.")
+
             op_list = [cls.Op(gamma=Gamma[g.upper()], mass=tuple(mass)) for g in gammas]
+        else:
+            op_list = []
+            for gamma_enum in Gamma:
+                if val := kwargs.get(gamma_enum.name.lower(), None):
+                    if isinstance(val, dict) and "mass" in val:
+                        mass = val["mass"]
+                        if isinstance(mass, str):
+                            mass = [mass]
+                        op_list.append(cls.Op(gamma=gamma_enum, mass=tuple(mass)))
+
+        if len(op_list) == 0:
+            utils.get_logger().debug('Returning an empty Op List.')
+            # raise ValueError("Valid operations not found in provided parameters.")
 
         return cls(op_list=op_list)
 

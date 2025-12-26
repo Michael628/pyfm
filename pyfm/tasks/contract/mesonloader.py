@@ -7,12 +7,20 @@ from pyfm.tasks.register import register_task
 
 
 def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    mass_shift = {}
+    """Preprocessing for MesonLoaderConfig."""
+    task_data = params.get("_tasks", {})
 
-    for key in ["mass_original", "mass_updated", "milc_mass"]:
-        if key in params:
-            mass_shift[key.removeprefix("mass_")] = params[key]
-    return params | {"mass_shift": mass_shift}
+    # Flatten params and task_data
+    result = params | task_data
+
+    # Build mass_shift from combined data
+    mass_shift = {
+        key.removeprefix("mass_"): result[key]
+        for key in ["mass_original", "mass_updated", "milc_mass"]
+        if key in result
+    }
+
+    return params | task_data | {"_tasks": {}, "mass_shift": mass_shift}
 
 
 def build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.Any]:

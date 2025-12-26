@@ -49,7 +49,13 @@ def get_job_params(
 
 def get_task_params(
     job_step: str, yaml_params: t.Dict[str, t.Any], defaults: t.Dict[str, t.Any] | None
-) -> t.Dict[str, t.Any]:
+) -> t.Tuple[t.Dict[str, t.Any], t.Dict[str, t.Any]]:
+    """
+    Returns:
+        (global_params, task_configs)
+        - global_params: Flattened parameter hierarchy for overrides
+        - task_configs: Unflattened task configuration structure
+    """
     if defaults is None:
         defaults = {}
 
@@ -57,7 +63,8 @@ def get_task_params(
 
     job_type = job_params["job_type"]
 
-    task_params = (
+    # Build flattened global params (WITHOUT tasks)
+    global_params = (
         defaults
         |
         # Load common shared parameters (legacy)
@@ -71,11 +78,12 @@ def get_task_params(
         |
         # Load job-specific overrides
         job_params.get("params", {})
-        |
-        # Load task-specific parameters
-        job_params.get("tasks", {})
     )
-    return task_params
+
+    # Keep task configs separate
+    task_configs = job_params.get("tasks", {})
+
+    return global_params, task_configs
 
 
 def create_task(
@@ -95,7 +103,8 @@ def create_task(
     if cfg:
         param_defaults["cfg"] = cfg
 
-    task_params = get_task_params(job_step, yaml_params, defaults=param_defaults)
+    # Get separated params
+    global_params, task_configs = get_task_params(job_step, yaml_params, defaults=param_defaults)
 
     job_type, task_type = map(
         get_job_params(job_step, yaml_params).get, ["job_type", "task_type"]
@@ -107,9 +116,13 @@ def create_task(
     config_type = handler.get_config_type()
 
     file_params = yaml_params.get("files", {})
+
+    # Merge task_configs into global_params under '_tasks' key
+    config_params = global_params | {"_tasks": task_configs}
+
     handler.config = build_config(
         config_type,
-        task_params,
+        config_params,
         file_params,
         get_handler=lambda x: get_task_handler(config=x),
     )

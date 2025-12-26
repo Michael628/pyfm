@@ -2,7 +2,6 @@ import sys
 import os
 import subprocess
 
-
 import typing as t
 from pyfm import utils
 import pandas as pd
@@ -40,6 +39,8 @@ def audit_outfiles(
     logger = utils.get_logger()
 
     df = get_outfiles(job_step, yaml_data, series, cfg)
+    MAX_FILES = 5
+    output_count = 0
 
     if df is not None:
         for i, row in df.iterrows():
@@ -49,7 +50,12 @@ def audit_outfiles(
                 logger.info(f"File {row['filepath']} is not complete")
             elif verbose:
                 logger.info(f"File {row['filepath']} is complete")
-            elif i >= 5:
+            else:
+                continue
+
+            output_count += 1
+
+            if output_count >= MAX_FILES:
                 logger.info("...")
                 break
     else:

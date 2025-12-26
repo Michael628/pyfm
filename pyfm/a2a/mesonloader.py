@@ -129,68 +129,6 @@ def load_meson(
     wmax_index: int | None,
     time: slice = slice(None),
 ) -> xp.ndarray:
-    """
-    Load meson field data from an HDF5 file with optional mass shifting.
-
-    This function reads a 3-dimensional meson field array from an HDF5 file,
-    applying time slicing and optional mass shifting. The data is automatically
-    promoted from single to double precision for numerical accuracy in
-    subsequent calculations.
-
-    Parameters
-    ----------
-    file : str
-        Path to the HDF5 file containing meson field data.
-        The file should contain a group with an 'a2aMatrix' dataset.
-    meson_config : MesonLoaderConfig
-        Configuration containing mass shift and file parameters.
-    vmax_index : int | None
-        Maximum v-index to load (None = load all).
-    wmax_index : int | None
-        Maximum w-index to load (None = load all).
-    time : slice, optional, default=slice(None)
-        Time slice object specifying which time slices to load.
-        Default loads all available time slices.
-
-    Returns
-    -------
-    xp.ndarray
-        3-dimensional complex array with shape (time, w_index, v_index).
-        Data type is complex128 (double precision complex).
-        The array contains the meson field data for the specified time range.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the specified HDF5 file cannot be found or opened.
-    KeyError
-        If the expected 'a2aMatrix' dataset is not found in the file.
-    ValueError
-        If the data cannot be properly converted or shaped.
-
-    Notes
-    -----
-    - Input data is assumed to be single precision complex (complex64)
-    - Output is promoted to double precision complex (complex128)
-    - Time slicing is applied first, followed by w/v index slicing
-    - If mass_shift is configured, mass shifting is applied after loading
-    - Loading time is logged at debug level for performance monitoring
-    - The method handles the HDF5 file structure automatically
-
-    Performance Notes
-    -----------------
-    - Loading time is measured and logged for performance analysis
-    - Memory usage scales with the size of the requested time slice
-    - For GPU backends, data is loaded directly to GPU memory when possible
-
-    File Format Requirements
-    ------------------------
-    The HDF5 file should have the following structure:
-    - Root level contains one or more groups
-    - Each group contains an 'a2aMatrix' dataset
-    - The dataset should have shape (time, w_max, v_max)
-    - Data should be stored as complex64 (single precision complex)
-    """
     t1 = perf_counter()
 
     with h5py.File(file, "r") as f:
