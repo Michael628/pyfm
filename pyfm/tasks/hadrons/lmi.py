@@ -4,7 +4,7 @@ import pandas as pd
 from pydantic.dataclasses import dataclass
 from dataclasses import replace
 
-
+from pyfm import utils
 from pyfm.tasks.hadrons.types import HadronsInput
 from pyfm.domain import CompositeConfig
 from pyfm.tasks.register import register_task
@@ -25,17 +25,17 @@ class LMIConfig(CompositeConfig):
 
     key: t.ClassVar[str] = "hadrons_lmi"
 
+    def __post_init__(self):
+        for k, skip in [
+            (k, getattr(self, f"skip_{k}")) for k in ["meson", "high_modes", "epack"]
+        ]:
+            if skip:
+                utils.get_logger().debug(f"Skipping {k} step")
 
-def __post_init__(self):
-    logger = utils.get_logger()
-    for k, skip in [
-        (k, getattr(self, f"skip_{k}")) for k in ["meson", "high_modes", "epack"]
-    ]:
-        if skip:
-            logger.debug(f"Skipping {k} step")
-
-    if self.skip_epack and not self.skip_meson:
-        raise ValueError("Epack parameters must be set to perform meson calculation")
+        if self.skip_epack and not self.skip_meson:
+            raise ValueError(
+                "Epack parameters must be set to perform meson calculation"
+            )
 
 
 def preprocess_params(params: t.Dict) -> t.Dict:

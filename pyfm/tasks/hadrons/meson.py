@@ -2,6 +2,7 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 from pydantic.dataclasses import dataclass
+from dataclasses import fields
 
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods

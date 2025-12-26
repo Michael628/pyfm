@@ -22,7 +22,8 @@ def preprocess_params(params: t.Dict) -> t.Dict:
             raise ValueError(f"Diagram {d} not found in diagram_params")
 
     return params | {
-        "diagrams": {k: v for k, v in diagram_params.items() if k in diagrams}
+        "_tasks": {},
+        "diagrams": {k: v for k, v in diagram_params.items() if k in diagrams},
     }
 
 
@@ -60,8 +61,8 @@ def create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
 # Register ContractConfig as the config for 'contract' task type
 register_task(
     ContractConfig,
-    build_input_params=build_input_params,
-    build_aggregator_params=build_aggregator_params,
-    create_outfile_catalog=create_outfile_catalog,
-    preprocess_params=preprocess_params,
+    build_input_params,
+    build_aggregator_params,
+    create_outfile_catalog,
+    preprocess_params,
 )

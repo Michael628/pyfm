@@ -37,18 +37,18 @@ def preprocess_params(params: t.Dict) -> t.Dict:
     mesons = params.get("mesons", [])
     if not isinstance(mesons, list):
         mesons = [mesons]
-    for m in mesons:
-        new_meson = freeze(m)
-        if "mass" in m:
-            new_meson = new_meson.remove("mass").update({"mass_original": m["mass"]})
-        if "new_mass" in m:
-            new_meson = new_meson.remove("new_mass").update(
-                {"mass_updated": m["new_mass"]}
-            )
+    new_mesons = [
+        thaw(
+            freeze(m)
+            .discard("mass")
+            .discard("new_mass")
+            .update({"mass_original": m["mass"]} if "mass" in m else {})
+            .update({"mass_updated": m["new_mass"]} if "new_mass" in m else {})
+        )
+        for m in mesons
+    ]
 
-        new_mesons.append(thaw(new_meson))
-
-    return params | {"mesons": new_mesons}
+    return result | {"mesons": new_mesons}
 
 
 def build_aggregator_params(config: DiagramConfig, average: bool) -> t.Dict:

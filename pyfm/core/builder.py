@@ -48,7 +48,12 @@ def build_config(
 
         subconfigs = {}
         for subconfig_label, field in config_type.get_subconfigs().items():
+
+            # Remove "_config" suffix to get clean key
             subconfig_key = subconfig_label.removesuffix("_config")
+
+            # Preprocess for subconfig
+            processed_sub_params = preproc_fn(processed_params, subconfig_key)
 
             match field.container:
                 case field.container.SIMPLE:
