@@ -1,7 +1,6 @@
 """Main execution logic for A2A contractions."""
 
 import itertools
-import logging
 import os
 import pickle
 import typing as t
@@ -27,12 +26,17 @@ def execute(
     contract_config: ContractConfig,
 ):
     """Execute the appropriate contraction based on diagram configuration."""
+    logger = utils.get_logger()
     if hasattr(xp, "cuda"):
         my_device = contract_config.rank % xp.cuda.runtime.getDeviceCount()
-        logging.debug(f"Rank {contract_config.rank} is using gpu device {my_device}")
+        logger.debug(f"Rank {contract_config.rank} is using gpu device {my_device}")
         xp.cuda.Device(my_device).use()
 
-    logging.info(f"Processing mode: {', '.join(contraction)}")
+    logger.debug(
+        f"Rank {contract_config.rank}/{contract_config.comm_size} "
+        f"processing contraction"
+    )
+    logger.info(f"Processing mode: {', '.join(contraction)}")
 
     contraction_types = {
         ContractType.TWOPOINT: lambda: conn_2pt(

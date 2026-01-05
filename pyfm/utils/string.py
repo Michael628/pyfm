@@ -1,7 +1,7 @@
 import typing as t
 from string import Formatter
 from pyrsistent import freeze, thaw
-from pyfm.utils.logging import get_logger
+from .logging import get_logger
 
 
 def format_keys(format_string: str) -> t.List[str]:
