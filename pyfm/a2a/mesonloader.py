@@ -21,7 +21,6 @@ Functions:
     clear_meson_cache: Clear the global cache
 """
 
-import logging
 import typing as t
 from time import perf_counter
 
@@ -32,8 +31,8 @@ try:
 except ImportError:
     import numpy as xp
 
+from pyfm import utils
 from pyfm.a2a.types import DiagramConfig, MesonLoaderConfig
-
 
 _MESON_CACHE: dict[tuple[str, slice], tuple[slice, xp.ndarray]] = {}
 
@@ -45,6 +44,7 @@ def get_meson_cache() -> dict:
 
 def clear_meson_cache() -> None:
     """Clear the global meson matrix cache."""
+    utils.get_logger().debug("Clearing meson cache")
     global _MESON_CACHE
     _MESON_CACHE.clear()
 
@@ -131,6 +131,7 @@ def load_meson(
 ) -> xp.ndarray:
     t1 = perf_counter()
 
+    logger = utils.get_logger()
     with h5py.File(file, "r") as f:
         a_group_key = list(f.keys())[0]
 
@@ -141,14 +142,14 @@ def load_meson(
         )
 
     t2 = perf_counter()
-    logging.debug(f"Loaded array {temp.shape} in {t2 - t1} sec")
+    logger.debug(f"Loaded array {temp.shape} in {t2 - t1} sec")
 
     shift_mass = meson_config.mass_shift.updated is not None
     if shift_mass:
         fact = "2*" if meson_config.mass_shift.milc_mass else ""
         oldmass = meson_config.mass[meson_config.mass_shift.original]
         newmass = meson_config.mass[meson_config.mass_shift.updated]
-        logging.info(f"Shifting mass from {fact}{oldmass:f} to {fact}{newmass:f}")
+        logger.info(f"Shifting mass from {fact}{oldmass:f} to {fact}{newmass:f}")
         meson_mass_alter(temp, meson_config)
 
     return temp
@@ -245,6 +246,7 @@ def iter_meson_fields(
     """
     cache = get_meson_cache()
 
+    logger = utils.get_logger()
     for iter_idx in range(len(times[0])):
         current_times = [times[i][iter_idx] for i in range(len(mesonfiles))]
         result = []
@@ -253,7 +255,7 @@ def iter_meson_fields(
             cache_key = (file, time)
 
             if cache_key in cache:
-                logging.debug(f"Using cached {time} from {file}")
+                logger.debug(f"Using cached {time} from {file}")
                 result.append(cache[cache_key])
                 continue
 
@@ -262,7 +264,7 @@ def iter_meson_fields(
                 if current_times[j] == time and mesonfiles[j] == file:
                     cache_key_j = (mesonfiles[j], current_times[j])
                     if cache_key_j in cache:
-                        logging.debug(f"Found {time} at index {j}")
+                        logger.debug(f"Found {time} at index {j}")
                         result.append(cache[cache_key_j])
                         found = True
                         break
@@ -277,7 +279,7 @@ def iter_meson_fields(
                 wmax_index = get_index_range(w_idx_str, diagram_config)
                 vmax_index = get_index_range(v_idx_str, diagram_config)
 
-                logging.debug(
+                logger.debug(
                     f"Loading {time} from {file} (wmax={wmax_index}, vmax={vmax_index})"
                 )
                 data = load_meson(file, meson_config, vmax_index, wmax_index, time)

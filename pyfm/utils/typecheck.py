@@ -1,6 +1,6 @@
 from typing import TypeVar, Union
 import typing as t
-from pyfm.utils.logging import get_logger
+from .logging import get_logger
 from enum import Enum, auto
 
 
@@ -114,22 +114,16 @@ def iterate_container(
 
 def get_container(item_type) -> ContainerType:
     field_type = extract_non_none_type(item_type)
-    
+
     if list_type := extract_list_type(field_type):
         return ContainerType(
-            container=ContainerType.Types.LIST,
-            name=None,
-            type=list_type
+            container=ContainerType.Types.LIST, name=None, type=list_type
         )
     elif dict_type := extract_dict_value_type(field_type):
         return ContainerType(
-            container=ContainerType.Types.DICT,
-            name=None,
-            type=dict_type
+            container=ContainerType.Types.DICT, name=None, type=dict_type
         )
     else:
         return ContainerType(
-            container=ContainerType.Types.SIMPLE,
-            name=None,
-            type=field_type
+            container=ContainerType.Types.SIMPLE, name=None, type=field_type
         )

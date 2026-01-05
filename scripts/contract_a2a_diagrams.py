@@ -45,6 +45,12 @@ def main():
     utils.set_logging_level(logging_level)
 
     logger = utils.get_logger()
+
+    logger.info(
+        f"Starting A2A contractions with {config.comm_size} MPI rank(s) "
+        f"(current rank: {config.rank}, hardware: {config.hardware})"
+    )
+
     if config.hardware == "cpu":
         import numpy as xp
 

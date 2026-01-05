@@ -1,4 +1,3 @@
-import logging
 import os
 import typing as t
 
@@ -37,9 +36,10 @@ def write(
     """
     fs = os.path.expanduser(filestem)
     repl_keys: t.List[str] = utils.string.format_keys(fs)
+    logger = utils.get_logger()
     if repl_keys:
-        logging.debug(f"df columns: {df.columns}")
-        logging.debug(f"df indices: {df.index.names}")
+        logger.debug(f"df columns: {df.columns}")
+        logger.debug(f"df indices: {df.index.names}")
         assert len(df) != 0
         assert all([k in df.columns for k in repl_keys])
 
@@ -49,7 +49,7 @@ def write(
             repl = dict(zip(repl_keys, repl_vals))
 
             filename = fs.format(**repl)
-            logging.info(f"Writing file: {filename}")
+            logger.info(f"Writing file: {filename}")
 
             if directory := os.path.dirname(filename):
                 os.makedirs(directory, exist_ok=True)
@@ -60,7 +60,7 @@ def write(
 
     else:
         filename = fs
-        logging.info(f"Writing file: {filename}")
+        logger.info(f"Writing file: {filename}")
         if directory := os.path.dirname(filename):
             os.makedirs(directory, exist_ok=True)
 

@@ -5,7 +5,6 @@ import typing as t
 from functools import partial
 import glob
 
-
 from pyfm.utils.string import format_keys
 
 from pyrsistent import freeze, thaw
@@ -14,8 +13,7 @@ import yaml
 from dict2xml import dict2xml as dxml
 import pandas as pd
 
-from pyfm.utils.logging import get_logger
-
+from .logging import get_logger
 
 procFn = t.Callable[[str, t.Any], t.Any]
 

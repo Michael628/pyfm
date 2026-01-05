@@ -1,11 +1,10 @@
-import logging
 import typing as t
 from collections import namedtuple
 import gvar as gv
 import gvar.dataset as ds
 import numpy as np
 import pandas as pd
-from pyfm import a2a
+from pyfm import a2a, utils
 
 ACTION_ORDER = [
     "preprocess_custom",
@@ -157,11 +156,9 @@ def group_apply(
 
     invert : bool, optional
 
-
     Returns
     -------
     pd.DataFrame
-
 
     """
     all_cols = list(df.index.names) + list(df.columns)
@@ -339,15 +336,16 @@ def index(df, _: str, *args) -> pd.DataFrame:
     if not indices:
         return df
 
+    logger = utils.get_logger()
     series_cfg = "series_cfg"
     if "series.cfg" in indices:
         i = indices.index("series.cfg")
         indices[i] = series_cfg
     df.rename_axis(index={"series.cfg": series_cfg}, inplace=True)
     df.rename({"series.cfg": series_cfg}, inplace=True)
-    logging.debug(f"Current df index: {df.index.names}")
-    logging.debug(f"Current df columns: {df.columns}")
-    logging.debug(f"Setting index as {indices}")
+    logger.debug(f"Current df index: {df.index.names}")
+    logger.debug(f"Current df columns: {df.columns}")
+    logger.debug(f"Setting index as {indices}")
 
     build_seriescfg = series_cfg in indices
     build_seriescfg &= series_cfg not in df.index.names
@@ -532,7 +530,9 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
 def call(df, fn_name, data_col, *args, **kwargs):
     fn = globals().get(fn_name, None)
     if callable(fn):
-        logging.debug(f"Calling {fn_name} with args: {args}, kwargs: {kwargs}")
+        utils.get_logger().debug(
+            f"Calling {fn_name} with args: {args}, kwargs: {kwargs}"
+        )
         return fn(df, data_col, *args, **kwargs)
     else:
         raise AttributeError(f"Function '{fn_name}' not found or is not callable.")
