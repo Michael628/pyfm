@@ -67,71 +67,85 @@ def write(
         write_fn(df, fs)
 
 
-def write_dict(df: pd.DataFrame, filestem: str, dict_depth: int) -> None:
-    """
-    Writes a pandas DataFrame to a dictionary file format.
+def write_files(
+    df: pd.DataFrame, filestem: str, *, format: str | None = None, **kwargs
+) -> None:
+    def write_dict(filestem: str, dict_depth: int) -> None:
+        """
+        Writes a pandas DataFrame to a dictionary file format.
 
-    Parameters:
-    df: pd.DataFrame
-        The input pandas DataFrame to be written.
-    filestem: str
-        The base name for the output file.
-    dict_depth: int
-        The depth of the dictionary structure to be created.
+        Parameters:
+        df: pd.DataFrame
+            The input pandas DataFrame to be written.
+        filestem: str
+            The base name for the output file.
+        dict_depth: int
+            The depth of the dictionary structure to be created.
 
-    See frame_to_dict for details on conversion from DataFrame to dictionary.
-    """
+        See frame_to_dict for details on conversion from DataFrame to dictionary.
+        """
 
-    def writeconvert(data, fname):
-        np.save(fname, frame_to_dict(data, dict_depth))
+        def writeconvert(data, fname):
+            np.save(fname, frame_to_dict(data, dict_depth))
 
-    write(df, filestem, write_fn=writeconvert)
+        write(df, filestem, write_fn=writeconvert)
 
+    def write_hdf5(filestem: str) -> None:
+        """
+        Writes a DataFrame to a file with a specified filestem using a custom write function.
 
-def write_hdf5(df: pd.DataFrame, filestem: str) -> None:
-    """
-    Writes a DataFrame to a file with a specified filestem using a custom write function.
+        Parameters:
+        df : pd.DataFrame
+            The DataFrame to be written to a file.
+        filestem : str
+            The base name for the output file.
 
-    Parameters:
-    df : pd.DataFrame
-        The DataFrame to be written to a file.
-    filestem : str
-        The base name for the output file.
+        See write_data for details.
+        """
+        write(
+            df,
+            filestem + ".h5",
+            write_fn=lambda data, fname: data.to_hdf(fname, key="corr", mode="w"),
+        )
 
-    See write_data for details.
-    """
-    write(
-        df,
-        os.path.splitext(filestem)[0] + ".h5",
-        write_fn=lambda data, fname: data.to_hdf(fname, key="corr", mode="w"),
-    )
+    def write_csv(filestem: str) -> None:
+        """
+        Writes a DataFrame to a file with a specified filestem using a custom write function.
 
+        Parameters:
+        df : pd.DataFrame
+            The DataFrame to be written to a file.
+        filestem : str
+            The base name for the output file.
 
-def write_csv(df: pd.DataFrame, filestem: str) -> None:
-    """
-    Writes a DataFrame to a file with a specified filestem using a custom write function.
+        See write_data for details.
+        """
+        write(
+            df,
+            filestem + ".csv",
+            write_fn=lambda data, fname: data.to_csv(fname),
+        )
 
-    Parameters:
-    df : pd.DataFrame
-        The DataFrame to be written to a file.
-    filestem : str
-        The base name for the output file.
+    # Determine output file format from parameter or filestem extension
+    stem, ext = os.path.splitext(filestem)
+    match ext:
+        case ".h5":
+            format = format or "hdf5"
+        case ".csv":
+            format = format or "csv"
+        case ".npy" | ".p":
+            format = format or "dict"
+        case _:
+            if format is None:
+                raise ValueError(
+                    f"No valid format given for writing to file: {filestem}."
+                )
 
-    See write_data for details.
-    """
-    write(
-        df,
-        os.path.splitext(filestem)[0] + ".csv",
-        write_fn=lambda data, fname: data.to_csv(fname),
-    )
-
-
-def write_files(df: pd.DataFrame, format: str, *args, **kwargs) -> None:
     if format == "csv":
-        write_csv(df, *args, **kwargs)
+        write_csv(stem, **kwargs)
     elif format == "hdf5":
-        write_hdf5(df, *args, **kwargs)
+        write_hdf5(stem, **kwargs)
     elif format == "dict":
-        write_dict(df, *args, **kwargs)
+        write_dict(stem, **kwargs)
     else:
         raise NotImplementedError(f"No support for format {format}.")
