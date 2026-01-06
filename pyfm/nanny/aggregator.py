@@ -32,7 +32,9 @@ def aggregate_data(agg_params: t.Dict[str, t.Any], format: str = "csv") -> None:
         keys = utils.io.format_keys(out_files["filestem"])
 
         if "format" in keys:
-            result[key]["format"] = f"{format}"
+            # Add format to dataframe column so that it is picked up by dio.write for file string processing
+            result[key].format = format
+
         if out_files:
             dio.write_files(result[key], format=format, **out_files)
 

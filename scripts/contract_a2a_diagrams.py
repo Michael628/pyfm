@@ -42,9 +42,7 @@ def main():
     )
 
     logging_level = getattr(config, "logging_level", "INFO")
-    utils.set_logging_level(logging_level)
-
-    logger = utils.get_logger()
+    logger = utils.set_logging_level(logging_level)
 
     logger.info(
         f"Starting A2A contractions with {config.comm_size} MPI rank(s) "
@@ -163,7 +161,7 @@ def main():
                     array_labels={o: f"0..{config.time-1}" for o in array_order},
                 )
                 df = data_to_frame(corr, data_config)
-                write_files(df, "hdf5", outfile)
+                write_files(df, outfile, format="hdf5")
                 # pickle.dump(corr, open(outfile, "wb"))
 
 
