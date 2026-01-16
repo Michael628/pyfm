@@ -9,7 +9,7 @@ from pyfm.core.builder import build_config
 from pyfm.tasks import get_task_handler, register_task
 
 
-# TODO: Consolidate layou, and job params into a config object
+# TODO: Consolidate layout, and job params into a config object
 def get_layout_params(
     job_step: str, yaml_params: t.Dict[str, t.Any]
 ) -> t.Dict[str, t.Any]:
@@ -104,7 +104,9 @@ def create_task(
         param_defaults["cfg"] = cfg
 
     # Get separated params
-    global_params, task_configs = get_task_params(job_step, yaml_params, defaults=param_defaults)
+    global_params, task_configs = get_task_params(
+        job_step, yaml_params, defaults=param_defaults
+    )
 
     job_type, task_type = map(
         get_job_params(job_step, yaml_params).get, ["job_type", "task_type"]
@@ -130,6 +132,7 @@ def create_task(
     if isinstance(handler, ConfigPostprocessorProtocol):
         handler.config = handler.postprocess_config()
 
+    # Register a default function for formatting variables found in strings in config parameters
     def format_string(config: ConfigBase, to_format: str) -> str:
         try:
             return config.format_string(to_format)

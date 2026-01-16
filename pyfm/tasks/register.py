@@ -1,5 +1,5 @@
 import typing as t
-from pyfm.domain import HandlerRegistry, ConfigHandler
+from pyfm.domain import HandlerRegistry, ConfigHandler, ConfigPreprocessorProtocol
 
 from pyfm import utils
 
@@ -41,11 +41,22 @@ def get_task_handler(
 
 
 def register_task(config: t.Type, *funcs, **kwfuncs):
+    def default_preprocess_fn(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+        """Default preprocessing function that unwraps _tasks key to overwrite other params."""
+        return params | params.get("_tasks", {})
+
     handler_key = get_task_key(config=config)
 
-    HandlerRegistry.register_config(handler_key, config)
+    handler = HandlerRegistry.register_config(handler_key, config)
+
     if len(funcs) > 0:
         HandlerRegistry.register_functions(handler_key, *funcs)
 
     for method_name, fn in kwfuncs.items():
         HandlerRegistry.register_function(handler_key, fn, method_name)
+
+    # Provide default preprocessing function for tasks if not explicitly defined
+    if not isinstance(handler, ConfigPreprocessorProtocol):
+        HandlerRegistry.register_function(
+            handler_key, default_preprocess_fn, "preprocess_params"
+        )

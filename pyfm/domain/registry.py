@@ -40,7 +40,7 @@ class ConfigHandler:
         if "config" in sig.parameters:
             if "config" != list(sig.parameters.keys())[0]:
                 raise ValueError(
-                    f"First parameter of function {function.__name__} must be 'config'."
+                    f"First parameter of function {name} must be 'config'."
                 )
 
             # Create wrapper that automatically injects self.config
@@ -76,7 +76,7 @@ class HandlerRegistry:
     @classmethod
     def register_function(
         cls, handler_key: str, function: Callable, method_name: Optional[str] = None
-    ):
+    ) -> ConfigHandler:
         if handler_key in cls._handlers:
             handler = cls._handlers[handler_key]
         else:
@@ -85,8 +85,12 @@ class HandlerRegistry:
 
         handler.set_method(function, method_name)
 
+        return handler
+
     @classmethod
-    def register_functions(cls, handler_key: str, *functions: Callable):
+    def register_functions(
+        cls, handler_key: str, *functions: Callable
+    ) -> ConfigHandler:
         if handler_key in cls._handlers:
             handler = cls._handlers[handler_key]
         else:
@@ -96,8 +100,10 @@ class HandlerRegistry:
         for function in functions:
             handler.set_method(function)
 
+        return handler
+
     @classmethod
-    def register_config(cls, handler_key: str, config_type: Any):
+    def register_config(cls, handler_key: str, config_type: Any) -> ConfigHandler:
         if handler_key in cls._handlers:
             handler = cls._handlers[handler_key]
         else:
@@ -105,6 +111,8 @@ class HandlerRegistry:
             cls._handlers[handler_key] = handler
 
         handler._config_type = config_type
+
+        return handler
 
     @classmethod
     def get_handler(cls, handler_key: str) -> ConfigHandler:
