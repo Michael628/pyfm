@@ -2,10 +2,7 @@ import itertools
 import os
 import re
 import typing as t
-from functools import partial
 import glob
-
-from pyfm.utils.string import format_keys
 
 from pyrsistent import freeze, thaw
 
@@ -13,37 +10,11 @@ import yaml
 from dict2xml import dict2xml as dxml
 import pandas as pd
 
+from pyfm.domain import PartialFormatter
+from .string import format_keys
 from .logging import get_logger
 
 procFn = t.Callable[[str, t.Any], t.Any]
-
-
-def preprocess_duplicate_keys(fstring: str, keys_to_check: t.Set[str]) -> str:
-    """
-    Replaces duplicate occurrences of the same formatting key with 'ALL'.
-
-    This prevents regex named group conflicts when a key appears multiple times.
-    For example: '/this/{mass}/corr_{mass}.h5' becomes '/this/{mass}/corr_{ALL}.h5'
-    if 'mass' is in keys_to_check.
-
-    Args:
-        fstring: The format string to preprocess
-        keys_to_check: Set of keys that will be used in regex replacements
-
-    Returns:
-        The preprocessed format string with duplicate occurrences replaced by {ALL}
-    """
-    for key in keys_to_check:
-        pattern = r"\{" + re.escape(key) + r"\}"
-        matches = list(re.finditer(pattern, fstring))
-
-        if len(matches) > 1:
-            # Replace all but the first occurrence with {ALL}
-            # Do this in reverse order to preserve string positions
-            for match in reversed(matches[1:]):
-                fstring = fstring[: match.start()] + "{ALL}" + fstring[match.end() :]
-
-    return fstring
 
 
 def process_files(
@@ -53,14 +24,13 @@ def process_files(
     regex: t.Dict | None = None,
     wildcard_fill: bool = False,
 ) -> t.List:
-    def file_regex_gen(filestem: partial, regex: t.Dict[str, str]):
+    def file_regex_gen(fstring: str, regex: t.Dict | None, missing_keys: t.Set[str]):
         """
         Generates file paths by formatting a filestem with regex replacements
         and searching for matching files in the system.
 
         Args:
-            filestem (partial): A partial function that generates file paths
-                with placeholders for regex replacements.
+            fstring : file paths with placeholders for regex replacements.
             regex (Dict[str, str]): A dictionary where keys are placeholder names
                 in the filestem, and values are regex patterns to match.
 
@@ -70,40 +40,52 @@ def process_files(
                 - The full path of the file that matched the regex search.
 
         Notes:
-            - If `regex` is empty, the function yields the result of `filestem()`
+            - If `regex` is empty, the function yields the result of `fstring_fn()`
             without any replacements.
             - Assumes all regex matches occur in the file name, not in the directory path.
         """
-        if len(regex) == 0:
-            yield {}, filestem()
-        else:
-            glob_repl = {k: "*" for k in regex.keys()}
+        fstring_keys: t.List[str] = format_keys(filestem)
+        regex = {k: v for k, v in regex.items() if k in fstring_keys} if regex else {}
 
-            # Fill in ALL placeholder (from duplicate key preprocessing)
-            glob_repl["ALL"] = "*"
+        if len(missing_keys) > 0:
+            if wildcard_fill:
+                get_logger().info(
+                    f"Adding wildcards to keys in replacements: {', '.join(sorted(missing_keys))}"
+                )
+                for k in missing_keys:
+                    regex[k] = ".*?"
+            else:
+                raise ValueError(f"Missing keys {', '.join(sorted(missing_keys))}")
 
-            files = glob.glob(filestem(**glob_repl))
+        if not regex:
+            yield {}, fstring_fn()
+            return
 
-            # Build regex objects to catch each replacement
-            regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
+        glob_repl = {k: "*" for k in regex.keys()}
 
-            # Fill in ALL placeholder (from duplicate key preprocessing)
-            regex_repl["ALL"] = ".*"
+        # Fill in ALL placeholder (from duplicate key preprocessing)
+        glob_repl["ALL"] = "*"
 
-            file_pattern = filestem(**regex_repl)
-            pattern_parser: re.Pattern = re.compile(file_pattern)
+        files = glob.glob(fstring_fn(**glob_repl))
 
-            for file in files:
-                try:
-                    regex_repl = freeze(next(pattern_parser.finditer(file)).groupdict())
-                except StopIteration:
-                    continue
+        # Build regex objects to catch each replacement
+        regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
 
-                yield regex_repl, file
+        # Fill in ALL placeholder (from duplicate key preprocessing)
+        regex_repl["ALL"] = ".*"
 
-    def string_replacement_gen(
-        fstring: str, replacements: t.Dict[str, t.Union[str, t.List[str]]]
-    ):
+        file_pattern = fstring_fn(**regex_repl)
+        pattern_parser: re.Pattern = re.compile(file_pattern)
+
+        for file in files:
+            try:
+                repl = freeze(next(pattern_parser.finditer(file)).groupdict())
+            except StopIteration:
+                continue
+
+            yield repl, file
+
+    def string_replacement_gen(fstring: str, replacements: t.Dict | None):
         """
         Generator for keyword replacements in a formatted string.
 
@@ -114,11 +96,9 @@ def process_files(
                 a single replacement string or a list of replacement strings.
 
         Yields:
-            Tuple[Dict[str, str], functools.partial]:
+            Tuple[Dict[str, str], str]:
                 - A dictionary of replacements applied to the format string.
-                - A `functools.partial` object representing the partially formatted
-                string. Calling this object will return the final string if no
-                further replacements are needed.
+                - A string representing the partially formatted file path.
 
         Notes:
             - If `replacements` is empty, the function yields the original format
@@ -127,50 +107,58 @@ def process_files(
             partially formatted string.
         """
 
-        if len(replacements) == 0:
-            yield freeze({}), partial(fstring.format)
-        else:
-            keys, repls = zip(
-                *(
-                    (k, map(str, r)) if isinstance(r, t.List) else (k, [str(r)])
-                    for k, r in replacements.items()
-                )
+        # Preprocess `fstring` to handle duplicate keys in regex replacements
+        fstring_keys: t.List[str] = format_keys(fstring)
+        for key in fstring_keys:
+            pattern = r"\{" + re.escape(key) + r"\}"
+            matches = list(re.finditer(pattern, fstring))
+
+            if len(matches) > 1:
+                # Replace all but the first occurrence with {ALL}
+                # Do this in reverse order to preserve string positions
+                for match in reversed(matches[1:]):
+                    fstring = (
+                        fstring[: match.start()] + "{ALL}" + fstring[match.end() :]
+                    )
+
+        if not replacements:
+            yield freeze({}), fstring
+            return
+
+        replacements = {k: v for k, v in replacements.items() if k in fstring_keys}
+        keys, repls = zip(
+            *(
+                (k, map(str, r)) if isinstance(r, t.List) else (k, [str(r)])
+                for k, r in replacements.items()
             )
+        )
 
-            for r in itertools.product(*repls):
-                repl = freeze(dict(zip(keys, r)))
-                string_repl: partial = partial(fstring.format, **repl)
+        for r in itertools.product(*repls):
+            repl = freeze(dict(zip(keys, r)))
+            repl_formatted_fstring = fstring.format_map(PartialFormatter(repl))
 
-                yield repl, string_repl
+            yield repl, repl_formatted_fstring
 
-    repl_keys: t.List[str] = format_keys(filestem)
-
-    str_repl: t.Dict = replacements if replacements else {}
-    regex_repl: t.Dict = regex if regex else {}
+    fstring_keys: t.List[str] = format_keys(filestem)
 
     logger = get_logger()
-    logger.debug(f"repl_keys: {sorted(repl_keys)}")
-    logger.debug(f"str_repl keys: {sorted(str_repl.keys())}")
-    logger.debug(f"regex_repl keys: {sorted(regex_repl.keys())}")
-    missing_keys = set(repl_keys) - set(str_repl.keys()) - set(regex_repl.keys())
-    if len(missing_keys) > 0:
-        if wildcard_fill:
-            logger.info(
-                f"Adding wildcards to keys in replacements: {', '.join(sorted(missing_keys))}"
-            )
-            for k in missing_keys:
-                regex_repl[k] = ".*?"
-        else:
-            raise ValueError(f"Missing keys {', '.join(sorted(missing_keys))}")
+    logger.debug(f"fstring_keys: {sorted(fstring_keys)}")
+    missing_keys = set(fstring_keys)
+    if replacements:
+        logger.debug(f"replacement keys: {sorted(replacements.keys())}")
+        missing_keys -= set(replacements.keys())
+    if regex:
+        logger.debug(f"regex keys: {sorted(regex.keys())}")
+        missing_keys -= set(regex.keys())
 
     collection: t.List = []
 
     def file_gen():
         fs = os.path.expanduser(filestem)
-        # Preprocess to handle duplicate keys in regex replacements
-        fs = preprocess_duplicate_keys(fs, set(regex_repl.keys()))
-        for str_reps, repl_filename in string_replacement_gen(fs, str_repl):
-            for reg_reps, regex_filename in file_regex_gen(repl_filename, regex_repl):
+        for str_reps, repl_filename in string_replacement_gen(fs, replacements):
+            for reg_reps, regex_filename in file_regex_gen(
+                repl_filename, regex, missing_keys
+            ):
                 yield regex_filename, thaw(str_reps.update(reg_reps))
 
     for filename, reps in file_gen():
@@ -192,6 +180,18 @@ def load_param(file):
     param = yaml.safe_load(open(file, "r"))
 
     return param
+
+
+def get_file_ext_from_format(format: str) -> str:
+    match format:
+        case "hdf5":
+            return ".h5"
+        case "csv":
+            return ".csv"
+        case "dict":
+            return ".npy"
+        case _:
+            raise ValueError(f"Invalid format option: {format}.")
 
 
 def write_plain_text(file_stem: str, contents: str, ext: str | None = None) -> str:
@@ -263,9 +263,9 @@ def catalog_files(
             processor=add_filepath,
             replacements={k: v for k, v in replacements.items() if k in filekeys},
         )
-        dict_of_rows = {
-            k: [file[k] for file in files] for k in files[0] if len(files) > 0
-        }
+        if len(files) == 0:
+            raise ValueError("Catalog Files: No files provided by outfile generator.")
+        dict_of_rows = {k: [file[k] for file in files] for k in files[0]}
 
         new_df = pd.DataFrame(dict_of_rows)
         new_df["good_size"] = outfile_config.good_size

@@ -17,6 +17,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "-f", "--format", type=str, default="csv", help="Output file format"
     )
+
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip data already in existing aggregated file",
+    )
     parser.add_argument(
         "--logging-level", type=str, default="INFO", help="Set logging level"
     )
@@ -34,5 +40,9 @@ if __name__ == "__main__":
     utils.set_logging_level(args.logging_level)
 
     aggregator.aggregate_task_data(
-        args.job, params, format=args.format, average=args.average
+        args.job,
+        params,
+        format=args.format,
+        average=args.average,
+        skip_existing=args.skip_existing,
     )

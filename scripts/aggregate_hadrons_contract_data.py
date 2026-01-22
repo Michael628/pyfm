@@ -74,4 +74,5 @@ if __name__ == "__main__":
         },
     }
 
-    aggregator.aggregate_data(agg_params, format=args.format)
+    result = aggregator.load_data(agg_params, args.format)
+    aggregator.process_data(result, agg_params, args.format)
