@@ -323,7 +323,7 @@ def drop(df, _: str, *args):
         elif key in df.columns:
             _ = df.pop(key)
         else:
-            raise ValueError(f"Drop Failed - No index or column `{key}` found.")
+            utils.get_logger().debug(f'Drop request skipped. Key not found: {key}')
     return df
 
 
