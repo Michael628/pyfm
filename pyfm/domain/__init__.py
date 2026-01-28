@@ -1,4 +1,4 @@
-from pyfm.domain.buildertypes import ConfigBuilder, PartialFormatter
+from pyfm.domain.buildertypes import ConfigBuilder
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig
 from pyfm.domain.registry import HandlerRegistry, ConfigHandler
 from pyfm.domain.outfiles import Outfile
@@ -14,7 +14,6 @@ from pyfm.domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
 
 __all__ = [
     "ConfigBuilder",
-    "PartialFormatter",
     "ConfigBase",
     "SimpleConfig",
     "CompositeConfig",
