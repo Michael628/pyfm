@@ -63,6 +63,7 @@ class HighModeConfig(SimpleConfig):
     dt: int
     noise: int
     time: int
+    cross_terms: bool = True
     shift_gauge_name: str | None = None
     skip_low_modes: bool = False
     skip_cg: bool = False

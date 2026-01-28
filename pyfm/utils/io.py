@@ -23,7 +23,7 @@ def process_files(
     regex: t.Dict | None = None,
     wildcard_fill: bool = False,
 ) -> t.List:
-    def file_regex_gen(fstring: str, regex: t.Dict | None, missing_keys: t.Set[str]):
+    def file_regex_gen(fstring: str, regex: t.Dict | None):
         """
         Generates file paths by formatting a filestem with regex replacements
         and searching for matching files in the system.
@@ -38,9 +38,25 @@ def process_files(
                 - A dictionary of matched values corresponding to the regex patterns.
                 - The full path of the file that matched the regex search.
         """
-        fstring_keys: t.List[str] = format_keys(filestem)
+        fstring_keys: t.List[str] = format_keys(fstring)
         regex = {k: v for k, v in regex.items() if k in fstring_keys} if regex else {}
 
+        for key in fstring_keys:
+            pattern = r"\{" + re.escape(key) + r"\}"
+            matches = list(re.finditer(pattern, fstring))
+
+            if len(matches) > 1:
+                # Replace all but the first occurrence with {ALL}
+                # Do this in reverse order to preserve string positions
+                for match in reversed(matches[1:]):
+                    fstring = (
+                        fstring[: match.start()] + "{ALL}" + fstring[match.end() :]
+                    )
+
+                if "ALL" not in regex:
+                    regex["ALL"] = ".*"
+
+        missing_keys = [k for k in fstring_keys if k not in regex.keys()]
         if len(missing_keys) > 0:
             if wildcard_fill:
                 get_logger().info(
@@ -57,18 +73,12 @@ def process_files(
 
         glob_repl = {k: "*" for k in regex.keys()}
 
-        # Fill in ALL placeholder (from duplicate key preprocessing)
-        glob_repl["ALL"] = "*"
-
         files = glob.glob(fstring.format_map(glob_repl))
 
         # Build regex objects to catch each replacement
-        regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
+        regex.update({k: f"(?P<{k}>{val})" for k, val in regex.items() if k != "ALL"})
 
-        # Fill in ALL placeholder (from duplicate key preprocessing)
-        regex_repl["ALL"] = ".*"
-
-        file_pattern = fstring.format_map(regex_repl)
+        file_pattern = fstring.format_map(regex)
         pattern_parser: re.Pattern = re.compile(file_pattern)
 
         for file in files:
@@ -103,18 +113,6 @@ def process_files(
 
         # Preprocess `fstring` to handle duplicate keys in regex replacements
         fstring_keys: t.List[str] = format_keys(fstring)
-        for key in fstring_keys:
-            pattern = r"\{" + re.escape(key) + r"\}"
-            matches = list(re.finditer(pattern, fstring))
-
-            if len(matches) > 1:
-                # Replace all but the first occurrence with {ALL}
-                # Do this in reverse order to preserve string positions
-                for match in reversed(matches[1:]):
-                    fstring = (
-                        fstring[: match.start()] + "{ALL}" + fstring[match.end() :]
-                    )
-
         if not replacements:
             yield freeze({}), fstring
             return
@@ -150,9 +148,7 @@ def process_files(
     def file_gen():
         fs = os.path.expanduser(filestem)
         for str_reps, repl_filename in string_replacement_gen(fs, replacements):
-            for reg_reps, regex_filename in file_regex_gen(
-                repl_filename, regex, missing_keys
-            ):
+            for reg_reps, regex_filename in file_regex_gen(repl_filename, regex):
                 yield regex_filename, thaw(str_reps.update(reg_reps))
 
     for filename, reps in file_gen():
