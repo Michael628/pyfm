@@ -110,6 +110,10 @@ def build_contractions(
         ):
             if m1label < m2label:
                 continue
+
+            if not config.cross_terms and m1label != m2label:
+                continue
+
             quark = f"quark_{slabel}_{glabel}_mass_{m1label}_t{tsource}"
             antiquark = f"quark_{slabel}_{antiquark_glabel}_mass_{m2label}_t{tsource}"
             m1out = config.mass.to_string(m1label, True)
