@@ -2,7 +2,7 @@ import typing as t
 from pyrsistent import freeze, thaw
 
 from pyfm.a2a.types import DiagramConfig
-from pyfm.domain import PartialFormatter
+from pyfm.utils.string import PartialFormatter
 
 from pyfm import utils
 

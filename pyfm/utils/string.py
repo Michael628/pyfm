@@ -4,6 +4,22 @@ from pyrsistent import freeze, thaw
 from .logging import get_logger
 
 
+class PartialFormatter(dict):
+    """Dictionary subclass for partial string formatting.
+
+    Used with str.format_map() to allow partial string formatting where missing
+    keys are left as literal placeholders instead of raising KeyError.
+
+    Example:
+        >>> template = "Hello {name}, you are {age} years old"
+        >>> formatter = PartialFormatter(name="Alice")
+        >>> template.format_map(formatter)
+        "Hello Alice, you are {age} years old"
+    """
+    def __missing__(self, key):
+        return "{" + key + "}"
+
+
 def format_keys(format_string: str) -> t.List[str]:
     """
     Extract formatting variables from a given format string.

@@ -10,8 +10,7 @@ import yaml
 from dict2xml import dict2xml as dxml
 import pandas as pd
 
-from pyfm.domain import PartialFormatter
-from .string import format_keys
+from .string import format_keys, PartialFormatter
 from .logging import get_logger
 
 procFn = t.Callable[[str, t.Any], t.Any]
@@ -38,11 +37,6 @@ def process_files(
             Tuple[Dict[str, str], str]:
                 - A dictionary of matched values corresponding to the regex patterns.
                 - The full path of the file that matched the regex search.
-
-        Notes:
-            - If `regex` is empty, the function yields the result of `fstring_fn()`
-            without any replacements.
-            - Assumes all regex matches occur in the file name, not in the directory path.
         """
         fstring_keys: t.List[str] = format_keys(filestem)
         regex = {k: v for k, v in regex.items() if k in fstring_keys} if regex else {}
@@ -58,7 +52,7 @@ def process_files(
                 raise ValueError(f"Missing keys {', '.join(sorted(missing_keys))}")
 
         if not regex:
-            yield {}, fstring_fn()
+            yield {}, fstring
             return
 
         glob_repl = {k: "*" for k in regex.keys()}
@@ -66,7 +60,7 @@ def process_files(
         # Fill in ALL placeholder (from duplicate key preprocessing)
         glob_repl["ALL"] = "*"
 
-        files = glob.glob(fstring_fn(**glob_repl))
+        files = glob.glob(fstring.format_map(glob_repl))
 
         # Build regex objects to catch each replacement
         regex_repl = {k: f"(?P<{k}>{val})" for k, val in regex.items()}
@@ -74,7 +68,7 @@ def process_files(
         # Fill in ALL placeholder (from duplicate key preprocessing)
         regex_repl["ALL"] = ".*"
 
-        file_pattern = fstring_fn(**regex_repl)
+        file_pattern = fstring.format_map(regex_repl)
         pattern_parser: re.Pattern = re.compile(file_pattern)
 
         for file in files:

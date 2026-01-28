@@ -1,6 +1,6 @@
 import typing as t
 
-from pyfm.domain import PartialFormatter
+from pyfm.utils.string import PartialFormatter
 from pyfm.a2a.types import MesonLoaderConfig
 
 from pyfm.tasks.register import register_task

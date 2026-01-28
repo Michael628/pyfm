@@ -5,13 +5,9 @@ from pyfm.domain.outfiles import Outfile
 from pyfm.domain.protocols import FromDictProtocol, FormattableProtocol
 from pyfm.domain.conftypes import ConfigBase
 from pyfm import utils
+from pyfm.utils.string import PartialFormatter
 
 StringableTypes = t.Union[str, int, float, bool]
-
-
-class PartialFormatter(dict):
-    def __missing__(self, key):
-        return "{" + key + "}"
 
 
 class ConfigBuilder:
