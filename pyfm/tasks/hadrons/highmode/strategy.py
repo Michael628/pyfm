@@ -272,3 +272,15 @@ def build_aggregator_params(
     agg_params = agg_params.set("run", run_list)
 
     return dict(thaw(agg_params))
+
+
+def validate_config(config: HighModeConfig) -> None:
+    """Validate HighModeConfig after construction and postprocessing.
+
+    Validates that if non-local operators are used, shift_gauge_name must be set.
+    """
+    has_nonlocal_ops = any([not op.gamma.local for op in config.operations.op_list])
+    if has_nonlocal_ops and config.shift_gauge_name is None:
+        raise ValueError(
+            "Non-local operators detected, but shift_gauge_name is not set."
+        )

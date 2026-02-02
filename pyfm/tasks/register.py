@@ -1,5 +1,10 @@
 import typing as t
-from pyfm.domain import HandlerRegistry, ConfigHandler, ConfigPreprocessorProtocol
+from pyfm.domain import (
+    HandlerRegistry,
+    ConfigHandler,
+    ConfigPreprocessorProtocol,
+    TaskHandlerProtocol,
+)
 
 from pyfm import utils
 
@@ -30,11 +35,21 @@ def get_task_handler(
     job_type: str | None = None,
     task_type: str | None = None,
     config: t.Type | None = None,
+    strict: bool = True,
 ) -> ConfigHandler | None:
     handler_key = get_task_key(job_type, task_type, config)
 
     try:
-        return HandlerRegistry.get_handler(handler_key)
+        handler = HandlerRegistry.get_handler(handler_key)
+        # Enforce that only complete, standalone handlers are returned
+        if strict and not isinstance(handler, TaskHandlerProtocol):
+            raise ValueError(
+                f"Handler '{handler_key}' does not satisfy TaskHandlerProtocol. "
+                f"It is not a complete, standalone handler and cannot be used directly. "
+                f"It may be missing required build_input_params, create_outfile_catalog, "
+                f"or format_string methods."
+            )
+        return handler
     except ValueError as e:
         utils.get_logger().debug(str(e))
         return None

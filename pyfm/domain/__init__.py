@@ -7,6 +7,8 @@ from pyfm.domain.protocols import (
     FormattableProtocol,
     ConfigPreprocessorProtocol,
     ConfigPostprocessorProtocol,
+    ConfigValidatorProtocol,
+    TaskHandlerProtocol,
 )
 from pyfm.domain.ops import Gamma, OpList, MassDict
 from pyfm.domain.datapipe import DataPipe, WrappedDataPipe
@@ -24,6 +26,8 @@ __all__ = [
     "FormattableProtocol",
     "ConfigPreprocessorProtocol",
     "ConfigPostprocessorProtocol",
+    "ConfigValidatorProtocol",
+    "TaskHandlerProtocol",
     "MassDict",
     "Gamma",
     "OpList",

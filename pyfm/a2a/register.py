@@ -19,7 +19,6 @@ def get_a2a_key(config: t.Type) -> str | None:
 
 def get_a2a_handler(config: t.Type) -> ConfigHandler:
     handler_key = get_a2a_key(config=config)
-
     try:
         return HandlerRegistry.get_handler(handler_key)
     except ValueError:

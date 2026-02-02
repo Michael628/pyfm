@@ -3,7 +3,6 @@ import typing as t
 from pyfm.domain import (
     ConfigBase,
     ConfigHandler,
-    ConfigPostprocessorProtocol,
 )
 from pyfm.core.builder import build_config
 from pyfm.tasks import get_task_handler, register_task
@@ -129,11 +128,8 @@ def create_task(
         config_type,
         config_params,
         file_params,
-        get_handler=lambda x: get_task_handler(config=x),
+        get_handler=lambda x: get_task_handler(config=x, strict=False),
     )
-
-    if isinstance(handler, ConfigPostprocessorProtocol):
-        handler.config = handler.postprocess_config()
 
     # Register a default function for formatting variables found in strings in config parameters
     def format_string(config: ConfigBase, to_format: str) -> str:

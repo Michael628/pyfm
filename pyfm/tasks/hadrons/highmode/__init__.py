@@ -5,6 +5,7 @@ from pyfm.tasks.hadrons.highmode.strategy import (
     create_outfile_catalog,
     build_aggregator_params,
     preprocess_params,
+    validate_config,
 )
 
 from pyfm.tasks.register import register_task
@@ -25,6 +26,7 @@ __all__ = [
     "create_outfile_catalog",
     "build_aggregator_params",
     "preprocess_params",
+    "validate_config",
 ]
 
 # Register HighModeConfig as the config for 'hadrons_high_modes' task type

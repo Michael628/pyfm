@@ -30,3 +30,35 @@ class ConfigPostprocessorProtocol(t.Protocol):
     def postprocess_config(self) -> "ConfigPostProcessorProtocol":
         """Perform any necessary modifications to subconfigs after they have been built."""
         ...
+
+
+@t.runtime_checkable
+class ConfigValidatorProtocol(t.Protocol):
+    def validate(self) -> None:
+        """Validate config after construction and postprocessing.
+
+        This method is called as the final phase of config building, after all
+        postprocessing has been applied. The validator function receives the config
+        as the first parameter (auto-injected by ConfigHandler) and should raise
+        exceptions if validation fails.
+        """
+        ...
+
+
+@t.runtime_checkable
+class TaskHandlerProtocol(t.Protocol):
+    """A handler that can independently generate inputs for external programs.
+
+    Any handler satisfying this protocol is complete and standalone.
+    External code (scripts, CLI tools) should only use handlers satisfying this.
+
+    Requires build_input_params, and create_outfile_catalog.
+    """
+
+    def build_input_params(self, config) -> t.Any:
+        """Generate complete input with no external dependencies."""
+        ...
+
+    def create_outfile_catalog(self, config) -> t.Any:
+        """List expected output files."""
+        ...

@@ -7,6 +7,8 @@ from pyfm.domain import (
     SimpleConfig,
     HandlerRegistry,
     ConfigHandler,
+    ConfigPostprocessorProtocol,
+    ConfigValidatorProtocol,
 )
 
 from pyfm import utils
@@ -18,7 +20,14 @@ def build_config(
     file_params: t.Dict[str, t.Any] | None = None,
     get_handler: t.Callable[[None], ConfigHandler] | None = None,
 ) -> ConfigBase:
-    """Build a configuration object from input parameters."""
+    """Build a configuration object from input parameters.
+
+    Execution phases:
+    1. Preprocessing: Call preprocess_params if handler provides it
+    2. Construction: Build config recursively (subconfigs built first)
+    3. Postprocessing: Call postprocess_config if handler provides it
+    4. Validation: Call validate if config implements ValidatableConfig
+    """
 
     if file_params is None:
         file_params = {}
@@ -30,6 +39,24 @@ def build_config(
                 return handler.preprocess_params(par)
         return par
 
+    def postproc_and_validate(config: ConfigBase) -> ConfigBase:
+        """Apply postprocessing and validation to a built config."""
+        if get_handler is None:
+            return config
+
+        handler = get_handler(config_type)
+        handler.config = config
+
+        # Phase 3: Postprocessing
+        if isinstance(handler, ConfigPostprocessorProtocol):
+            handler.config = handler.postprocess_config()
+
+        # Phase 4: Validation
+        if isinstance(handler, ConfigValidatorProtocol):
+            handler.validate()
+
+        return handler.config
+
     def new_builder(build_params: t.Dict[str, t.Any]) -> ConfigBuilder:
         """Return new ConfigBuilder.
         Builder is loaded with `config_params` after wrapping with all preprocessors, if provided.
@@ -37,9 +64,9 @@ def build_config(
         return ConfigBuilder(config_type).with_yaml(build_params)
 
     def build_simple_config() -> SimpleConfig:
-        processed_params = preproc_fn(config_params)
-
-        return new_builder(processed_params).with_files(file_params).build()
+        processed_params = preproc_fn(config_params, None)
+        config = new_builder(processed_params).with_files(file_params).build()
+        return postproc_and_validate(config)
 
     def build_composite_config() -> CompositeConfig:
         """Return new CompositeConfig after recursively building all subconfigs."""
@@ -115,9 +142,10 @@ def build_config(
                             get_handler,
                         )
 
-        return (
+        config = (
             new_builder(processed_params | subconfigs).with_files(file_params).build()
         )
+        return postproc_and_validate(config)
 
     if issubclass(config_type, CompositeConfig):
         return build_composite_config()

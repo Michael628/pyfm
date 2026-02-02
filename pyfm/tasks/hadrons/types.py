@@ -74,13 +74,6 @@ class HighModeConfig(SimpleConfig):
 
     key: t.ClassVar[str] = "hadrons_high_modes"
 
-    def __post_init__(self):
-        has_nonlocal_ops = any([not op.gamma.local for op in self.operations.op_list])
-        if has_nonlocal_ops and self.shift_gauge_name is None:
-            raise ValueError(
-                "Non-local operators detected, but shift_gauge_name is not set."
-            )
-
     @property
     def tsource_range(self) -> t.List[int]:
         return list(range(self.tstart, self.tstop + 1, self.dt))
