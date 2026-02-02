@@ -9,7 +9,6 @@ import pandas as pd
 @t.runtime_checkable
 class AggregatorProtocol(t.Protocol):
     def build_aggregator_params(self, average: bool) -> t.Any: ...
-    def format_string(self, to_format: str) -> str: ...
 
 
 def load_data(

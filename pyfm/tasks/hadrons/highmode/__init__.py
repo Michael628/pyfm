@@ -3,6 +3,7 @@ from pyfm.tasks.hadrons.highmode.strategy import (
     create_outfile_catalog,
     build_aggregator_params,
     preprocess_params,
+    validate_config,
 )
 
 __all__ = [
@@ -10,4 +11,5 @@ __all__ = [
     "create_outfile_catalog",
     "build_aggregator_params",
     "preprocess_params",
+    "validate_config",
 ]

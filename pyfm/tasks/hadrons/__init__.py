@@ -9,6 +9,7 @@ from pyfm.tasks.hadrons.highmode import (
     create_outfile_catalog,
     build_aggregator_params,
     preprocess_params,
+    validate_config as validate_high_mode_config,
 )
 
 hadmods = modules
@@ -22,4 +23,5 @@ register_task(
     create_outfile_catalog,
     build_aggregator_params,
     preprocess_params,
+    validate=validate_high_mode_config,
 )

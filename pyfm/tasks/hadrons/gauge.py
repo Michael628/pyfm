@@ -1,6 +1,5 @@
 import typing as t
 from pydantic.dataclasses import dataclass
-from pydantic import Field
 
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
@@ -21,27 +20,15 @@ class GaugeConfig(SimpleConfig):
     fat_links: Outfile
     free: bool = False
     action_name: str | None = None
-    action_masses: t.List[str] = Field(default_factory=list)
-    sp_masses: t.List[str] = Field(default_factory=list)
 
     key: t.ClassVar[str] = "hadrons_gauge"
 
-    def __post_init__(self):
-        if len(self.action_masses) != 0:
-            if self.action_name is None:
-                raise ValueError(
-                    "No action_name parameter provided. Required when `action_masses` are provided."
-                )
-        else:
-            if len(self.sp_masses) != 0:
-                raise ValueError(
-                    f"sp_masses ({self.sp_masses}) should be a subset of action_masses ({self.action_masses})"
-                )
 
+def build_base_gauge(config: GaugeConfig) -> HadronsInput:
+    """Create base gauge modules: gauge, gauge_fat, gauge_long.
 
-def build_input_params(
-    config: GaugeConfig,
-) -> HadronsInput:
+    These are always generated as they are the foundation for all computations.
+    """
     modules = {}
     schedule = ["gauge", "gauge_fat", "gauge_long"]
     for name in schedule:
@@ -52,33 +39,67 @@ def build_input_params(
             modules[name] = hadmods.load_gauge(
                 name, getattr(config, ofile_label).filestem
             )
-    has_sp_masses = len(config.sp_masses) != 0
-    if has_sp_masses:
-        schedule += ["gauge_fatf", "gauge_longf"]
-        modules["gauge_fatf"] = hadmods.cast_gauge("gauge_fatf", "gauge_fat")
-        modules["gauge_longf"] = hadmods.cast_gauge("gauge_longf", "gauge_long")
+    return HadronsInput(modules=modules, schedule=schedule)
 
-    for mass_label in config.action_masses:
+
+def build_sp_gauge(config: GaugeConfig) -> HadronsInput:
+    """Create single-precision gauge modules: gauge_fatf, gauge_longf.
+
+    These are generated when needed (e.g., when highmode uses mixed precision).
+    """
+    modules = {}
+    schedule = ["gauge_fatf", "gauge_longf"]
+    modules["gauge_fatf"] = hadmods.cast_gauge("gauge_fatf", "gauge_fat")
+    modules["gauge_longf"] = hadmods.cast_gauge("gauge_longf", "gauge_long")
+    return HadronsInput(modules=modules, schedule=schedule)
+
+
+def build_action_modules(
+    config: GaugeConfig,
+    dp_masses: t.List[str] | None = None,
+    sp_masses: t.List[str] | None = None,
+) -> HadronsInput:
+    """Create action modules for double and single precision.
+
+    Args:
+        config: GaugeConfig instance
+        dp_masses: List of masses requiring double-precision actions
+        sp_masses: List of masses requiring single-precision actions
+
+    Returns:
+        HadronsInput with action modules and their schedule entries.
+    """
+    if dp_masses is None:
+        dp_masses = []
+    if sp_masses is None:
+        sp_masses = []
+
+    modules = {}
+    schedule = []
+
+    # Double-precision actions
+    for mass_label in dp_masses:
         mass = config.mass.to_string(mass_label)
         name = config.action_name.format(mass=mass_label)
-
         modules[name] = hadmods.action(
             name=name, mass=mass, gauge_fat="gauge_fat", gauge_long="gauge_long"
         )
         schedule.append(name)
 
-        if mass_label in config.sp_masses:
-            iname = f"i{name}"
-            modules[iname] = hadmods.action_float(
-                name=iname,
-                mass=mass,
-                gauge_fat="gauge_fatf",
-                gauge_long="gauge_longf",
-            )
-            schedule.append(iname)
+    # Single-precision actions
+    for mass_label in sp_masses:
+        mass = config.mass.to_string(mass_label)
+        iname = f"i{config.action_name.format(mass=mass_label)}"
+        modules[iname] = hadmods.action_float(
+            name=iname,
+            mass=mass,
+            gauge_fat="gauge_fatf",
+            gauge_long="gauge_longf",
+        )
+        schedule.append(iname)
 
     return HadronsInput(modules=modules, schedule=schedule)
 
 
-# Register GaugeConfig as the config for 'hadrons_gauge' task type
-register_task(GaugeConfig, build_input_params)
+# Register GaugeConfig (not as a complete handler task, just for infrastructure)
+register_task(GaugeConfig)
