@@ -125,6 +125,7 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
     )
     NP = str(nodes * ppn)
     geom = ".".join([str(i) for i in layout_params["geom"]])
+    lattice = ".".join([str(i) for i in layout_params["lattice"]])
 
     # Append the number of cases to the step tag, as in A -> A3
     job_name = yaml_params["submit"]["job_name_pfx"] + "-" + step + str(ncases)
@@ -134,6 +135,7 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
     os.environ["BASETASKS"] = str(basetasks)
     os.environ["BASENODES"] = str(basenodes)
     os.environ["LAYOUT"] = geom
+    os.environ["LATTICE"] = lattice
 
     # Check that the job script exists
     try:

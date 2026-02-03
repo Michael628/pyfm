@@ -59,7 +59,7 @@ def process_files(
         missing_keys = [k for k in fstring_keys if k not in regex.keys()]
         if len(missing_keys) > 0:
             if wildcard_fill:
-                get_logger().info(
+                get_logger().debug(
                     f"Adding wildcards to keys in replacements: {', '.join(sorted(missing_keys))}"
                 )
                 for k in missing_keys:

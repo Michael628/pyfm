@@ -77,7 +77,7 @@ class Gamma(Enum):
             case Gamma.VEC_LOCAL:
                 return ["GX_GX", "GY_GY", "GZ_GZ"]
             case Gamma.IDENTITY:
-                return ["G5_G5"]
+                return ["G1_G1"]
             case Gamma.PION_LOCAL:
                 return ["G5_G5"]
             case _:
@@ -176,7 +176,7 @@ class OpList:
                         op_list.append(cls.Op(gamma=gamma_enum, mass=tuple(mass)))
 
         if len(op_list) == 0:
-            utils.get_logger().debug('Returning an empty Op List.')
+            utils.get_logger().debug("Returning an empty Op List.")
             # raise ValueError("Valid operations not found in provided parameters.")
 
         return cls(op_list=op_list)
