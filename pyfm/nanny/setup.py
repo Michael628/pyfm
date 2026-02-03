@@ -16,6 +16,7 @@ def get_layout_params(
         raise ValueError("No `submit` parameters provided.")
 
     layout = yaml_params.get("submit").get("layout")
+    layout['lattice'] = yaml_params.get('submit').get('lattice',[0,0,0,0])
     if job_step not in layout:
         raise ValueError(f"No layout parameters provided for `{job_step}`.")
     return layout | layout[job_step]
