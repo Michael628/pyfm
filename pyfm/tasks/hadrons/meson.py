@@ -55,20 +55,19 @@ def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
     return utils.io.catalog_files(outfile_generator)
 
 
-def check_files_complete(
-    config: MesonConfig, gammas: t.List[str], mass_label: str, bad_files: t.List[str]
+def get_incomplete_gammas(
+    config: MesonConfig, gammas: t.List[Gamma], mass_label: str, bad_files: t.List[str]
 ) -> bool:
     meson_files = [
         config.meson.filename.format(
             mass=config.mass.to_string(mass_label, remove_prefix=True),
-            gamma=g,
+            gamma=g_str,
         )
-        for g in gammas
+        for g_str in gamma.gamma_string()
+        for gamma in gammas
     ]
 
-    if not any([mf in bad_files for mf in meson_files]):
-        return True
-    return False
+    return [g for g, mf in zip(gammas, meson_files) if mf in bad_files]
 
 
 def build_input_params(config: MesonConfig) -> HadronsInput:
@@ -81,35 +80,36 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
     if not config.overwrite:
         bad_files = utils.io.get_bad_files(create_outfile_catalog(config))
 
-    for op in config.op_list:
-        op_type = op.gamma.name.lower()
-        gauge = "" if op.gamma.local else "gauge"
+    for op_type, gammas in config.operations.group_by_mass_and_shift():
+        assert len(op_type.mass) == 1, "Grouped operations should each have only 1 mass"
+        op_label = op_type.gamma.name.lower()
+        mass_label = op_type.mass[0]
+        gauge = "" if op_type.gamma.local else "gauge"
 
-        for mass_label in op.mass:
-            if not config.overwrite and check_files_complete(
-                config, op.gamma.gamma_list, mass_label, bad_files
-            ):
-                continue
+        if not config.overwrite:
+            gammas = get_incomplete_gammas(config, gammas, mass_label, bad_files)
 
-            output = meson_template.format(
-                mass=config.mass.to_string(mass_label, remove_prefix=True)
-            )
+        gamma_string = " ".join([x.gamma_string for x in gammas])
 
-            module_name = f"mf_{op_type}_mass_{mass_label}"
+        output = meson_template.format(
+            mass=config.mass.to_string(mass_label, remove_prefix=True)
+        )
 
-            schedule.append(module_name)
-            modules[module_name] = hadmods.meson_field(
-                name=module_name,
-                action=config.action_name.format(mass=mass_label),
-                block=config.blocksize,
-                gammas=op.gamma.gamma_string,
-                apply_g5=str(config.apply_g5).lower(),
-                gauge=gauge,
-                low_modes=config.low_modes_name.format(mass=mass_label),
-                left="",
-                right="",
-                output=output,
-            )
+        module_name = f"mf_{op_label}_mass_{mass_label}"
+
+        schedule.append(module_name)
+        modules[module_name] = hadmods.meson_field(
+            name=module_name,
+            action=config.action_name.format(mass=mass_label),
+            block=config.blocksize,
+            gammas=gamma_string,
+            apply_g5=str(config.apply_g5).lower(),
+            gauge=gauge,
+            low_modes=config.low_modes_name.format(mass=mass_label),
+            left="",
+            right="",
+            output=output,
+        )
 
     return HadronsInput(modules=modules, schedule=schedule)
 
@@ -147,10 +147,28 @@ def preprocess_params(params: t.Dict) -> t.Dict:
     return params | sub
 
 
+def postprocess_config(config: MesonConfig) -> MesonConfig:
+    # Backward compatibility. Convert local operation into pion_local and vec_local
+    try:
+        local_index = config.op_list.index(Gamma.LOCAL)
+    except ValueError:
+        return config
+
+    local_op = config.op_list.pop(local_index)
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.VEC_LOCAL, mass=local_op.mass)
+    )
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.PION_LOCAL, mass=local_op.mass)
+    )
+    return config
+
+
 # Register MesonConfig as the config for 'hadrons_meson' task type
 register_task(
     MesonConfig,
     build_input_params,
     create_outfile_catalog,
-    preprocess_params=preprocess_params,
+    preprocess_params,
+    postprocess_config,
 )
