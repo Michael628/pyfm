@@ -61,9 +61,11 @@ def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
         h5_config = LoadH5Config.create(**kwargs).format_data_strings(repl)
         try:
             data = data_to_frame(file, h5_config)
-        except ValueError:
-            h5_config = h5_config.search_for_dataset_label(file)
-            data = data_to_frame(file, h5_config)
+        except ValueError as e:
+            utils.get_logger().debug(f"Error loading HDF5 file: {e}")
+            raise
+            # h5_config = h5_config.search_for_dataset_label(file)
+            # data = data_to_frame(file, h5_config)
 
     if data is not None:
         return data
