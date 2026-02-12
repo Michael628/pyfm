@@ -60,16 +60,17 @@ class Gamma(Enum):
     VEC_LOCAL = auto()
     PION_LOCAL = auto()
     IDENTITY = auto()
-    ONELINK = VEC_ONELINK
     LOCAL = auto()
+    ONELINK = auto()
+    TWOLINK = auto()
+    THREELINK = auto()
+    FOURLINK = auto()
 
     @property
     def gamma_list(self) -> t.List[str]:
         match self:
-            case Gamma.ONELINK | Gamma.VEC_ONELINK:
+            case Gamma.VEC_ONELINK:
                 return ["GX_G1", "GY_G1", "GZ_G1"]
-            case Gamma.LOCAL:
-                return ["G5_G5", "GX_GX", "GY_GY", "GZ_GZ"]
             case Gamma.AXIAL_VEC_LOCAL:
                 return ["G5X_G5X", "G5Y_G5Y", "G5Z_G5Z"]
             case Gamma.AXIAL_VEC_ONELINK:
@@ -80,9 +81,10 @@ class Gamma(Enum):
                 return ["G1_G1"]
             case Gamma.PION_LOCAL:
                 return ["G5_G5"]
+            case Gamma.LOCAL | Gamma.ONELINK | Gamma.TWOLINK | Gamma.THREELINK | Gamma.FOURLINK:
+                raise ValueError(f"{self.name} has no explicit gamma_list representation. See OpList.gamma_list instead.")
             case _:
                 return [self.name]
-            # raise ValueError(f"Unexpected Gamma value: {self}")
 
     @property
     def gamma_string(self) -> str:
@@ -92,8 +94,9 @@ class Gamma(Enum):
         gammas = gammas.replace("_", " ")
         return gammas
 
-    @property
-    def _local_gammas(self) -> t.List:
+
+    @staticmethod
+    def _local_gammas() -> t.List:
         return [
             Gamma.LOCAL,
             Gamma.PION_LOCAL,
@@ -101,18 +104,58 @@ class Gamma(Enum):
             Gamma.AXIAL_VEC_LOCAL,
             Gamma.IDENTITY,
             Gamma.G1_G1,
+            Gamma.G5_G5,
             Gamma.GX_GX,
             Gamma.GY_GY,
             Gamma.GZ_GZ,
-            Gamma.G5_G5,
+            Gamma.G5X_G5X,
+            Gamma.G5Y_G5Y,
+            Gamma.G5Z_G5Z,
         ]
+    @staticmethod
+    def _onelink_gammas() -> t.List:
+        return [
+            Gamma.ONELINK,
+            Gamma.VEC_ONELINK,
+            Gamma.AXIAL_VEC_ONELINK,
+            Gamma.GX_G1,
+            Gamma.GY_G1,
+            Gamma.GZ_G1,
+            Gamma.G5X_G5,
+            Gamma.G5Y_G5,
+            Gamma.G5Z_G5,
+        ]
+    @staticmethod
+    def _twolink_gammas() -> t.List:
+        return [Gamma.TWOLINK]
+    @staticmethod
+    def _threelink_gammas() -> t.List:
+        return [Gamma.THREELINK]
+    @staticmethod
+    def _fourlink_gammas() -> t.List:
+        return [Gamma.FOURLINK]
 
     @property
     def local(self) -> bool:
-        if self in self._local_gammas:
+        if self in self._local_gammas():
             return True
         else:
             return False
+
+    @property
+    def shift(self) -> int:
+        if self in self._local_gammas():
+            return 0
+        elif self in self._onelink_gammas():
+            return 1
+        elif self in self._twolink_gammas():
+            return 2
+        elif self in self._threelink_gammas():
+            return 3
+        elif self in self._fourlink_gammas():
+            return 4
+        else:
+            raise ValueError(f"Cannot determine shift for gamma: {self}")
 
 
 @dataclass
@@ -120,6 +163,11 @@ class OpList:
     class Op(t.NamedTuple):
         gamma: Gamma
         mass: t.Tuple[str, ...]
+
+        def __eq__(self,gamma:Gamma) -> bool:
+            if self.gamma == gamma:
+                return True
+            return False
 
     op_list: t.List[Op]
 
@@ -189,6 +237,15 @@ class OpList:
                 res.add(m)
 
         return list(res)
+
+    def group_by_mass_and_shift(self) -> t.Generator[t.Tuple[Op,t.List[Gamma]],None,None]:
+        for m in self.mass:
+            ops_with_mass_m = list(filter(lambda x: m in x.mass,self.op_list))
+            for i, g in enumerate([Gamma.LOCAL,Gamma.ONELINK,Gamma.TWOLINK,Gamma.THREELINK,Gamma.FOURLINK ]):
+                
+                if mass_m_shift_i := list(filter(lambda x: x.gamma.shift == i, ops_with_mass_m)):
+                    yield self.Op(gamma=g,mass=(m,)), [op.gamma for op in mass_m_shift_i]
+                
 
     def __iter__(self):
         return iter(self.op_list)

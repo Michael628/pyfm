@@ -117,8 +117,9 @@ class ConfigBuilder:
         if isinstance(value, StringableTypes):
             self.with_formatter(key, value)
         else:
+            value_preview =   str(value).split()[0] + " ..."
             utils.get_logger().debug(
-                f"Not using `{key}` (type: {type(value).__name__}) for formatting: {value}"
+                f"Not using `{key}` (type: {type(value).__name__}) for formatting: {value_preview}"
             )
 
         return self

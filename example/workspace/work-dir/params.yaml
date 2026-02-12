@@ -7,6 +7,7 @@ submit_params:
   logging_level: DEBUG
   ens: "4444"
   time: 4
+  space: 4
   runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
 
 contract_params:
@@ -64,7 +65,6 @@ contract_params:
       outfile: contract
 
 smear_params:
-  space: 4
   node_geometry: "1 1 1 1"
 
 hadrons_params:
@@ -84,7 +84,7 @@ hadrons_params:
     residual: 1e-8 # parameter for lanczos eigensolver
   residual: 1e-8
   blocksize: 200 # number of fields to contract in meson field kernel
-  overwrite_sources: False # skip CG solves if correlator already exists
+  overwrite: true # If true, skip CG solves if correlator already exists
 
 precess: # (cfg - cfg0)/dcfg*tstep % dt
   loose:
@@ -106,6 +106,7 @@ nanny:
   check_interval: 30
 
 submit:
+  lattice: [4, 4, 4, 4]
   # scheduler: SLURM
   scheduler: INTERACTIVE
   job_name_pfx: LMI
@@ -118,7 +119,7 @@ submit:
       ppn: 1
       nodes: 1
       geom: [1, 1, 1, 1]
-    tau:
+    test:
       nodes: 1
       geom: [1, 1, 1, 1] # geom list product should equal nodes*ppn
     hadrons:
@@ -151,7 +152,7 @@ job_setup:
       noise: 1
   hadrons:
     run: hadrons.sh
-    io: "test-l4444-lmi"
+    io: "test-lmi"
     wall_time: "24:00:00"
     job_type: hadrons
     task_type: lmi
@@ -170,6 +171,7 @@ job_setup:
       #   mass:
       #     - "l"
       high_modes:
+        cross_terms: false
         gamma:
           - pion_local
           - vec_local
@@ -178,6 +180,35 @@ job_setup:
           - axial_vec_onelink
         mass:
           - "l"
+  test:
+    run: hadrons.sh
+    io: "test-tau"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      gauge: 
+        free: true
+      # meson:
+      #   gamma:
+      #     - pion_local
+      #     - vec_local
+      #     - vec_onelink
+      #     - axial_vec_local
+      #     - axial_vec_onelink
+      #   mass:
+      #     - "l"
+      high_modes:
+        cross_terms: false
+        gamma:
+          # - pion_local
+          - vec_local
+          - vec_onelink
+          - axial_vec_local
+          - axial_vec_onelink
+        mass:
+          - "l"
+          # - 'd'
 
 files:
   home: /home/mlynch/Work/pyfm/example/workspace/work-dir
