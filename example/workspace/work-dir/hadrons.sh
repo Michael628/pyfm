@@ -12,7 +12,7 @@ export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${HOME}/work/deps/install/scalar/lib
 executable=../bin/HadronsMILC
 
 # export OPT="--shm 1024 --device-mem 1024"
-runargs=" --grid 4.4.4.4 $OPT"
+runargs=" --grid $LATTICE $OPT"
 
 OFFSET=0
 for inXML in ${INPUTLIST}; do
