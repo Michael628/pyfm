@@ -4,17 +4,30 @@ Nanny, postprocessing, and A2A contraction scripts for lattice QCD calculations.
 
 ## Installation
 
-### Requirements
+### Python package
 
-- Python >= 3.11
-
-### Install from source
+Requires Python >= 3.12.
 
 ```bash
 pip install -e .
 ```
 
-This will install PyFM in editable mode along with all required dependencies.
+### Building Grid, Hadrons, and HadronsMILC
+
+PyFM drives the [HadronsMILC](https://github.com/Michael628/HadronsMILC) application, which depends on [Grid](https://github.com/milc-qcd/Grid) and [Hadrons](https://github.com/milc-qcd/Hadrons). The `systems/build.sh` script in this repo handles cloning, configuring, and building all three. Run it from the parent workspace directory that will contain all repos side-by-side:
+
+```bash
+# Build all components for a generic scalar (CPU) system
+pyfm/systems/build.sh --system scalar --all
+
+# Build for a specific HPC system (e.g. Perlmutter GPU)
+pyfm/systems/build.sh --system perlmutter --all --threads 8
+
+# Build dependencies first, then the stack
+pyfm/systems/build.sh --gmp --mpfr --lime --system scalar --grid --hadrons --app
+```
+
+Available systems: `scalar` (CPU, default), `perlmutter`, `deltaai`, `lq`, `lq2`. See [`systems/README.md`](systems/README.md) for full details on customizing builds and adding new systems.
 
 ## Scripts
 
@@ -56,7 +69,3 @@ The `scripts/` directory contains standalone utilities for managing lattice QCD 
 - **`contract_a2a_diagrams.py`** - Execute all-to-all (A2A) contraction calculations
   - Usage: Configured via parameter file with diagram specifications
   - Computes meson correlators from A2A vectors with support for low/high mode mixing
-
-## License
-
-MIT
