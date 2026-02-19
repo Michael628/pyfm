@@ -14,7 +14,10 @@
 # ├── Hadrons/               - Hadrons library (git repo, cloned from GitHub)
 # │   ├── build${BUILD_EXT}/ - Build directory
 # │   └── install${BUILD_EXT}/ - Installation directory
-# ├── HadronsMILC/           - Main application (git repo, cloned from GitHub)
+# ├── grid-lma/              - Grid LMA application (git repo, cloned from GitHub)
+# │   ├── build${BUILD_EXT}/ - Build directory
+# │   └── install${BUILD_EXT}/ - Installation directory
+# ├── HadronsMILC/           - Hadrons Staggered Fermion application (git repo, cloned from GitHub)
 # │   ├── build${BUILD_EXT}/ - Build directory
 # │   └── install${BUILD_EXT}/ - Installation directory
 # ├── deps/                  - Dependencies directory
@@ -57,7 +60,8 @@ Build Configuration Options:
 Component Selection:
   --grid             Build Grid library
   --hadrons          Build Hadrons library
-  --app              Build HadronsMILC application
+  --app|--hmilc       Build HadronsMILC application
+  --glma             Build grid-lma
   --all              Build all components (grid, hadrons, app)
 
 Help:
@@ -149,7 +153,11 @@ function parse_flags() {
       ;;
 
       # Components
-      --grid|--hadrons|--app)
+      --app)
+          BUILD_COMPONENTS="${BUILD_COMPONENTS} hmilc"
+        shift
+      ;;
+      --grid|--hadrons|--hmilc|--glma)
           BUILD_COMPONENTS="${BUILD_COMPONENTS} ${1:2}"
         shift
       ;;
@@ -343,14 +351,19 @@ function build-component() {
       GIT_BRANCH="feature/LMI-develop"
       SRCDIR=${TOPDIR}/Hadrons
       ;;
-    app)
+    hmilc)
       GIT_REPO=https://github.com/Michael628/HadronsMILC
       GIT_BRANCH="develop"
       SRCDIR=${TOPDIR}/HadronsMILC
       ;;
+    glma)
+      GIT_REPO=https://github.com/Michael628/grid-lma
+      GIT_BRANCH="main"
+      SRCDIR=${TOPDIR}/grid-lma
+      ;;
     *)
       echo "Unsupported build type"
-      echo "Usage $0 <grid|hadrons|app>"
+      echo "Usage $0 <grid|hadrons|hmilc|glma>"
       exit 1
     esac
 
@@ -398,8 +411,13 @@ function build-component() {
         status=$?
         echo "Configure exit status $status"
       ;;
-      app)
-        app_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
+      glma)
+        glma_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
+        status=$?
+        echo "Configure exit status $status"
+      ;;
+      hmilc)
+        hmilc_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
         status=$?
         echo "Configure exit status $status"
       ;;
