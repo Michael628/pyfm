@@ -82,7 +82,7 @@ Each system is a subdirectory here (e.g. `perlmutter/`, `scalar/`). A system may
 
 | File | Purpose |
 |---|---|
-| `configure-params.sh` | Defines `grid_configure`, `hadrons_configure`, `app_configure`, `dependency_configure` shell functions |
+| `configure-params.sh` | Defines `grid_configure`, `hadrons_configure`, `hmilc_configure`, `glma_configure`, `dependency_configure` shell functions |
 | `env.sh` | Loads modules and sets environment variables before building |
 
 Configuration is layered in this order (later sources override earlier ones):
@@ -123,7 +123,16 @@ function hadrons_configure() {
     --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
 }
 
-function app_configure() {
+function glma_configure() {
+  local INSTALLDIR=$1
+  local TOPDIR=$2
+
+  ${TOPDIR}/grid-lma/configure \
+    --prefix=${INSTALLDIR} \
+    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+}
+
+function hmilc_configure() {
   local INSTALLDIR=$1
   local TOPDIR=$2
 

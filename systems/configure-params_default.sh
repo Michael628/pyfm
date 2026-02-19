@@ -7,6 +7,16 @@
 #   - BUILD_DEBUG
 #   - BUILD_MPI_REDUCTION
 
+function glma_configure() {
+  local INSTALLDIR=$1
+  local TOPDIR=$2
+
+  # Configure arguments for Hadrons
+  ${TOPDIR}/grid-lma/configure \
+    --prefix=${INSTALLDIR} \
+    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+}
+
 function hadrons_configure() {
   local INSTALLDIR=$1
   local TOPDIR=$2
@@ -17,7 +27,7 @@ function hadrons_configure() {
     --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
 }
 
-function app_configure() {
+function hmilc_configure() {
   local INSTALLDIR=$1
   local TOPDIR=$2
 
