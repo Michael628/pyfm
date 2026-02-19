@@ -176,7 +176,7 @@ class ConfigBuilder:
                                 f"Unexpected parameter found when searching for Outfile param: {field_name}"
                             )
 
-        file_path: str = files_config.get("home", "")
+        file_path: str = files_config.get("home", "") #WARNING: depracated location for files->home param
         for field in self.iterate_outfiles():
             match field.container:
                 case field.container.SIMPLE:

@@ -18,6 +18,7 @@ function grid_configure() {
     --enable-gen-simd-width=64 \
     --enable-accelerator=cuda \
     --disable-fermion-reps \
+    --enable-old-rng \
     --disable-unified \
     --disable-gparity \
    --with-lime=${TOPDIR}/deps/install${BUILD_EXT} \
@@ -26,24 +27,3 @@ function grid_configure() {
     CXXFLAGS="-ccbin mpicxx -gencode arch=compute_80,code=sm_80 -std=c++17 -cudart shared"
 }
 
-function dependency_configure() {
-  local dep_name=$1
-  local INSTALLDIR=$2
-
-  # Dependency-specific additions
-  case ${dep_name} in
-    mpfr)
-      DEP_CONFIGURE_ARGS="--with-gmp=${INSTALLDIR}"
-    ;;
-    hdf5)
-      DEP_CONFIGURE_ARGS="--enable-cxx"
-    ;;
-  esac
-  ${TOPDIR}/deps/${dep_name}/configure \
-    --prefix=${INSTALLDIR} \
-    ${DEP_CONFIGURE_ARGS} \
-    CXXFLAGS=-O3 \
-    CFLAGS=-O3 \
-    CC=cc CXX=CC
-
-}

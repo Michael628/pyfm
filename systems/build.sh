@@ -121,7 +121,7 @@ function parse_flags() {
         shift
       ;;
       --all)
-        BUILD_COMPONENTS="grid hadrons app"
+        BUILD_COMPONENTS="grid hadrons hmilc"
         shift
       ;;
 
@@ -373,10 +373,10 @@ function build-component() {
 	popd
 
 	# Configure only if not already configured
-	mkdir -p ${BUILDDIR}
   if [ "$FORCE_REBUILD" = 'true' ]; then
-    rm -rf ${BUILDDIR}/*
+    rm -rf ${BUILDDIR}
   fi
+	mkdir -p ${BUILDDIR}
 	pushd ${BUILDDIR}
 	if [ ! -f Makefile ]
 	then
