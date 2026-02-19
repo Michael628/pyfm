@@ -1,14 +1,31 @@
 import sys
 import os
 import subprocess
-from pyfm import utils
+from pydantic.dataclasses import dataclass
+import typing as t
 
+from pyfm import utils
+from pyfm.domain import SimpleConfig
+from pyfm.core.builder import build_config
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
 from pyfm.nanny.setup import get_job_params, get_layout_params
 import pyfm.nanny.todo as todo
 
 from functools import reduce
+
+@dataclass(frozen=True)
+class NannyConfig(SimpleConfig):
+    home: str
+    todo_file: str
+    max_cases: int
+    max_queue: int
+    wait: int
+    check_interval: int
+    lattice: t.List[int]
+    scheduler: str
+    job_name_pfx: str
+    layout: t.Dict[str,t.Any]
 
 
 ######################################################################
@@ -248,9 +265,13 @@ def nanny_loop(YAML, require_step: str | None = None):
         if os.access("STOP", os.R_OK):
             print("Spawn job process stopped because STOP file is present")
             break
-
-        todo_file = yaml_params["nanny"]["todo_file"]
-        max_cases = yaml_params["nanny"]["max_cases"]
+        params = yaml_params.get('shared_params',{})
+        params |= yaml_params['nanny'] 
+        params |= yaml_params['submit'] 
+        params |= yaml_params.get("files",{})
+        config = build_config(NannyConfig,params)
+        todo_file = os.path.join(config.home,config.todo_file)
+        max_cases = config.max_cases
         job_name_pfx = yaml_params["submit"]["job_name_pfx"]
         scheduler = yaml_params["submit"]["scheduler"]
 

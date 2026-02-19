@@ -33,6 +33,9 @@ function dependency_configure() {
   local dep_name=$1
   local INSTALLDIR=$2
 
+  CONFIG=${TOPDIR}/deps/${dep_name}/configure
+  pcc=cc
+  pcxx=CC
   # Dependency-specific additions
   case ${dep_name} in
     mpfr)
@@ -40,13 +43,18 @@ function dependency_configure() {
     ;;
     hdf5)
       DEP_CONFIGURE_ARGS="--enable-cxx"
+      pcc=mpicc
+      pcxx=mpicxx
+    ;;
+    openssl)
+      CONFIG=${TOPDIR}/deps/${dep_name}/config
     ;;
   esac
-  ${TOPDIR}/deps/${dep_name}/configure \
+  $CONFIG \
     --prefix=${INSTALLDIR} \
     ${DEP_CONFIGURE_ARGS} \
     CXXFLAGS=-O3 \
     CFLAGS=-O3 \
-    CC=gcc CXX=g++
+    CC=$pcc CXX=$pcxx
 
 }
