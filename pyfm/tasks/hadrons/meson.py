@@ -59,15 +59,19 @@ def get_incomplete_gammas(
     config: MesonConfig, gammas: t.List[Gamma], mass_label: str, bad_files: t.List[str]
 ) -> bool:
     meson_files = [
-        config.meson.filename.format(
-            mass=config.mass.to_string(mass_label, remove_prefix=True),
-            gamma=g_str,
-        )
-        for g_str in gamma.gamma_string()
+        [
+            config.meson.filename.format(
+                mass=config.mass.to_string(mass_label, remove_prefix=True),
+                gamma=g_str,
+            )
+            for g_str in gamma.gamma_list
+        ]
         for gamma in gammas
     ]
 
-    return [g for g, mf in zip(gammas,meson_files) if mf in bad_files]
+    return [
+        g for i, g in enumerate(gammas) if any(mf in bad_files for mf in meson_files[i])
+    ]
 
 
 def build_input_params(config: MesonConfig) -> HadronsInput:
@@ -87,7 +91,7 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
         gauge = "" if op_type.gamma.local else "gauge"
 
         if not config.overwrite:
-           gammas = get_incomplete_gammas(config, gammas, mass_label, bad_files)
+            gammas = get_incomplete_gammas(config, gammas, mass_label, bad_files)
 
         gamma_string = " ".join([x.gamma_string for x in gammas])
 
@@ -113,6 +117,7 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
 
     return HadronsInput(modules=modules, schedule=schedule)
 
+
 def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
     """Preprocessing for MesonConfig.
 
@@ -137,19 +142,29 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         | {k: v for k, v in task_data.items() if k in config_fields}
     )
 
+
 def postprocess_config(config: MesonConfig) -> MesonConfig:
     # Backward compatibility. Convert local operation into pion_local and vec_local
     try:
-        local_index = config.op_list.index(Gamma.LOCAL) 
+        local_index = config.op_list.index(Gamma.LOCAL)
     except ValueError:
         return config
 
     local_op = config.op_list.pop(local_index)
-    config.op_list.insert(local_index,OpList.Op(gamma=Gamma.VEC_LOCAL, mass=local_op.mass))
-    config.op_list.insert(local_index,OpList.Op(gamma=Gamma.PION_LOCAL, mass=local_op.mass))
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.VEC_LOCAL, mass=local_op.mass)
+    )
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.PION_LOCAL, mass=local_op.mass)
+    )
     return config
+
 
 # Register GaugeConfig as the config for 'hadrons_gauge' task type
 register_task(
-    MesonConfig, build_input_params, create_outfile_catalog, preprocess_params, postprocess_config
+    MesonConfig,
+    build_input_params,
+    create_outfile_catalog,
+    preprocess_params,
+    postprocess_config,
 )

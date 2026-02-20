@@ -1,9 +1,7 @@
 import typing as t
-from enum import Enum, auto
+from enum import auto
 
-from pyfm.domain.outfiles import Outfile
-from pyfm.domain.ops import MassDict
-from pyfm.domain.conftypes import CompositeConfig, SimpleConfig
+from pyfm.domain import Outfile, MassDict, SerializableEnum, CompositeConfig, SimpleConfig
 from pydantic.dataclasses import dataclass
 
 
@@ -15,7 +13,7 @@ except ImportError:
     COMM = None
 
 
-class ContractType(Enum):
+class ContractType(SerializableEnum):
     TWOPOINT = auto()
     SIB = auto()
     PHOTEX = auto()
@@ -26,18 +24,6 @@ class ContractType(Enum):
         match self:
             case ContractType.TWOPOINT:
                 return 2
-
-    @classmethod
-    def from_dict(cls, name: str) -> "ContractType":
-        if not isinstance(name, str):
-            raise ValueError(
-                f"Parameter passed to contraction type must be string, received: {name}"
-            )
-        name = name.upper().replace("_", "")
-        if val := getattr(cls, name, None):
-            return val
-        raise ValueError(f"Invalid contraction type ({name}). options are: {list(cls)}")
-
 
 @dataclass(frozen=True)
 class MesonLoaderConfig(SimpleConfig):

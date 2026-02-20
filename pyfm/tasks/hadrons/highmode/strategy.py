@@ -37,23 +37,22 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         | {k: v for k, v in task_data.items() if k in config_fields}
     )
 
-
-def create_file_catalog(config: HighModeConfig) -> pd.DataFrame:
+def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
     def generate_outfile_formatting():
-        res = {"tsource": list(map(str, config.tsource_range)), "dset": []}
-        if not config.skip_low_modes:
-            res["dset"].append("ranLL")
-        if not config.skip_cg:
-            res["dset"].append("ama")
+        solver_labels = config.get_solver_labels()
+        res = {"tsource": list(map(str, config.tsource_range)), "dset": solver_labels}
 
         for op in config.op_list:
             res["gamma_label"] = op.gamma.name.lower()
-            res["mass"] = [config.mass.to_string(m, True) for m in op.mass]
+            res["mass"] = config.get_mass_labels(op)
             yield res, config.high_modes
 
     outfile_generator = generate_outfile_formatting()
 
-    return utils.io.catalog_files(outfile_generator)
+    df = utils.io.catalog_files(outfile_generator)
+
+    return df
+
 
 
 def build_input_params(config: HighModeConfig) -> HadronsInput:
@@ -61,7 +60,7 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     schedule = []
 
     if not config.overwrite:
-        df = create_file_catalog(config)
+        df = create_outfile_catalog(config)
         missing_files = df[df["exists"] == False]
         run_tsources = []
         for tsource in config.tsource_range:
@@ -96,7 +95,8 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
             )
             schedule.append(name)
 
-        cg_solver_labels: t.List = [s for s in config.get_solver_labels() if "ama" in s]
+        cg_solver_labels: t.List = [s for s in config.get_solver_labels(skip_cross=True) if "ama" in s]
+        print (cg_solver_labels)
         for resid, sl in zip(map(str, config.residual), cg_solver_labels):
             name = config.solver_name.format(solver=sl, mass=mass_label)
 
@@ -144,6 +144,13 @@ def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[s
                 return i
         return -1
 
+    def mixed_solvers_last(name):
+        # Assumes get_solver_labels appends cross_terms to the end of the list
+        for i, label in reversed(list(enumerate(config.get_solver_labels()))):
+            if label in name:
+                return i
+        return -1
+
     def mixed_mass_last(name):
         return len(re.findall(r"_mass", name))
 
@@ -157,6 +164,7 @@ def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[s
     sorted_modules = sorted(module_names, key=gamma_order)
     sorted_modules = sorted(sorted_modules, key=mass_order)
     sorted_modules = sorted(sorted_modules, key=mixed_mass_last)
+    sorted_modules = sorted(sorted_modules, key=mixed_solvers_last)
     sorted_modules = sorted(sorted_modules, key=tslice_order)
 
     return sorted_modules
@@ -188,23 +196,6 @@ def build_contract_strategy(
             raise ValueError(
                 f"Unknown correlator_strategy: {config.correlator_strategy}"
             )
-
-
-def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
-    def generate_outfile_formatting():
-        solver_labels = config.get_solver_labels()
-        res = {"tsource": list(map(str, config.tsource_range)), "dset": solver_labels}
-
-        for op in config.op_list:
-            res["gamma_label"] = op.gamma.name.lower()
-            res["mass"] = [config.mass.to_string(m, True) for m in op.mass]
-            yield res, config.high_modes
-
-    outfile_generator = generate_outfile_formatting()
-
-    df = utils.io.catalog_files(outfile_generator)
-
-    return df
 
 
 def build_aggregator_params(
