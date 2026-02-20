@@ -1,5 +1,5 @@
 from pyfm.domain.buildertypes import ConfigBuilder
-from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig
+from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig, SerializableEnum
 from pyfm.domain.registry import HandlerRegistry, ConfigHandler
 from pyfm.domain.outfiles import Outfile
 from pyfm.domain.protocols import (
@@ -21,6 +21,7 @@ __all__ = [
     "CompositeConfig",
     "HandlerRegistry",
     "ConfigHandler",
+    "SerializableEnum",
     "Outfile",
     "FromDictProtocol",
     "FormattableProtocol",

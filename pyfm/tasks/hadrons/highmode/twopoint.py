@@ -4,7 +4,7 @@ import itertools
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import OpList, Gamma
-from pyfm.tasks.hadrons.types import HighModeConfig
+from pyfm.tasks.hadrons.types import CrossTerms, HighModeConfig
 
 
 class TwoPointOp(t.NamedTuple):
@@ -90,7 +90,7 @@ def contraction_gen(op_list: OpList) -> t.Tuple[OpList.Op, t.Iterator[TwoPointOp
 
 def build_quarks(config: HighModeConfig, run_tsources: t.List[str]) -> HadronsInput:
     modules = {}
-    solver_labels = config.get_solver_labels()
+    solver_labels = config.get_solver_labels(skip_cross=True)
     guess_solver_labels = solver_labels[:-1].copy()
     guess_solver_labels.insert(0, "")
     solver_zip = list(zip(solver_labels, guess_solver_labels))
@@ -126,23 +126,27 @@ def build_contractions(
     config: HighModeConfig, run_tsources: t.List[str]
 ) -> HadronsInput:
     modules = {}
-    solver_labels = config.get_solver_labels()
+    solver_labels = config.get_solver_labels(skip_cross=True)
 
     for op, con_set in set(contraction_gen(config.operations)):
         glabel = op.gamma.name.lower()
         quark_glabel = con_set.quark.gamma.name.lower()
         antiquark_glabel = con_set.antiquark.gamma.name.lower()
-        for tsource, slabel, m1label, m2label in itertools.product(
-            run_tsources, solver_labels, con_set.quark.mass, con_set.antiquark.mass
+        for tsource, slabel1, slabel2, m1label, m2label in itertools.product(
+            run_tsources, solver_labels, solver_labels, con_set.quark.mass, con_set.antiquark.mass
         ):
             if m1label < m2label:
                 continue
 
-            if not config.cross_terms and m1label != m2label:
+            if config.cross_terms not in (CrossTerms.MASS, CrossTerms.ALL) and m1label != m2label:
                 continue
 
-            quark = f"quark_{slabel}_{quark_glabel}_mass_{m1label}_t{tsource}"
-            antiquark = f"quark_{slabel}_{antiquark_glabel}_mass_{m2label}_t{tsource}"
+
+            if config.cross_terms not in (CrossTerms.SOLVE, CrossTerms.ALL) and slabel1 != slabel2:
+                continue
+
+            quark = f"quark_{slabel1}_{quark_glabel}_mass_{m1label}_t{tsource}"
+            antiquark = f"quark_{slabel2}_{antiquark_glabel}_mass_{m2label}_t{tsource}"
             m1out = config.mass.to_string(m1label, True)
             m2out = config.mass.to_string(m2label, True)
 
@@ -153,11 +157,16 @@ def build_contractions(
                 mass_label = f"mass_{m1label}_mass_{m2label}"
                 mass_output = f"{m1out}_m{m2out}"
 
+            if slabel1 == slabel2:
+                solver_label = slabel1
+            else:
+                solver_label = f"{slabel1}_{slabel2}"
+
             output = config.high_modes.filestem.format(
-                mass=mass_output, dset=slabel, gamma_label=glabel, tsource=tsource
+                mass=mass_output, dset=solver_label, gamma_label=glabel, tsource=tsource
             )
 
-            name = f"corr_{slabel}_{glabel}_{mass_label}_t{tsource}"
+            name = f"corr_{solver_label}_{glabel}_{mass_label}_t{tsource}"
             modules[name] = hadmods.prop_contract(
                 name=name,
                 source=quark,

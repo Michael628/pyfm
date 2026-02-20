@@ -2,7 +2,6 @@ from enum import Enum, auto
 import typing as t
 from pydantic.dataclasses import dataclass
 from dataclasses import fields
-from pyfm.domain.protocols import FromDictProtocol
 
 from pydantic import Field
 
@@ -11,6 +10,7 @@ from pyfm.domain import (
     Outfile,
     OpList,
     MassDict,
+    FromDictProtocol, SerializableEnum
 )
 
 
@@ -45,6 +45,12 @@ class LanczosParams(FromDictProtocol):
         return {k: str(v) for k, v in self.items()}
 
 
+class CrossTerms(SerializableEnum):
+    NONE = 0
+    MASS = 1
+    SOLVE = 2
+    ALL = 3
+
 class CorrelatorStrategy(Enum):
     TWOPOINT = auto()
     SIB = auto()
@@ -63,7 +69,7 @@ class HighModeConfig(SimpleConfig):
     dt: int
     noise: int
     time: int
-    cross_terms: bool = True
+    cross_terms: CrossTerms = CrossTerms.NONE
     shift_gauge_name: str | None = None
     skip_low_modes: bool = False
     skip_cg: bool = False
@@ -87,7 +93,14 @@ class HighModeConfig(SimpleConfig):
     def masses(self) -> t.List[str]:
         return self.operations.mass
 
-    def get_solver_labels(self) -> t.List[str]:
+    def get_mass_labels(self, op:OpList.Op, skip_cross: bool = False) -> t.List[str]:
+        mass_labels = [self.mass.to_string(m, True) for m in op.mass]
+        if not skip_cross and self.cross_terms in (CrossTerms.MASS, CrossTerms.ALL):
+            cross_labels = [f"{a}_{mass_labels[j]}" for i,a in enumerate(mass_labels) for j in range(i)]
+            mass_labels += cross_labels
+        return mass_labels
+
+    def get_solver_labels(self, skip_cross: bool = False) -> t.List[str]:
         solver_labels = []
         if not self.skip_low_modes:
             solver_labels.append("ranLL")
@@ -98,5 +111,9 @@ class HighModeConfig(SimpleConfig):
                 solver_labels.append("ama")
             else:
                 solver_labels += [f"ama_{r}" for r in residuals]
+
+        if not skip_cross and self.cross_terms in (CrossTerms.SOLVE, CrossTerms.ALL):
+            cross_labels = [f"{a}_{b}" for a in solver_labels for b in solver_labels if a != b]
+            solver_labels += cross_labels
 
         return solver_labels
