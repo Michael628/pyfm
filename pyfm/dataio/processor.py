@@ -79,62 +79,6 @@ def generate_column_dfs(df, cols):
     yield from generate_dfs(df, generate_column_masks(df, cols))
 
 
-def stdjackknife(buff: gv.BufferDict) -> gv.BufferDict:
-    """
-    Compute the jackknife standard deviation for each element in a BufferDict.
-
-    This function performs jackknife resampling to calculate the standard deviation
-    for each element in the input BufferDict. Jackknife resampling involves systematically
-    leaving out one sample at a time and computing the desired statistic on the remaining data.
-
-    Parameters:
-        buff (gv.BufferDict): Input BufferDict containing data arrays for which
-                              the jackknife standard deviation is to be computed.
-
-    Returns:
-        gv.BufferDict: A BufferDict containing the computed standard deviations
-                       for each key in the input BufferDict.
-    """
-    buff_std = gv.BufferDict()
-
-    for k, v in buff.items():
-        stdarray = np.empty_like(v)
-        for i in range(len(v)):
-            j_sample = np.delete(v, i, axis=0)
-            stdarray[i, :] = np.std(j_sample, axis=0, ddof=1)
-        buff_std[k] = stdarray / np.sqrt(len(stdarray))
-
-    return buff_std
-
-
-# BUG: Broken
-# def mask_apply(
-#     df: pd.DataFrame,
-#     func: t.Callable,
-#     data_col: str,
-#     ungrouped_cols: t.List,
-#     invert: bool = False,
-# ) -> pd.DataFrame:
-#     all_cols = list(df.columns)
-#
-#     if not invert:
-#         ungrouped = ungrouped_cols + [data_col]
-#         grouped = [x for x in all_cols if x not in ungrouped]
-#     else:
-#         grouped = ungrouped_cols
-#         ungrouped = [x for x in all_cols if x not in grouped] + [data_col]
-#
-#     df_out = df
-#     for group, mask in generate_column_masks(df, grouped):
-#         df_out = df_out.mask(mask, func(df_out[mask]))
-# df_out = []
-#
-# for group, mask in col_mask_gen(df, grouped):
-#     df_out.append(func(df[mask]))
-#
-# return pd.concat(df_out)
-
-
 def group_apply(
     df: pd.DataFrame,
     apply_fn: t.Callable,
@@ -180,140 +124,6 @@ def group_apply(
     return df_out
 
 
-def buffer_avg(buff: gv.BufferDict, col_names: list[str] | None = None) -> pd.DataFrame:
-    """
-    Computes the average of data stored in a BufferDict and returns it as a pandas DataFrame.
-
-    Parameters:
-        buff (gv.BufferDict): A dictionary-like object where keys are group identifiers
-                              and values are numpy arrays of data.
-
-    Returns:
-        pd.DataFrame: A DataFrame containing the averaged data, with keys from the BufferDict
-                      as column names.
-    """
-
-    if col_names is None:
-        levels = next(iter(buff.keys()))
-        nlevels = 1 if isinstance(levels, str) else len(levels)
-        col_names = [f"level_{i}" for i in range(nlevels)]
-    counts = pd.Series({k: len(v) for k, v in buff.items()}, name="ncfgs").rename_axis(
-        index=col_names
-    )
-    avg_data = ds.avg_data(buff)
-    print(avg_data)
-    df = (
-        pd.DataFrame(dict(avg_data))
-        .rename_axis(index="t")
-        .rename_axis(columns=col_names)
-    )
-    print(df[30:60])
-    df = df.melt(ignore_index=False, value_name="corr").merge(
-        counts, right_index=True, left_on=col_names
-    )
-    return df
-
-
-def buffer(
-    df: pd.DataFrame,
-    data_col: str,
-    key_index: t.Union[str, t.List[str]],
-    fold: bool = False,
-) -> BufferTuple:
-    """
-    Converts a pandas DataFrame into a grouped buffer dictionary.
-
-    Parameters:
-        df (pd.DataFrame): The input DataFrame, expected to have a multi-index with a time variable.
-        data_col (str): The name of the column containing the data to be buffered.
-        key_index (Union[str, List[str]]): The column(s) or index level(s) to group by.
-
-    Returns:
-        gv.BufferDict: A dictionary-like object where keys are group identifiers and values are
-                       numpy arrays of reshaped data corresponding to each group.
-
-    Raises:
-        AssertionError: If the specified key_index is not found in the DataFrame's columns or index levels.
-    """
-    tvar = "t" if "t" in df.columns else "dt"
-
-    buff = gv.BufferDict()
-
-    nt = df[tvar].nunique()
-
-    # labels_dt_last = sorted(df.index.names, key=lambda x: 0 if x == tvar else -1)
-
-    if isinstance(key_index, str):
-        key_indices = [key_index]
-    else:
-        key_indices = key_index
-
-    buff_fold = gv.BufferDict()
-
-    for key, xs in df.groupby(key_indices, as_index=False):
-        k = key if len(key_indices) > 1 else key[0]
-        buff[k] = xs[data_col].to_numpy().reshape((-1, nt))
-        if fold:
-            size = buff[k].shape
-            size = (size[0], size[1] // 2 + 1)
-
-            buff_fold[k] = np.zeros(size, dtype=buff[k].dtype)
-
-            buff_fold[k][:, 1 : nt // 2] = (
-                buff[k][:, 1 : nt // 2] + buff[k][:, -1 : nt // 2 : -1]
-            ) / 2.0
-            buff_fold[k][:, 0] = buff[k][:, 0]
-            buff_fold[k][:, nt // 2] = buff[k][:, nt // 2]
-
-    return BufferTuple(buffer=buff if not fold else buff_fold, columns=key_indices)
-
-
-def signal_noise_nts(
-    data: t.Union[gv.BufferDict, pd.DataFrame], *args, **kwargs
-) -> pd.DataFrame:
-    corr_col = "corr"
-    if isinstance(data, pd.DataFrame):
-        col_names, buff = buffer(data, *args, **kwargs)
-    else:
-        assert isinstance(data, gv.BufferDict)
-        buff = data
-        col_names = None
-
-    signal = buffer_avg(buff, col_names)
-    noise = buffer_avg(stdjackknife(buff), col_names)
-
-    print(signal)
-    nts = noise.copy().assign(
-        **{corr_col: lambda x: x[corr_col].divide(signal[corr_col])}
-    )
-
-    df_out = (
-        pd.concat(
-            [signal, noise, nts],
-            keys=["signal", "noise", "nts"],
-            names=["dset"],
-        )
-        .reset_index()
-        .assign(
-            mean=lambda x: x[corr_col].map(gv.mean),
-            error=lambda x: x[corr_col].map(gv.sdev),
-        )
-    )
-    return df_out
-
-
-# def build_high(df: pd.DataFrame, data_col) -> pd.DataFrame:
-
-#     high = df.xs('ama', level='dset').sort_index()[data_col] \
-#         - df.xs('ranLL', level='dset').sort_index()[data_col]
-#     high = high.to_frame(data_col)
-#     high['dset'] = 'high'
-#     high.set_index('dset', append=True, inplace=True)
-#     high = high.reorder_levels(df.index.names)
-
-#     return pd.concat([df, high])
-
-
 def drop(df, _: str, *args):
     for key in args:
         assert isinstance(key, str)
@@ -323,7 +133,7 @@ def drop(df, _: str, *args):
         elif key in df.columns:
             _ = df.pop(key)
         else:
-            utils.get_logger().debug(f'Drop request skipped. Key not found: {key}')
+            utils.get_logger().debug(f"Drop request skipped. Key not found: {key}")
     return df
 
 
