@@ -15,7 +15,6 @@ from pyfm import utils
 
 from functools import partial
 
-
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
 
@@ -88,7 +87,7 @@ def get_file_loader(file_path: str):
 
 
 def load_files(
-    filestem: str,
+    filestem: str | t.List[str],
     replacements: t.Dict | None = None,
     regex: t.Dict | None = None,
     wildcard_fill: bool = False,
@@ -116,7 +115,11 @@ def load_files(
         if skip_file_set:
             file_repls = [f for f in file_repls if f[0] not in skip_file_set]
 
-        file_loader = partial(get_file_loader(filestem), **kwargs)
+        if not file_repls:
+            file0 = filestem if isinstance(filestem, str) else filestem[0] + ", ..."
+            raise ValueError(f"No files found for file search pattern: {file0}")
+
+        file_loader = partial(get_file_loader(file_repls[0][0]), **kwargs)
         flw = partial(file_loader_wrapper, file_loader)
 
         group_cols = []
