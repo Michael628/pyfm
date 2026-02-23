@@ -17,7 +17,7 @@ procFn = t.Callable[[str, t.Any], t.Any]
 
 
 def process_files(
-    filestem: str,
+    filestem: str | t.List[str],
     processor: procFn,
     replacements: t.Dict | None = None,
     regex: t.Dict | None = None,
@@ -131,35 +131,42 @@ def process_files(
 
             yield repl, repl_formatted_fstring
 
-    fstring_keys: t.List[str] = format_keys(filestem)
-
-    logger = get_logger()
-    logger.debug(f"fstring_keys: {sorted(fstring_keys)}")
-    missing_keys = set(fstring_keys)
-    if replacements:
-        logger.debug(f"replacement keys: {sorted(replacements.keys())}")
-        missing_keys -= set(replacements.keys())
-    if regex:
-        logger.debug(f"regex keys: {sorted(regex.keys())}")
-        missing_keys -= set(regex.keys())
+    # Normalize filestem to a list
+    filestems = [filestem] if isinstance(filestem, str) else filestem
 
     collection: t.List = []
+    logger = get_logger()
 
-    def file_gen():
-        fs = os.path.expanduser(filestem)
-        for str_reps, repl_filename in string_replacement_gen(fs, replacements):
-            for reg_reps, regex_filename in file_regex_gen(repl_filename, regex):
-                yield regex_filename, thaw(str_reps.update(reg_reps))
+    # Process each filestem
+    for fs in filestems:
+        fstring_keys: t.List[str] = format_keys(fs)
 
-    for filename, reps in file_gen():
-        try:
-            new_result = processor(filename, reps)
-        except StopIteration as e:
-            if e.args:
-                assert len(e.args) == 1
-                collection.append(e.args[0])
-            break
-        collection.append(new_result)
+        logger.debug(f"fstring_keys: {sorted(fstring_keys)}")
+        missing_keys = set(fstring_keys)
+        if replacements:
+            logger.debug(f"replacement keys: {sorted(replacements.keys())}")
+            missing_keys -= set(replacements.keys())
+        if regex:
+            logger.debug(f"regex keys: {sorted(regex.keys())}")
+            missing_keys -= set(regex.keys())
+
+        def file_gen():
+            expanded_fs = os.path.expanduser(fs)
+            for str_reps, repl_filename in string_replacement_gen(
+                expanded_fs, replacements
+            ):
+                for reg_reps, regex_filename in file_regex_gen(repl_filename, regex):
+                    yield regex_filename, thaw(str_reps.update(reg_reps))
+
+        for filename, reps in file_gen():
+            try:
+                new_result = processor(filename, reps)
+            except StopIteration as e:
+                if e.args:
+                    assert len(e.args) == 1
+                    collection.append(e.args[0])
+                break
+            collection.append(new_result)
 
     return collection
 
