@@ -8,27 +8,11 @@ from pyfm.core.builder import build_config
 from pyfm.tasks import get_task_handler, register_task
 
 
-# TODO: Consolidate layout, and job params into a config object
-def get_layout_params(
-    job_step: str, yaml_params: t.Dict[str, t.Any]
-) -> t.Dict[str, t.Any]:
-    if "submit" not in yaml_params or "layout" not in yaml_params["submit"]:
-        raise ValueError("No `submit` parameters provided.")
-
-    layout = yaml_params.get("submit").get("layout")
-    layout['lattice'] = yaml_params.get('submit').get('lattice',[0,0,0,0])
-    if job_step not in layout:
-        raise ValueError(f"No layout parameters provided for `{job_step}`.")
-    return layout | layout[job_step]
-
-
 def get_job_params(
     job_step: str, yaml_params: t.Dict[str, t.Any]
 ) -> t.Dict[str, t.Any]:
-    job_defaults = {
-        "job_type": "hadrons",
-        "task_type": "lmi",
-    }
+    job_defaults = yaml_params.get("shared_params", {})
+    job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
     if "job_setup" not in yaml_params:
         raise ValueError("No `job_setup` parameters provided.")
     if job_step not in yaml_params["job_setup"]:
