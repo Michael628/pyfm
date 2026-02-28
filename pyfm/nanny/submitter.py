@@ -9,10 +9,11 @@ from pyfm.domain import SimpleConfig
 from pyfm.core.builder import build_config
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
-from pyfm.nanny.setup import get_job_params, get_layout_params
+from pyfm.nanny.setup import get_job_params
 import pyfm.nanny.todo as todo
 
 from functools import reduce
+
 
 @dataclass(frozen=True)
 class NannyConfig(SimpleConfig):
@@ -25,7 +26,20 @@ class NannyConfig(SimpleConfig):
     lattice: t.List[int]
     scheduler: str
     job_name_pfx: str
-    layout: t.Dict[str,t.Any]
+
+
+@dataclass(frozen=True)
+class JobConfig(SimpleConfig):
+    run: str
+    job_type: str
+    step: str
+    io: str
+    wall_time: str
+    ppn: int
+    nodes: int
+    geom: t.List[int]
+    task_type: str | None = None
+    barrier: bool = True
 
 
 ######################################################################
@@ -107,8 +121,8 @@ def make_inputs(param, step, cfgno_steps):
     input_files = []
 
     for i in range(ncases):
-        (cfgno_series, _) = cfgno_steps[i]
-        (series, cfgno) = cfgno_series.split(".")
+        cfgno_series, _ = cfgno_steps[i]
+        series, cfgno = cfgno_series.split(".")
 
         infile = write_input_file(step, param, series, cfgno)
 
@@ -120,20 +134,18 @@ def make_inputs(param, step, cfgno_steps):
 
 
 ######################################################################
-def submit_job(yaml_params, step, cfgno_steps, max_cases):
+def submit_job(nanny_config: NannyConfig, job_config: JobConfig, cfgno_steps):
     """Submit the job"""
 
     ncases = len(cfgno_steps)
 
-    job_params = get_job_params(step, yaml_params)
-    job_script = job_params["run"]
-    wall_time = job_params["wall_time"]
-    queue_barrier = job_params.get("barrier", True)
+    job_script = job_config.run
+    wall_time = job_config.wall_time
+    queue_barrier = job_config.barrier
 
-    layout_params = get_layout_params(step, yaml_params)
-    basenodes = layout_params["nodes"]
-    ppj = reduce((lambda x, y: x * y), layout_params["geom"])
-    ppn = layout_params["ppn"]
+    basenodes = job_config.nodes
+    ppj = reduce((lambda x, y: x * y), job_config.geom)
+    ppn = job_config.ppn
 
     jpn = int(ppn / ppj)
     basetasks = basenodes * ppn if basenodes > 1 or jpn <= 1 else ppj
@@ -141,11 +153,11 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
         basenodes * ncases if jpn <= 1 else int((basenodes * ncases + jpn - 1) / jpn)
     )
     NP = str(nodes * ppn)
-    geom = ".".join([str(i) for i in layout_params["geom"]])
-    lattice = ".".join([str(i) for i in layout_params["lattice"]])
+    geom = ".".join(map(str, job_config.geom))
+    lattice = ".".join(map(str, nanny_config.lattice))
 
     # Append the number of cases to the step tag, as in A -> A3
-    job_name = yaml_params["submit"]["job_name_pfx"] + "-" + step + str(ncases)
+    job_name = nanny_config.job_name_pfx + "-" + job_config.step + str(ncases)
     os.environ["NP"] = NP
     os.environ["PPN"] = str(ppn)
     os.environ["PPJ"] = str(ppj)
@@ -163,7 +175,7 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
         sys.exit(1)
 
     # Job submission command depends on locale
-    scheduler = yaml_params["submit"]["scheduler"]
+    scheduler = nanny_config.scheduler
     if scheduler == "LSF":
         cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
     elif scheduler == "PBS":
@@ -223,7 +235,7 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
     for cfgno, index in cfgno_steps:
         cfgnos = cfgnos + cfgno
     date = subprocess.check_output("date", shell=True).rstrip().decode()
-    print(date, "Submitted job", jobid, "for", cfgnos, "step", step)
+    print(date, "Submitted job", jobid, "for", cfgnos, "step", job_config.step)
 
     return 0, jobid, queue_barrier
 
@@ -265,15 +277,15 @@ def nanny_loop(YAML, require_step: str | None = None):
         if os.access("STOP", os.R_OK):
             print("Spawn job process stopped because STOP file is present")
             break
-        params = yaml_params.get('shared_params',{})
-        params |= yaml_params['nanny'] 
-        params |= yaml_params['submit'] 
-        params |= yaml_params.get("files",{})
-        config = build_config(NannyConfig,params)
-        todo_file = os.path.join(config.home,config.todo_file)
-        max_cases = config.max_cases
-        job_name_pfx = yaml_params["submit"]["job_name_pfx"]
-        scheduler = yaml_params["submit"]["scheduler"]
+        nanny_params = yaml_params.get("shared_params", {})
+        nanny_params |= yaml_params["nanny"]
+        nanny_params |= yaml_params["submit"]
+        nanny_params |= yaml_params.get("files", {})
+        nanny_config = build_config(NannyConfig, nanny_params)
+        todo_file = os.path.join(nanny_config.home, nanny_config.todo_file)
+        max_cases = nanny_config.max_cases
+        job_name_pfx = nanny_config.job_name_pfx
+        scheduler = nanny_config.scheduler
 
         lock_file = todo.lock_file_name(todo_file)
 
@@ -281,7 +293,7 @@ def nanny_loop(YAML, require_step: str | None = None):
         nqueued = count_queue(scheduler, job_name_pfx)
 
         # Submit until we have the desired number of jobs in the queue
-        if nqueued < yaml_params["nanny"]["max_queue"]:
+        if nqueued < nanny_config.max_queue:
             todo.wait_set_todo_lock(lock_file)
             todo_list = todo.read_todo(todo_file)
             todo.remove_todo_lock(lock_file)
@@ -292,8 +304,9 @@ def nanny_loop(YAML, require_step: str | None = None):
 
             # Check completion and purge scratch files for complete jobs
             if check_count == 0:
+                # TODO: Replace check_jobs param with config object(s)
                 check_jobs(yaml_params)
-                check_count = int(yaml_params["nanny"]["check_interval"])
+                check_count = nanny_config.check_interval
 
             if ncases > 0:
                 # Make input
@@ -301,8 +314,12 @@ def nanny_loop(YAML, require_step: str | None = None):
 
                 # Submit the job
 
+                job_params = get_job_params(step, yaml_params)
+                job_params |= yaml_params["submit"]["layout"]
+                job_params |= yaml_params["submit"]["layout"].get(step, {})
+                job_config = build_config(JobConfig, job_params)
                 status, jobid, barrier = submit_job(
-                    yaml_params, step, cfgno_steps, max_cases
+                    nanny_config, job_config, cfgno_steps
                 )
 
                 # Job submissions succeeded
@@ -327,7 +344,7 @@ def nanny_loop(YAML, require_step: str | None = None):
 
         sys.stdout.flush()
 
-        subprocess.call(["sleep", str(yaml_params["nanny"]["wait"])])
+        subprocess.call(["sleep", str(nanny_config.wait)])
         check_count -= 1
 
         # Reload parameters in case of hot changes
