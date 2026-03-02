@@ -59,7 +59,9 @@ class Gamma(Enum):
     VEC_ONELINK = auto()
     VEC_LOCAL = auto()
     PION_LOCAL = auto()
-    IDENTITY = auto()
+    PSEUDO_SCALAR_LOCAL = PION_LOCAL
+    SCALAR_LOCAL = auto()
+    IDENTITY = SCALAR_LOCAL
     LOCAL = auto()
     ONELINK = auto()
     TWOLINK = auto()
@@ -81,8 +83,16 @@ class Gamma(Enum):
                 return ["G1_G1"]
             case Gamma.PION_LOCAL:
                 return ["G5_G5"]
-            case Gamma.LOCAL | Gamma.ONELINK | Gamma.TWOLINK | Gamma.THREELINK | Gamma.FOURLINK:
-                raise ValueError(f"{self.name} has no explicit gamma_list representation. See OpList.gamma_list instead.")
+            case (
+                Gamma.LOCAL
+                | Gamma.ONELINK
+                | Gamma.TWOLINK
+                | Gamma.THREELINK
+                | Gamma.FOURLINK
+            ):
+                raise ValueError(
+                    f"{self.name} has no explicit gamma_list representation. See OpList.gamma_list instead."
+                )
             case _:
                 return [self.name]
 
@@ -93,7 +103,6 @@ class Gamma(Enum):
         gammas = " ".join(gammas)
         gammas = gammas.replace("_", " ")
         return gammas
-
 
     @staticmethod
     def _local_gammas() -> t.List:
@@ -112,6 +121,7 @@ class Gamma(Enum):
             Gamma.G5Y_G5Y,
             Gamma.G5Z_G5Z,
         ]
+
     @staticmethod
     def _onelink_gammas() -> t.List:
         return [
@@ -125,12 +135,15 @@ class Gamma(Enum):
             Gamma.G5Y_G5,
             Gamma.G5Z_G5,
         ]
+
     @staticmethod
     def _twolink_gammas() -> t.List:
         return [Gamma.TWOLINK]
+
     @staticmethod
     def _threelink_gammas() -> t.List:
         return [Gamma.THREELINK]
+
     @staticmethod
     def _fourlink_gammas() -> t.List:
         return [Gamma.FOURLINK]
@@ -164,7 +177,7 @@ class OpList:
         gamma: Gamma
         mass: t.Tuple[str, ...]
 
-        def __eq__(self,gamma:Gamma) -> bool:
+        def __eq__(self, gamma: Gamma) -> bool:
             if self.gamma == gamma:
                 return True
             return False
@@ -238,14 +251,27 @@ class OpList:
 
         return list(res)
 
-    def group_by_mass_and_shift(self) -> t.Generator[t.Tuple[Op,t.List[Gamma]],None,None]:
+    def group_by_mass_and_shift(
+        self,
+    ) -> t.Generator[t.Tuple[Op, t.List[Gamma]], None, None]:
         for m in self.mass:
-            ops_with_mass_m = list(filter(lambda x: m in x.mass,self.op_list))
-            for i, g in enumerate([Gamma.LOCAL,Gamma.ONELINK,Gamma.TWOLINK,Gamma.THREELINK,Gamma.FOURLINK ]):
-                
-                if mass_m_shift_i := list(filter(lambda x: x.gamma.shift == i, ops_with_mass_m)):
-                    yield self.Op(gamma=g,mass=(m,)), [op.gamma for op in mass_m_shift_i]
-                
+            ops_with_mass_m = list(filter(lambda x: m in x.mass, self.op_list))
+            for i, g in enumerate(
+                [
+                    Gamma.LOCAL,
+                    Gamma.ONELINK,
+                    Gamma.TWOLINK,
+                    Gamma.THREELINK,
+                    Gamma.FOURLINK,
+                ]
+            ):
+
+                if mass_m_shift_i := list(
+                    filter(lambda x: x.gamma.shift == i, ops_with_mass_m)
+                ):
+                    yield self.Op(gamma=g, mass=(m,)), [
+                        op.gamma for op in mass_m_shift_i
+                    ]
 
     def __iter__(self):
         return iter(self.op_list)
