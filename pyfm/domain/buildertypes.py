@@ -40,9 +40,9 @@ class ConfigBuilder:
             cond=lambda x: isinstance(x, FormattableProtocol),
         )
         for field in iterator:
-            if field.name not in self._input_params:
+            value = self._input_params.get(field.name, None)
+            if value is None:
                 continue
-            value = self._input_params[field.name]
             try:
                 match field.container:
                     case field.container.SIMPLE:
@@ -117,7 +117,7 @@ class ConfigBuilder:
         if isinstance(value, StringableTypes):
             self.with_formatter(key, value)
         else:
-            value_preview =   str(value).split()[0] + " ..."
+            value_preview = str(value).split()[0] + " ..."
             utils.get_logger().debug(
                 f"Not using `{key}` (type: {type(value).__name__}) for formatting: {value_preview}"
             )
@@ -176,7 +176,9 @@ class ConfigBuilder:
                                 f"Unexpected parameter found when searching for Outfile param: {field_name}"
                             )
 
-        file_path: str = files_config.get("home", "") #WARNING: depracated location for files->home param
+        file_path: str = files_config.get(
+            "home", ""
+        )  # WARNING: depracated location for files->home param
         for field in self.iterate_outfiles():
             match field.container:
                 case field.container.SIMPLE:
