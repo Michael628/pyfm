@@ -8,12 +8,12 @@
 
 ## Workspace layout
 
-Run `build.sh` from a top-level workspace directory. It creates the following structure relative to where it's run (`TOPDIR`):
+Run `build.sh` from a top-level workspace directory. It creates the following structure relative to where it's run (`PYFMTOPDIR`):
 
 ```
-TOPDIR/
+PYFMTOPDIR/
 ├── pyfm/                  ← this repo
-│   └── systems/           ← build.sh lives here
+│   └── systems/           ← system-specific build scripts
 ├── Grid/                  (cloned automatically)
 │   ├── build-<system>/
 │   └── install-<system>/
@@ -89,9 +89,9 @@ Configuration is layered in this order (later sources override earlier ones):
 
 1. `configure-params_default.sh` – fallback functions (CPU, no MPI, no accelerator)
 2. `systems/<system>/configure-params.sh` – system-specific configure flags
-3. `configure-params-<system>[<ext>].sh` in `TOPDIR` – optional local overrides
+3. `configure-params-<system>[<ext>].sh` in `PYFMTOPDIR` – optional local overrides
 
-Environment is loaded from `systems/<system>/env.sh` unless a local `env-<system>[<ext>].sh` exists in `TOPDIR`.
+Environment is loaded by searching in order: `env${PYFM_SYSTEM_EXT}.sh` in the current working directory, then in `PYFMTOPDIR`, then falling back to `systems/<system>/env.sh`.
 
 ## Adding a new system
 
@@ -103,43 +103,43 @@ Environment is loaded from `systems/<system>/env.sh` unless a local `env-<system
 ### `configure-params.sh` function signatures
 
 ```bash
-# All functions receive BUILD_EXT, BUILD_DEBUG, BUILD_MPI_REDUCTION as globals from build.sh
+# All functions receive PYFM_SYSTEM_EXT, BUILD_DEBUG, BUILD_MPI_REDUCTION as globals from build.sh
 
 function grid_configure() {
   local INSTALLDIR=$1   # Grid install prefix
-  local TOPDIR=$2       # Workspace root
+  local PYFMTOPDIR=$2       # Workspace root
 
-  ${TOPDIR}/Grid/configure \
+  ${PYFMTOPDIR}/Grid/configure \
     --prefix=${INSTALLDIR} \
     # ... system-specific flags (SIMD, comms, accelerator, etc.)
 }
 
 function hadrons_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
-  ${TOPDIR}/Hadrons/configure \
+  ${PYFMTOPDIR}/Hadrons/configure \
     --prefix=${INSTALLDIR} \
-    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+    --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
 function glma_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
-  ${TOPDIR}/grid-lma/configure \
+  ${PYFMTOPDIR}/grid-lma/configure \
     --prefix=${INSTALLDIR} \
-    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+    --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
 function hmilc_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
-  ${TOPDIR}/HadronsMILC/configure \
+  ${PYFMTOPDIR}/HadronsMILC/configure \
     --prefix=${INSTALLDIR} \
-    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT} \
-    --with-hadrons=${TOPDIR}/Hadrons/install${BUILD_EXT}
+    --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT} \
+    --with-hadrons=${PYFMTOPDIR}/Hadrons/install${PYFM_SYSTEM_EXT}
 }
 
 function dependency_configure() {

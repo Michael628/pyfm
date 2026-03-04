@@ -3,14 +3,14 @@
 #
 # This script provides functions that set environment variables for configure calls.
 # It expects the following BUILD_* variables to be set by build.sh before sourcing:
-#   - BUILD_EXT
+#   - PYFM_SYSTEM_EXT
 #   - BUILD_DEBUG
 #   - BUILD_MPI_REDUCTION
 
 function grid_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
-  ${TOPDIR}/Grid/configure \
+  local PYFMTOPDIR=$2
+  ${PYFMTOPDIR}/Grid/configure \
     --prefix ${INSTALLDIR}      \
     --enable-comms=mpi       \
     --enable-simd=GPU \
@@ -21,7 +21,7 @@ function grid_configure() {
     --enable-old-rng \
     --disable-unified \
     --disable-gparity \
-    --with-lime=${TOPDIR}/deps/install${BUILD_EXT} \
+    --with-lime=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT} \
     CXX="nvcc" \
     CXXFLAGS="-ccbin CC -gencode arch=compute_90,code=sm_90 -std=c++17 -I${CUBLAS_PATH}/include -DEIGEN_DONT_VECTORIZE" \
     LIBS="-lcublas" \
@@ -30,27 +30,25 @@ function grid_configure() {
 
 function hadrons_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
   unset CXX #Should be grabbed from grid-config
 
   # Configure arguments for Hadrons
-  ${TOPDIR}/Hadrons/configure \
+  ${PYFMTOPDIR}/Hadrons/configure \
     --prefix=${INSTALLDIR} \
-    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+    --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
 function hmilc_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
   unset CXX #Should be grabbed from grid-config
   
   # Configure arguments for App
-  ${TOPDIR}/HadronsMILC/configure \
+  ${PYFMTOPDIR}/HadronsMILC/configure \
   --prefix=${INSTALLDIR} \
-  --with-grid=${TOPDIR}/Grid/install${BUILD_EXT} \
-  --with-hadrons=${TOPDIR}/Hadrons/install${BUILD_EXT}
-
-}
+  --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT} \
+  --with-hadrons=${PYFMTOPDIR}/Hadrons/install${PYFM_SYSTEM_EXT}
 
