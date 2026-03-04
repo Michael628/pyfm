@@ -17,6 +17,7 @@ function grid_configure() {
    --enable-shm=nvlink \
    --enable-gen-simd-width=64 \
    --enable-accelerator=cuda \
+   --enable-old-rng \
    --disable-fermion-reps \
    --disable-unified \
    --disable-gparity \
