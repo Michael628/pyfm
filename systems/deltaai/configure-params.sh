@@ -12,7 +12,7 @@ function grid_configure() {
   local TOPDIR=$2
   ${TOPDIR}/Grid/configure \
     --prefix ${INSTALLDIR}      \
-    --enable-comms=mpi-auto       \
+    --enable-comms=mpi       \
     --enable-simd=GPU \
     --enable-shm=nvlink \
     --enable-gen-simd-width=64 \
@@ -21,9 +21,36 @@ function grid_configure() {
     --enable-old-rng \
     --disable-unified \
     --disable-gparity \
-   --with-lime=${TOPDIR}/deps/install${BUILD_EXT} \
-    CXX="nvcc" MPICXX="mpicxx" \
-    LDFLAGS="-cudart shared" \
-    CXXFLAGS="-ccbin mpicxx -gencode arch=compute_80,code=sm_80 -std=c++17 -cudart shared"
+    --with-lime=${TOPDIR}/deps/install${BUILD_EXT} \
+    CXX="nvcc" \
+    CXXFLAGS="-ccbin CC -gencode arch=compute_90,code=sm_90 -std=c++17 -I${CUBLAS_PATH}/include -DEIGEN_DONT_VECTORIZE" \
+    LIBS="-lcublas" \
+    LDFLAGS="-L${CUBLAS_PATH}/lib"
+}
+
+function hadrons_configure() {
+  local INSTALLDIR=$1
+  local TOPDIR=$2
+
+  unset CXX #Should be grabbed from grid-config
+
+  # Configure arguments for Hadrons
+  ${TOPDIR}/Hadrons/configure \
+    --prefix=${INSTALLDIR} \
+    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+}
+
+function hmilc_configure() {
+  local INSTALLDIR=$1
+  local TOPDIR=$2
+
+  unset CXX #Should be grabbed from grid-config
+  
+  # Configure arguments for App
+  ${TOPDIR}/HadronsMILC/configure \
+  --prefix=${INSTALLDIR} \
+  --with-grid=${TOPDIR}/Grid/install${BUILD_EXT} \
+  --with-hadrons=${TOPDIR}/Hadrons/install${BUILD_EXT}
+
 }
 
