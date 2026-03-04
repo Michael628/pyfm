@@ -1,10 +1,10 @@
 #!/bin/sh
 
-TOPDIR=$(pwd)
-SRCDIR=${TOPDIR}/quda
-BUILD_EXT="-lq2"
-BUILDDIR=${SRCDIR}/build${BUILD_EXT}
-INSTALLDIR=${SRCDIR}/install${BUILD_EXT}
+PYFMTOPDIR=$(pwd)
+SRCDIR=${PYFMTOPDIR}/quda
+PYFM_SYSTEM_EXT="-deltaai"
+BUILDDIR=${SRCDIR}/build${PYFM_SYSTEM_EXT}
+INSTALLDIR=${SRCDIR}/install${PYFM_SYSTEM_EXT}
 
 module load gcc-native/12.3
 
@@ -40,7 +40,7 @@ make -j 32 >& make_quda.log
 make install
 
 QUDA_INSTALL=$INSTALLDIR
-SRCDIR={TOPDIR}/milc_qcd
+SRCDIR={PYFMTOPDIR}/milc_qcd
 
 if [ ! -d $SRCDIR ]
   then

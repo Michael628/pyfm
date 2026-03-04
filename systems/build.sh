@@ -1,7 +1,7 @@
 #! /bin/bash
 
 # Expected directory structure:
-# TOPDIR (root directory where this script is run from)
+# PYFMTOPDIR (root directory where this script is run from)
 # ├── pyfm/                  - This repo (git repo)
 # │   └── systems/           - System-specific configurations (this directory)
 # │       ├── ${CONFIG_SYSTEM}/
@@ -9,17 +9,17 @@
 # │       │   └── configure-params.sh - System build parameters
 # │       └── configure-params_default.sh - Default configuration parameters
 # ├── Grid/                  - Grid library (git repo, cloned from GitHub)
-# │   ├── build${BUILD_EXT}/ - Build directory
-# │   └── install${BUILD_EXT}/ - Installation directory
+# │   ├── build${PYFM_SYSTEM_EXT}/ - Build directory
+# │   └── install${PYFM_SYSTEM_EXT}/ - Installation directory
 # ├── Hadrons/               - Hadrons library (git repo, cloned from GitHub)
-# │   ├── build${BUILD_EXT}/ - Build directory
-# │   └── install${BUILD_EXT}/ - Installation directory
+# │   ├── build${PYFM_SYSTEM_EXT}/ - Build directory
+# │   └── install${PYFM_SYSTEM_EXT}/ - Installation directory
 # ├── grid-lma/              - Grid LMA application (git repo, cloned from GitHub)
-# │   ├── build${BUILD_EXT}/ - Build directory
-# │   └── install${BUILD_EXT}/ - Installation directory
+# │   ├── build${PYFM_SYSTEM_EXT}/ - Build directory
+# │   └── install${PYFM_SYSTEM_EXT}/ - Installation directory
 # ├── HadronsMILC/           - Hadrons Staggered Fermion application (git repo, cloned from GitHub)
-# │   ├── build${BUILD_EXT}/ - Build directory
-# │   └── install${BUILD_EXT}/ - Installation directory
+# │   ├── build${PYFM_SYSTEM_EXT}/ - Build directory
+# │   └── install${PYFM_SYSTEM_EXT}/ - Installation directory
 # ├── deps/                  - Dependencies directory
 # │   ├── gmp-6.2.1/         - GMP source (downloaded)
 # │   ├── gmp/               - Symlink to gmp-6.2.1
@@ -32,10 +32,10 @@
 # │   ├── openssl-3.3.1/     - OpenSSL source (downloaded)
 # │   ├── openssl/           - Symlink to openssl-3.3.1
 # │   └── install-${CONFIG_SYSTEM}/ - Installation directory for dependencies
-# ├── env${BUILD_EXT}.sh     - Optional local environment configuration
-# └── configure-params${BUILD_EXT}.sh - Optional local configuration parameters
+# ├── env${PYFM_SYSTEM_EXT}.sh     - Optional local environment configuration
+# └── configure-params${PYFM_SYSTEM_EXT}.sh - Optional local configuration parameters
 
-TOPDIR=$(pwd)
+PYFMTOPDIR="${PYFMTOPDIR:-$(pwd)}"
 
 function print_help() {
   cat << 'EOF'
@@ -117,7 +117,7 @@ function parse_flags() {
       ;;
       --ext)
         shift
-        BUILD_EXT="-$1"
+        BUILD_EXT=$1
         shift
       ;;
       --hdf5)
@@ -176,38 +176,28 @@ function parse_flags() {
     esac
   done
 
-  BUILD_EXT="-${CONFIG_SYSTEM}${BUILD_EXT}"
-}
-
-function source_env() {
-  # Load local environment if it exists, otherwise load system
-  if [ -f "${TOPDIR}/env${BUILD_EXT}.sh" ]; then
-    source ${TOPDIR}/env${BUILD_EXT}.sh
-  elif [ -f "${TOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh" ]; then
-    source ${TOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh
-  fi
 }
 
 function source_config_params() {
   # Load default params, then overwrite with system and local params
-  source ${TOPDIR}/pyfm/systems/configure-params_default.sh
+  source ${PYFMTOPDIR}/pyfm/systems/configure-params_default.sh
   # Overwrite with system params if they exist
-  [ -f "${TOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/configure-params.sh" ] && source ${TOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/configure-params.sh
+  [ -f "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/configure-params.sh" ] && source ${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/configure-params.sh
   # Overwrite with local params if they exist
-  [ -f "${TOPDIR}/configure-params${BUILD_EXT}.sh" ] && source ${TOPDIR}/configure-params${BUILD_EXT}.sh
+  [ -f "${PYFMTOPDIR}/configure-params${PYFM_SYSTEM_EXT}.sh" ] && source ${PYFMTOPDIR}/configure-params${PYFM_SYSTEM_EXT}.sh
 }
 
 function dependencies() {
   # Installs gmp, mpfr, lime, and (sometimes) hdf5
   # Uses global BUILD_* variables set by parse_flags()
 
-  WORKDIR=${TOPDIR}/deps
+  WORKDIR=${PYFMTOPDIR}/deps
   INSTALLDIR=${WORKDIR}/install-${CONFIG_SYSTEM}
 
   mkdir -p ${WORKDIR}
   pushd ${WORKDIR}
 
-  source_env
+  source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
   module list
 
   source_config_params
@@ -221,9 +211,9 @@ function dependencies() {
           fi
 
           pushd openssl-3.3.1
-          rm -rf build${BUILD_EXT}
-          mkdir -p build${BUILD_EXT}
-          pushd build${BUILD_EXT}
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
           dependency_configure "openssl" "${INSTALLDIR}"
           make all install
           status=$?
@@ -245,9 +235,9 @@ function dependencies() {
           fi
 
           pushd gmp-6.2.1
-          rm -rf build${BUILD_EXT}
-          mkdir -p build${BUILD_EXT}
-          pushd build${BUILD_EXT}
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
           dependency_configure "gmp" "${INSTALLDIR}"
           make all install
           status=$?
@@ -269,9 +259,9 @@ function dependencies() {
           fi
 
           pushd mpfr-4.1.0
-          rm -rf build${BUILD_EXT}
-          mkdir -p build${BUILD_EXT}
-          pushd build${BUILD_EXT}
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
           dependency_configure "mpfr" "${INSTALLDIR}"
           make all install
           status=$?
@@ -293,9 +283,9 @@ function dependencies() {
           fi
 
           pushd lime-1.3.2
-          rm -rf build${BUILD_EXT}
-          mkdir -p build${BUILD_EXT}
-          pushd build${BUILD_EXT}
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
           dependency_configure "lime" "${INSTALLDIR}"
           make all install
           status=$?
@@ -317,9 +307,9 @@ function dependencies() {
           fi
 
           pushd hdf5-1.10.10
-          rm -rf build${BUILD_EXT}
-          mkdir -p build${BUILD_EXT}
-          pushd build${BUILD_EXT}
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
           dependency_configure "hdf5" "${INSTALLDIR}"
           make all install
           status=$?
@@ -344,22 +334,22 @@ function build-component() {
     grid)
       GIT_REPO=https://github.com/milc-qcd/Grid
       GIT_BRANCH="feature/LMI-develop"
-      SRCDIR=${TOPDIR}/Grid
+      SRCDIR=${PYFMTOPDIR}/Grid
       ;;
     hadrons)
       GIT_REPO=https://github.com/milc-qcd/Hadrons
       GIT_BRANCH="feature/LMI-develop"
-      SRCDIR=${TOPDIR}/Hadrons
+      SRCDIR=${PYFMTOPDIR}/Hadrons
       ;;
     hmilc)
       GIT_REPO=https://github.com/Michael628/HadronsMILC
       GIT_BRANCH="develop"
-      SRCDIR=${TOPDIR}/HadronsMILC
+      SRCDIR=${PYFMTOPDIR}/HadronsMILC
       ;;
     glma)
       GIT_REPO=https://github.com/Michael628/grid-lma
       GIT_BRANCH="main"
-      SRCDIR=${TOPDIR}/grid-lma
+      SRCDIR=${PYFMTOPDIR}/grid-lma
       ;;
     *)
       echo "Unsupported build type"
@@ -367,14 +357,14 @@ function build-component() {
       exit 1
     esac
 
-	BUILDDIR=${SRCDIR}/build${BUILD_EXT}
-	INSTALLDIR=${SRCDIR}/install${BUILD_EXT}
+	BUILDDIR=${SRCDIR}/build${PYFM_SYSTEM_EXT}
+	INSTALLDIR=${SRCDIR}/install${PYFM_SYSTEM_EXT}
 
 	if [ ! -d ${SRCDIR} ]
 	then
 	  mkdir -p ${SRCDIR}
 	  echo "Fetching ${GIT_BRANCH} branch of ${SOURCE} package from github"
-	  pushd ${TOPDIR}
+	  pushd ${PYFMTOPDIR}
 	  git clone ${GIT_REPO} -b ${GIT_BRANCH}
     git submodule update --init
 	  popd
@@ -395,29 +385,29 @@ function build-component() {
 	then
 	  echo "Configuring ${SOURCE} in ${BUILDDIR}"
 
-    source_env
+    source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
     module list > compile.out 2>&1
 
     source_config_params
 
     case ${SOURCE} in
       grid)
-        grid_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
+        grid_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
         echo "Configure exit status $status"
       ;;
       hadrons)
-        hadrons_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
+        hadrons_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
         echo "Configure exit status $status"
       ;;
       glma)
-        glma_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
+        glma_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
         echo "Configure exit status $status"
       ;;
       hmilc)
-        hmilc_configure "${INSTALLDIR}" "${TOPDIR}" >> compile.out 2>&1
+        hmilc_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
         echo "Configure exit status $status"
       ;;
@@ -449,6 +439,11 @@ fi
 
 # Parse all command-line flags first
 parse_flags "$@"
+
+if [ ! -d "${PYFMTOPDIR}" ]; then
+  echo "Error: PYFMTOPDIR is not a valid directory: '${PYFMTOPDIR}'"
+  exit 1
+fi
 
 # Build dependencies if any were requested
 if [ "$BUILD_GMP" = 'true' ] || [ "$BUILD_MPFR" = 'true' ] || \

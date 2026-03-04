@@ -1,10 +1,10 @@
 #!/bin/sh
 
-TOPDIR=$(pwd)
-SRCDIR=${TOPDIR}/quda
-BUILD_EXT="-lq2"
-BUILDDIR=${SRCDIR}/build${BUILD_EXT}
-INSTALLDIR=${SRCDIR}/install${BUILD_EXT}
+PYFMTOPDIR=$(pwd)
+SRCDIR=${PYFMTOPDIR}/quda
+PYFM_SYSTEM_EXT="-lq2"
+BUILDDIR=${SRCDIR}/build${PYFM_SYSTEM_EXT}
+INSTALLDIR=${SRCDIR}/install${PYFM_SYSTEM_EXT}
 
 module load gompi cuda ucc_cuda ucx_cuda
 
@@ -50,7 +50,7 @@ make install
 popd
 
 QUDA_INSTALL=$INSTALLDIR
-SRCDIR={TOPDIR}/milc_qcd
+SRCDIR={PYFMTOPDIR}/milc_qcd
 
 if [ ! -d $SRCDIR ]
   then

@@ -3,39 +3,39 @@
 #
 # This script provides functions that set environment variables for configure calls.
 # It expects the following BUILD_* variables to be set by build.sh before sourcing:
-#   - BUILD_EXT
+#   - PYFM_SYSTEM_EXT
 #   - BUILD_DEBUG
 #   - BUILD_MPI_REDUCTION
 
 function glma_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
   # Configure arguments for Hadrons
-  ${TOPDIR}/grid-lma/configure \
+  ${PYFMTOPDIR}/grid-lma/configure \
     --prefix=${INSTALLDIR} \
-    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+    --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
 function hadrons_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
   # Configure arguments for Hadrons
-  ${TOPDIR}/Hadrons/configure \
+  ${PYFMTOPDIR}/Hadrons/configure \
     --prefix=${INSTALLDIR} \
-    --with-grid=${TOPDIR}/Grid/install${BUILD_EXT}
+    --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
 function hmilc_configure() {
   local INSTALLDIR=$1
-  local TOPDIR=$2
+  local PYFMTOPDIR=$2
 
   # Configure arguments for App
-  ${TOPDIR}/HadronsMILC/configure \
+  ${PYFMTOPDIR}/HadronsMILC/configure \
   --prefix=${INSTALLDIR} \
-  --with-grid=${TOPDIR}/Grid/install${BUILD_EXT} \
-  --with-hadrons=${TOPDIR}/Hadrons/install${BUILD_EXT}
+  --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT} \
+  --with-hadrons=${PYFMTOPDIR}/Hadrons/install${PYFM_SYSTEM_EXT}
 
 }
 
@@ -43,7 +43,7 @@ function dependency_configure() {
   local dep_name=$1
   local INSTALLDIR=$2
 
-  CONFIG=${TOPDIR}/deps/${dep_name}/configure
+  CONFIG=${PYFMTOPDIR}/deps/${dep_name}/configure
   pcc=cc
   pcxx=CC
   # Dependency-specific additions
@@ -57,7 +57,7 @@ function dependency_configure() {
       pcxx=mpicxx
     ;;
     openssl)
-      CONFIG=${TOPDIR}/deps/${dep_name}/config
+      CONFIG=${PYFMTOPDIR}/deps/${dep_name}/config
     ;;
   esac
   $CONFIG \
