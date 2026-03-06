@@ -179,7 +179,7 @@ def submit_job(nanny_config: NannyConfig, job_config: JobConfig, cfgno_steps):
     if scheduler == "LSF":
         cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
     elif scheduler == "PBS":
-        cmd = f"qsub -l nodes={str(nodes)} -N {job_name} {job_script}"
+        cmd = f"qsub -l nodes={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
     elif scheduler == "SLURM":
         # NEEDS UPDATING
         cmd = (
