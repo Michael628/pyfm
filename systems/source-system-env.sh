@@ -1,18 +1,44 @@
 #! /bin/bash
 
+function add_common_install_paths() {
+  QUDA_INSTALL=${PYFMTOPDIR}/quda/install${PYFM_SYSTEM_EXT}
+  HADRONSMILC_INSTALL=${PYFMTOPDIR}/HadronsMILC/install${PYFM_SYSTEM_EXT}
+  GRIDLMA_INSTALL=${PYFMTOPDIR}/grid-lma/install${PYFM_SYSTEM_EXT}
+  MAKELINKSHISQ_INSTALL=${PYFMTOPDIR}/milc_qcd/install${PYFM_SYSTEM_EXT}
+  DEPSINSTALL=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT}
+  for b in $QUDA_INSTALL $HADRONSMILC_INSTALL $GRIDLMA_INSTALL $MAKELINKSHISQ_INSTALL $DEPSINSTALL
+  do 
+    if [ -d "${d}/lib" ]; then
+      export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${d}/lib
+    fi
+    if [ -d "${d}/bin" ]; then
+      export PATH=${PATH}:${d}/bin
+    fi
+  done
+
+  export PYTHONPATH=${PYTHONPATH}:${PYFMTOPDIR}/pyfm
+
+  return 
+}
+
 if [ -z "${PYFMTOPDIR}" ] || [ ! -d "${PYFMTOPDIR}" ]; then
   echo "Error: PYFMTOPDIR is not set or not a valid directory (got: '${PYFMTOPDIR}')"
   return 1
 fi
 
 _EXT_SUFFIX=''
+PYFM_RUNTIME_ENV=true
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --system) CONFIG_SYSTEM="$2"; shift 2 ;;
-    --ext)    _EXT_SUFFIX="-$2"; shift 2 ;;
+    --system=*)      CONFIG_SYSTEM="${1#*=}"; shift ;;
+    --system)        CONFIG_SYSTEM="$2"; shift 2 ;;
+    --ext=*)         _EXT_SUFFIX="-${1#*=}"; shift ;;
+    --ext)           _EXT_SUFFIX="-$2"; shift 2 ;;
+    --runtime-env=*) PYFM_RUNTIME_ENV="${1#*=}"; shift ;;
+    --runtime-env)   PYFM_RUNTIME_ENV="$2"; shift 2 ;;
     --help)
-      echo "Usage: source systems/source-system-env.sh --system <name> [--ext <ext>]"
+      echo "Usage: source systems/source-system-env.sh --system <name> [--ext <ext>] [--runtime-env true|false]"
       return 0 ;;
     *) echo "Unknown argument: $1"; return 1 ;;
   esac
@@ -24,6 +50,8 @@ if [ -z "${CONFIG_SYSTEM}" ]; then
 fi
 
 PYFM_SYSTEM_EXT="-${CONFIG_SYSTEM}${_EXT_SUFFIX}"
+
+add_common_install_paths
 
 if [ -f "$(pwd)/env${PYFM_SYSTEM_EXT}.sh" ]; then
   source "$(pwd)/env${PYFM_SYSTEM_EXT}.sh"

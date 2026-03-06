@@ -9,7 +9,7 @@
 
 function grid_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
   ${PYFMTOPDIR}/Grid/configure \
     --prefix ${INSTALLDIR}      \
     --enable-comms=mpi       \
@@ -30,7 +30,7 @@ function grid_configure() {
 
 function hadrons_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
 
   unset CXX #Should be grabbed from grid-config
 
@@ -42,7 +42,7 @@ function hadrons_configure() {
 
 function hmilc_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
 
   unset CXX #Should be grabbed from grid-config
   
