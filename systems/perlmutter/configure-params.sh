@@ -9,7 +9,7 @@
 
 function grid_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
   ${PYFMTOPDIR}/Grid/configure \
    --prefix=${INSTALLDIR} \
    --enable-comms=mpi-auto       \

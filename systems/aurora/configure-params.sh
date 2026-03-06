@@ -9,7 +9,6 @@
 
 function grid_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
 
   if [ $BUILD_DEBUG = 'true' ]; then
     ext_flags='--enable-debug'

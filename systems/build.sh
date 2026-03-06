@@ -192,13 +192,12 @@ function dependencies() {
   # Uses global BUILD_* variables set by parse_flags()
 
   WORKDIR=${PYFMTOPDIR}/deps
-  INSTALLDIR=${WORKDIR}/install-${CONFIG_SYSTEM}
+  INSTALLDIR=${WORKDIR}/install-${PYFM_SYSTEM_EXT}
 
   mkdir -p ${WORKDIR}
   pushd ${WORKDIR}
 
-  source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
-  module list
+  module list > compile.out 2>&1
 
   source_config_params
 
@@ -214,8 +213,8 @@ function dependencies() {
           rm -rf build${PYFM_SYSTEM_EXT}
           mkdir -p build${PYFM_SYSTEM_EXT}
           pushd build${PYFM_SYSTEM_EXT}
-          dependency_configure "openssl" "${INSTALLDIR}"
-          make all install
+          dependency_configure "openssl" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
           status=$?
 
           popd
@@ -238,8 +237,8 @@ function dependencies() {
           rm -rf build${PYFM_SYSTEM_EXT}
           mkdir -p build${PYFM_SYSTEM_EXT}
           pushd build${PYFM_SYSTEM_EXT}
-          dependency_configure "gmp" "${INSTALLDIR}"
-          make all install
+          dependency_configure "gmp" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
           status=$?
 
           popd
@@ -262,8 +261,8 @@ function dependencies() {
           rm -rf build${PYFM_SYSTEM_EXT}
           mkdir -p build${PYFM_SYSTEM_EXT}
           pushd build${PYFM_SYSTEM_EXT}
-          dependency_configure "mpfr" "${INSTALLDIR}"
-          make all install
+          dependency_configure "mpfr" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
           status=$?
           popd
 
@@ -286,8 +285,8 @@ function dependencies() {
           rm -rf build${PYFM_SYSTEM_EXT}
           mkdir -p build${PYFM_SYSTEM_EXT}
           pushd build${PYFM_SYSTEM_EXT}
-          dependency_configure "lime" "${INSTALLDIR}"
-          make all install
+          dependency_configure "lime" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
           status=$?
           popd
 
@@ -310,8 +309,8 @@ function dependencies() {
           rm -rf build${PYFM_SYSTEM_EXT}
           mkdir -p build${PYFM_SYSTEM_EXT}
           pushd build${PYFM_SYSTEM_EXT}
-          dependency_configure "hdf5" "${INSTALLDIR}"
-          make all install
+          dependency_configure "hdf5" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
           status=$?
           popd
           if [ $status -ne 0 ]; then
@@ -357,6 +356,8 @@ function build-component() {
       exit 1
     esac
 
+  module list > compile.out 2>&1
+
 	BUILDDIR=${SRCDIR}/build${PYFM_SYSTEM_EXT}
 	INSTALLDIR=${SRCDIR}/install${PYFM_SYSTEM_EXT}
 
@@ -366,7 +367,6 @@ function build-component() {
 	  echo "Fetching ${GIT_BRANCH} branch of ${SOURCE} package from github"
 	  pushd ${PYFMTOPDIR}
 	  git clone ${GIT_REPO} -b ${GIT_BRANCH}
-    git submodule update --init
 	  popd
 	fi
 
@@ -385,48 +385,47 @@ function build-component() {
 	then
 	  echo "Configuring ${SOURCE} in ${BUILDDIR}"
 
-    source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
-    module list > compile.out 2>&1
-
     source_config_params
 
     case ${SOURCE} in
       grid)
         grid_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
-        echo "Configure exit status $status"
       ;;
       hadrons)
         hadrons_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
-        echo "Configure exit status $status"
       ;;
       glma)
         glma_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
-        echo "Configure exit status $status"
       ;;
       hmilc)
         hmilc_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
-        echo "Configure exit status $status"
       ;;
     esac
+    if [[ $status -ne 0 ]]; then
+      echo "${SOURCE} configure failed."
+      echo "See ${BUILDDIR}/compile.out for details."
+      exit 1
+    fi
+	fi
 
   if [ "$MAKE_COMPONENT" = 'true' ]; then
 
-	  if [ $status -ne 0 ]
-	  then
-	      echo "Quitting because of configure errors"
-	  else
-	    echo "Building in ${BUILDDIR}"
-	    make V=1 -k -j$THREADS  >> compile.out 2>&1
+    echo "Building in ${BUILDDIR}"
+    make V=1 -k -j$THREADS >> compile.out 2>&1
 
-	    echo "Installing in ${INSTALLDIR}"
-	    make install >> compile.out 2>&1
-	  fi
-
-	fi
+    echo "Installing in ${INSTALLDIR}"
+    make install >> compile.out 2>&1
+    status=$?
+    if [[ $status -ne 0 ]]; then
+      echo "${SOURCE} compilation failed."
+      echo "See ${BUILDDIR}/compile.out:"
+      tail ${BUILDDIR}/compile.out
+      exit 1
+    fi
 	fi
 	popd
 }
@@ -444,6 +443,9 @@ if [ ! -d "${PYFMTOPDIR}" ]; then
   echo "Error: PYFMTOPDIR is not a valid directory: '${PYFMTOPDIR}'"
   exit 1
 fi
+
+source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
+module list
 
 # Build dependencies if any were requested
 if [ "$BUILD_GMP" = 'true' ] || [ "$BUILD_MPFR" = 'true' ] || \

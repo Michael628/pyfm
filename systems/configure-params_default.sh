@@ -9,7 +9,6 @@
 
 function glma_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
 
   # Configure arguments for Hadrons
   ${PYFMTOPDIR}/grid-lma/configure \
@@ -19,7 +18,6 @@ function glma_configure() {
 
 function hadrons_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
 
   # Configure arguments for Hadrons
   ${PYFMTOPDIR}/Hadrons/configure \
@@ -29,7 +27,6 @@ function hadrons_configure() {
 
 function hmilc_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
 
   # Configure arguments for App
   ${PYFMTOPDIR}/HadronsMILC/configure \

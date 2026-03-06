@@ -107,7 +107,7 @@ Environment is loaded by searching in order: `env${PYFM_SYSTEM_EXT}.sh` in the c
 
 function grid_configure() {
   local INSTALLDIR=$1   # Grid install prefix
-  local PYFMTOPDIR=$2       # Workspace root
+  
 
   ${PYFMTOPDIR}/Grid/configure \
     --prefix=${INSTALLDIR} \
@@ -116,7 +116,7 @@ function grid_configure() {
 
 function hadrons_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
 
   ${PYFMTOPDIR}/Hadrons/configure \
     --prefix=${INSTALLDIR} \
@@ -125,7 +125,7 @@ function hadrons_configure() {
 
 function glma_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
 
   ${PYFMTOPDIR}/grid-lma/configure \
     --prefix=${INSTALLDIR} \
@@ -134,7 +134,7 @@ function glma_configure() {
 
 function hmilc_configure() {
   local INSTALLDIR=$1
-  local PYFMTOPDIR=$2
+  
 
   ${PYFMTOPDIR}/HadronsMILC/configure \
     --prefix=${INSTALLDIR} \

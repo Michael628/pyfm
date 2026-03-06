@@ -15,26 +15,18 @@ export MPICH_GPU_SUPPORT_ENABLED=1
 export GPU_SUPPORT_ENABLED=1
 # export CUBLAS_PATH=/opt/nvidia/hpc_sdk/Linux_aarch64/24.3/math_libs/12.3/targets/sbsa-linux
 export CUBLAS_PATH=${NVHPC_COMM_LIBS_HOME}/../math_libs/12.9/targets/sbsa-linux
-export LD_LIBRARY_PATH=${HOME}/pyfm/deps/install/deltaai-lib:${CUBLAS_PATH}/lib:${LD_LIBRARY_PATH}
 
 #export LD_LIBRARY_PATH=/opt/nvidia/hpc_sdk/Linux_aarch64/24.3/math_libs/12.3/targets/sbsa-linux/lib
 
-if [ -d "${PYFMTOPDIR}" ]; then
-  export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${PYFMTOPDIR}/deps/install-deltaai/lib
-  export PATH=${PATH}:${PYFMTOPDIR}/HadronsMILC/install-deltaai/bin
-  export PATH=${PATH}:${PYFMTOPDIR}/milc_qcd/ks_imp_utilities
-  export PYTHONPATH=${PYTHONPATH}:${PYFMTOPDIR}/pyfm
+if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
 
   # QUDA Tuning Directory: Change location as needed
-  export QUDA_RESOURCE_PATH=tunecache
-  mkdir -p tunecache
+  # export QUDA_RESOURCE_PATH=tunecache
+  # mkdir -p tunecache
 
   export QUDA_ENABLE_GDR=1
   export QUDA_MILC_HISQ_RECONSTRUCT=13
   export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9
-
-  QUDA_INSTALL=${PYFMTOPDIR}/quda/install-deltaai
-  export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${QUDA_INSTALL}/lib"
 
   export CRAY_ACCEL_TARGET=nvidia90
   export MPICH_RDMA_ENABLED_CUDA=1
