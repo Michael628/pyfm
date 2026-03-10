@@ -57,7 +57,7 @@ def generate_column_masks(
     if not group_cols:
         yield (None, pd.Series(True, index=df.index))
     else:
-        GroupTuple = namedtuple("GroupTuple", group_cols)
+        GroupTuple = utils.create_group_tuple(*group_cols)
         groups = df[group_cols].assign(group_num=df.groupby(group_cols).ngroup())
         for i, (group, _) in enumerate(groups.groupby(group_cols)):
             yield (GroupTuple(*group), groups["group_num"] == i)

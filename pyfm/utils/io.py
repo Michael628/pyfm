@@ -2,6 +2,7 @@ import itertools
 import os
 import re
 import typing as t
+from collections import namedtuple
 import glob
 
 from pyrsistent import freeze, thaw
@@ -14,6 +15,13 @@ from .string import format_keys, PartialFormatter
 from .logging import get_logger
 
 procFn = t.Callable[[str, t.Any], t.Any]
+
+
+def create_group_tuple(*args, **kwargs):
+    if kwargs:
+        return namedtuple("GroupTuple", kwargs.keys())
+    else:
+        return namedtuple("GroupTuple", args)
 
 
 def process_files(
