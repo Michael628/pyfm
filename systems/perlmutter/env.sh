@@ -22,8 +22,7 @@ if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
   export MPICH_ENV_DISPLAY=1
   export MPICH_GPU_SUPPORT_ENABLED=1
 
-  # export OMP_NUM_THREADS=16
-  export OMP_NUM_THREADS=32
+  export OMP_NUM_THREADS=16
 
   export SLURM_CPU_BIND="cores"
   export OMP_PROC_BIND="spread, spread, spread"

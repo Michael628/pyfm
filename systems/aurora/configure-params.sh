@@ -13,6 +13,11 @@ function grid_configure() {
   if [ $BUILD_DEBUG = 'true' ]; then
     ext_flags='--enable-debug'
   fi
+
+  if [ $OLD_RNG = 'true' ]; then
+    ext_flags='$ext_flags --enable-old-rng'
+  fi
+
   # ext_flags="$ext_flags --enable-accelerator-aware-mpi=yes  --enable-reduction=mpi"
   ext_flags="$ext_flags --enable-accelerator-aware-mpi=no  --enable-reduction=grid"
 

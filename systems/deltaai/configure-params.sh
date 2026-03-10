@@ -10,6 +10,10 @@
 function grid_configure() {
   local INSTALLDIR=$1
   
+  if [ $OLD_RNG = 'true' ]; then
+    ext_flags='--enable-old-rng'
+  fi
+
   ${PYFMTOPDIR}/Grid/configure \
     --prefix ${INSTALLDIR}      \
     --enable-comms=mpi       \
@@ -18,7 +22,7 @@ function grid_configure() {
     --enable-gen-simd-width=64 \
     --enable-accelerator=cuda \
     --disable-fermion-reps \
-    --enable-old-rng \
+    ${ext_flags} \
     --disable-unified \
     --disable-gparity \
     --with-lime=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT} \
