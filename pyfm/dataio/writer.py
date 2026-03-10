@@ -1,4 +1,5 @@
 import os
+import tarfile
 import typing as t
 
 import numpy as np
@@ -13,7 +14,10 @@ loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
 
 
 def write(
-    df: pd.DataFrame, filestem: str, write_fn: t.Callable[[pd.DataFrame, str], None]
+    df: pd.DataFrame,
+    filestem: str,
+    write_fn: t.Callable[[pd.DataFrame, str], None],
+    tar: str | None = None,
 ) -> None:
     """
     Writes the data from a DataFrame to one or more files based on the given format and specified write function.
@@ -23,6 +27,7 @@ def write(
     filestem (str): A filename format string that may include placeholders for column values.
     write_fn (Callable[[pd.DataFrame, str], None]): A callable function responsible for writing each portion of the DataFrame to a file,
     taking the specific DataFrame segment and file path as arguments.
+    tar (str | None): If provided, bundles all output files into a tar archive at this path and removes the originals.
 
     Behavior:
     - If the `filestem` contains placeholders (keys enclosed in `{}`) that match column names in the DataFrame:
@@ -33,10 +38,13 @@ def write(
     - If the `filestem` does not contain placeholders:
         - Writes the entire DataFrame to a single file using the specified `filestem` as the filename.
     - Creates the necessary directories for the output files if they do not already exist.
+    - If `tar` is specified, all written files are bundled into a tar archive at that path and the originals are removed.
     """
     fs = os.path.expanduser(filestem)
     repl_keys: t.List[str] = utils.string.format_keys(fs)
     logger = utils.get_logger()
+    written_files: t.List[str] = []
+
     if repl_keys:
         logger.debug(f"df columns: {df.columns}")
         logger.debug(f"df indices: {df.index.names}")
@@ -57,6 +65,7 @@ def write(
             out_cols = [c for c in df_group.columns if c not in repl_keys]
 
             write_fn(df_group[out_cols], filename)
+            written_files.append(filename)
 
     else:
         filename = fs
@@ -65,67 +74,23 @@ def write(
             os.makedirs(directory, exist_ok=True)
 
         write_fn(df, fs)
+        written_files.append(filename)
+
+    if tar is not None:
+        tar_path = os.path.expanduser(tar)
+        if directory := os.path.dirname(tar_path):
+            os.makedirs(directory, exist_ok=True)
+        logger.info(f"Bundling {len(written_files)} file(s) into tar: {tar_path}")
+        with tarfile.open(tar_path, "w") as tf:
+            for f in written_files:
+                tf.add(f, arcname=os.path.basename(f))
+        for f in written_files:
+            os.remove(f)
 
 
 def write_files(
-    df: pd.DataFrame, filestem: str, *, format: str | None = None, **kwargs
+    df: pd.DataFrame, filestem: str, *, format: str | None = None, tar: str | None = None, **kwargs
 ) -> None:
-    def write_dict(filestem: str, dict_depth: int) -> None:
-        """
-        Writes a pandas DataFrame to a dictionary file format.
-
-        Parameters:
-        df: pd.DataFrame
-            The input pandas DataFrame to be written.
-        filestem: str
-            The base name for the output file.
-        dict_depth: int
-            The depth of the dictionary structure to be created.
-
-        See frame_to_dict for details on conversion from DataFrame to dictionary.
-        """
-
-        def writeconvert(data, fname):
-            np.save(fname, frame_to_dict(data, dict_depth))
-
-        write(df, filestem, write_fn=writeconvert)
-
-    def write_hdf5(filestem: str) -> None:
-        """
-        Writes a DataFrame to a file with a specified filestem using a custom write function.
-
-        Parameters:
-        df : pd.DataFrame
-            The DataFrame to be written to a file.
-        filestem : str
-            The base name for the output file.
-
-        See write_data for details.
-        """
-        write(
-            df,
-            filestem + ".h5",
-            write_fn=lambda data, fname: data.to_hdf(fname, key="corr", mode="w"),
-        )
-
-    def write_csv(filestem: str) -> None:
-        """
-        Writes a DataFrame to a file with a specified filestem using a custom write function.
-
-        Parameters:
-        df : pd.DataFrame
-            The DataFrame to be written to a file.
-        filestem : str
-            The base name for the output file.
-
-        See write_data for details.
-        """
-        write(
-            df,
-            filestem + ".csv",
-            write_fn=lambda data, fname: data.to_csv(fname),
-        )
-
     # Determine output file format from parameter or filestem extension
     stem, ext = os.path.splitext(filestem)
     match ext:
@@ -142,10 +107,17 @@ def write_files(
                 )
 
     if format == "csv":
-        write_csv(stem, **kwargs)
+        out_filestem = stem + ".csv"
+        fn = lambda data, fname: data.to_csv(fname)
     elif format == "hdf5":
-        write_hdf5(stem, **kwargs)
+        out_filestem = stem + ".h5"
+        fn = lambda data, fname: data.to_hdf(fname, key="corr", mode="w")
     elif format == "dict":
-        write_dict(stem, **kwargs)
+        dict_depth = kwargs.pop("dict_depth")
+        out_filestem = stem
+        def fn(data, fname):
+            np.save(fname, frame_to_dict(data, dict_depth))
     else:
         raise NotImplementedError(f"No support for format {format}.")
+
+    write(df, out_filestem, write_fn=fn, tar=tar)

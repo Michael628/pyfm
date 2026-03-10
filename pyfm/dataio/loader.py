@@ -1,6 +1,5 @@
 import os
 import typing as t
-from collections import namedtuple
 
 from concurrent.futures import ThreadPoolExecutor
 import h5py
@@ -124,9 +123,9 @@ def load_files(
 
         group_cols = []
         if len(file_repls) > 0:
-            group_cols = file_repls[0][1].keys()
+            group_cols = list(file_repls[0][1].keys())
 
-        GroupTuple = namedtuple("GroupTuple", group_cols)
+        GroupTuple = utils.create_group_tuple(*group_cols)
 
         def temp(*args):
             fname, rep = args[0]
