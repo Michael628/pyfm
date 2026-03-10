@@ -83,8 +83,9 @@ function parse_flags() {
   BUILD_HDF5='false'
   BUILD_OPENSSL='false'
   FORCE_REBUILD='false'
-  MAKE_COMPONENT='true'
+  SKIP_MAKE='true'
   BUILD_EXT=''
+  OLD_RNG='false'
   CONFIG_SYSTEM='scalar'
   THREADS=4
   BUILD_COMPONENTS=''
@@ -96,6 +97,11 @@ function parse_flags() {
       # Dependency flags
       --gmp)
         BUILD_GMP='true'
+        shift
+      ;;
+      --old-rng)
+        shift
+        OLD_RNG='true'
         shift
       ;;
       --threads)
@@ -148,7 +154,7 @@ function parse_flags() {
         shift
       ;;
       --skip-make)
-        MAKE_COMPONENT='false'
+        SKIP_MAKE='false'
         shift
       ;;
 
@@ -412,7 +418,7 @@ function build-component() {
     fi
 	fi
 
-  if [ "$MAKE_COMPONENT" = 'true' ]; then
+  if [ "$SKIP_MAKE" = 'true' ]; then
 
     echo "Building in ${BUILDDIR}"
     make V=1 -k -j$THREADS >> compile.out 2>&1
