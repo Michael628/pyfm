@@ -450,7 +450,7 @@ if [ ! -d "${PYFMTOPDIR}" ]; then
   exit 1
 fi
 
-source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
+source ${PYFMTOPDIR}/pyfm/systems/source-system-env.sh --runtime-env=false --system ${CONFIG_SYSTEM}${BUILD_EXT:+ --ext ${BUILD_EXT}}
 module list
 
 # Build dependencies if any were requested

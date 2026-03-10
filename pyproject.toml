@@ -32,6 +32,13 @@ dependencies = [
     "pyrsistent>=0.20.0",
 ]
 
+[project.optional-dependencies]
+docs = [
+    "mkdocs>=1.5",
+    "mkdocs-material>=9.0",
+    "mkdocstrings[python]>=0.24",
+]
+
 [project.urls]
 Homepage = "https://github.com/Michael628/pyfm"
 
