@@ -8,11 +8,11 @@ function add_common_install_paths() {
   DEPSINSTALL=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT}
   for b in $QUDA_INSTALL $HADRONSMILC_INSTALL $GRIDLMA_INSTALL $MAKELINKSHISQ_INSTALL $DEPSINSTALL
   do 
-    if [ -d "${d}/lib" ]; then
-      export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${d}/lib
+    if [ -d "${b}/lib" ]; then
+      export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:${b}/lib
     fi
-    if [ -d "${d}/bin" ]; then
-      export PATH=${PATH}:${d}/bin
+    if [ -d "${b}/bin" ]; then
+      export PATH=${PATH}:${b}/bin
     fi
   done
 
@@ -54,10 +54,13 @@ PYFM_SYSTEM_EXT="-${CONFIG_SYSTEM}${_EXT_SUFFIX}"
 add_common_install_paths
 
 if [ -f "$(pwd)/env${PYFM_SYSTEM_EXT}.sh" ]; then
+  echo "Loading: $(pwd)/env${PYFM_SYSTEM_EXT}.sh"
   source "$(pwd)/env${PYFM_SYSTEM_EXT}.sh"
 elif [ -f "${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh" ]; then
+  echo "Loading: ${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh"
   source "${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh"
 elif [ -f "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh" ]; then
+  echo "Loading: ${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh"
   source "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh"
 else
   echo "No env.sh found for system '${CONFIG_SYSTEM}'"

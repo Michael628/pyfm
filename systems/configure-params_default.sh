@@ -50,7 +50,6 @@ function dependency_configure() {
     ;;
     hdf5)
       DEP_CONFIGURE_ARGS="--enable-cxx"
-      pcc=mpicc
       pcxx=mpicxx
     ;;
     openssl)

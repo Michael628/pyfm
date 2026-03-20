@@ -1,15 +1,15 @@
 #! /bin/bash
 
-module reset 
-module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/Core 
-module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/oneapi/2025.0.5 
-module unload mpich 
-module unload oneapi 
-module use /soft/compilers/oneapi/2025.1.0/modulefiles 
-module load oneapi/public/2025.1.0 
-module use /home/bertoni/mpich_module/ 
-module load aurora_test_2025.1 
-
+# module reset 
+# module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/Core 
+# module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/oneapi/2025.0.5 
+# module unload mpich 
+# module unload oneapi 
+# module use /soft/compilers/oneapi/2025.1.0/modulefiles 
+# module load oneapi/public/2025.1.0 
+# module use /home/bertoni/mpich_module/ 
+# module load aurora_test_2025.1 
+#
 export HTTP_PROXY=http://proxy.alcf.anl.gov:3128
 export HTTPS_PROXY=http://proxy.alcf.anl.gov:3128
 export http_proxy=http://proxy.alcf.anl.gov:3128
