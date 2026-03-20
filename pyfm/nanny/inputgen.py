@@ -5,6 +5,7 @@ from pyfm.nanny.setup import create_task
 from pyfm import utils
 from pyfm.domain import Outfile
 from pyfm.tasks.hadrons import hadmods
+from pyfm.tasks.grid import gridmods
 
 
 @t.runtime_checkable
@@ -28,6 +29,14 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
         infile = utils.io.write_plain_text(
             infile_stem, task.build_input_params(), ext="txt"
         )
+    elif "grid" in task_key:
+        grid_input = task.build_input_params()
+
+        xml_dict = gridmods.xml_wrapper(
+            run_seed=task.config.runid, series=series, cfg=cfg
+        )
+        xml_dict["grid"]["parameters"] |= grid_input
+        infile = utils.io.write_xml(infile_stem, xml_dict)
     elif "hadrons" in task_key:
         hadrons_input = task.build_input_params()
 
