@@ -198,7 +198,7 @@ function dependencies() {
   # Uses global BUILD_* variables set by parse_flags()
 
   WORKDIR=${PYFMTOPDIR}/deps
-  INSTALLDIR=${WORKDIR}/install-${PYFM_SYSTEM_EXT}
+  INSTALLDIR=${WORKDIR}/install${PYFM_SYSTEM_EXT}
 
   mkdir -p ${WORKDIR}
   pushd ${WORKDIR}
