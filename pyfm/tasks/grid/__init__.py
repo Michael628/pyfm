@@ -62,67 +62,76 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
         mass="0.0" if not config.epack_config.load else None,
         **irl_kwargs,
     )
-    highModeActions = [
-        gridmods.action(str(config.high_modes_config.mass[m]))
-        for m in config.high_modes_config.masses
-    ]
-    sources = [
-        gridmods.random_wall_source(
-            t_step=str(config.high_modes_config.time),
-            t0=str(t),
-            n_src=str(config.high_modes_config.noise),
-            seed=f"noise_t{t}",
-        )
-        for t in range(
-            config.high_modes_config.tstart,
-            config.high_modes_config.tstop + 1,
-            config.high_modes_config.dt,
-        )
-    ]
-    a2a = [
-        gridmods.meson_field(
-            block=str(config.meson_config.blocksize),
-            mass=str(config.meson_config.mass[op.mass[0]]),
-            output=config.meson_config.meson.filestem.format(
-                mass=config.high_modes_config.mass.to_string(op.mass[0], True)
-            ),
-            gammas=" ".join(g.gamma_string for g in gammas),
-            apply_g5=str(config.meson_config.apply_g5).lower(),
-        )
-        for op, gammas in config.meson_config.operations.group_by_mass_and_shift()
-    ]
+    if config.skip_high_modes:
+        highModeActions = []
+        sources = []
+    else:
+        highModeActions = [
+            gridmods.action(str(config.high_modes_config.mass[m]))
+            for m in config.high_modes_config.masses
+        ]
+        sources = [
+            gridmods.random_wall_source(
+                t_step=str(config.high_modes_config.time),
+                t0=str(t),
+                n_src=str(config.high_modes_config.noise),
+                seed=f"noise_t{t}",
+            )
+            for t in range(
+                config.high_modes_config.tstart,
+                config.high_modes_config.tstop + 1,
+                config.high_modes_config.dt,
+            )
+        ]
+    if config.skip_meson:
+        a2a = []
+    else:
+        a2a = [
+            gridmods.meson_field(
+                block=str(config.meson_config.blocksize),
+                mass=str(config.meson_config.mass[op.mass[0]]),
+                output=config.meson_config.meson.filestem.format(
+                    mass=config.high_modes_config.mass.to_string(op.mass[0], True)
+                ),
+                gammas=" ".join(g.gamma_string for g in gammas),
+                apply_g5=str(config.meson_config.apply_g5).lower(),
+            )
+            for op, gammas in config.meson_config.operations.group_by_mass_and_shift()
+        ]
 
-    corr = [
-        gridmods.contraction(
-            quark=gridmods.spin_taste(
-                gammas=con.quark.gamma.gamma_string,
-                apply_g5=str(con.quark.apply_g5).lower(),
-            ),
-            antiquark=gridmods.spin_taste(
-                gammas=con.antiquark.gamma.gamma_string,
-                apply_g5=str(con.antiquark.apply_g5).lower(),
-            ),
-            sink=gridmods.spin_taste(
-                gammas=con.sink.gamma.gamma_string,
-                apply_g5=str(con.sink.apply_g5).lower(),
-            ),
-            lma_output=hadrons_to_grid_filestem(
-                config.high_modes_config.high_modes.filestem, config.series
-            ).format(
-                mass=config.high_modes_config.mass.to_string(op.mass[0], True),
-                dset="ranLL",
-                gamma_label=op.gamma.name.lower(),
-            ),
-            ama_output=hadrons_to_grid_filestem(
-                config.high_modes_config.high_modes.filestem, config.series
-            ).format(
-                mass=config.high_modes_config.mass.to_string(op.mass[0], True),
-                dset="ama",
-                gamma_label=op.gamma.name.lower(),
-            ),
+    corr = []
+    for op, con in contraction_gen(config.high_modes_config):
+        mass_label = con.mass_label(config.high_modes_config.mass)
+        corr.append(
+            gridmods.contraction(
+                quark=gridmods.spin_taste(
+                    gammas=con.quark.gamma.gamma_string,
+                    apply_g5=str(con.quark.apply_g5).lower(),
+                ),
+                antiquark=gridmods.spin_taste(
+                    gammas=con.antiquark.gamma.gamma_string,
+                    apply_g5=str(con.antiquark.apply_g5).lower(),
+                ),
+                sink=gridmods.spin_taste(
+                    gammas=con.sink.gamma.gamma_string,
+                    apply_g5=str(con.sink.apply_g5).lower(),
+                ),
+                lma_output=hadrons_to_grid_filestem(
+                    config.high_modes_config.high_modes.filestem, config.series
+                ).format(
+                    mass=mass_label,
+                    dset="ranLL",
+                    gamma_label=op.gamma.name.lower(),
+                ),
+                ama_output=hadrons_to_grid_filestem(
+                    config.high_modes_config.high_modes.filestem, config.series
+                ).format(
+                    mass=mass_label,
+                    dset="ama",
+                    gamma_label=op.gamma.name.lower(),
+                ),
+            )
         )
-        for op, con in contraction_gen(config.high_modes_config.operations)
-    ]
     return dict(
         gauge=gauge,
         epack=epack_params,
