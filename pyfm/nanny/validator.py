@@ -6,7 +6,7 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 
-from pyfm.nanny.setup import create_task
+from pyfm.nanny.core import create_task
 import pyfm.nanny.todo as todo
 
 
@@ -179,7 +179,7 @@ def next_finished(param, todo_list, entry_list) -> t.Tuple[int, str, str] | None
 
 ######################################################################
 def has_good_output(step: str, cfgno: str, param: t.Dict) -> bool:
-    (series, cfg) = cfgno.split(".")
+    series, cfg = cfgno.split(".")
 
     df = audit_outfiles(step, param, series, cfg)
     bad_file_mask = (df["exists"] == False) | (df["file_size"] < df["good_size"])

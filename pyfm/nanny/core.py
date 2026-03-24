@@ -1,16 +1,47 @@
 import typing as t
+from pydantic.dataclasses import dataclass
 
-from pyfm.domain import (
-    ConfigBase,
-    ConfigHandler,
-)
+from pyfm.domain import ConfigBase, ConfigHandler, SimpleConfig
 from pyfm.core.builder import build_config
 from pyfm.tasks import get_task_handler, register_task
 
 
-def get_job_params(
-    job_step: str, yaml_params: t.Dict[str, t.Any]
-) -> t.Dict[str, t.Any]:
+@dataclass(frozen=True)
+class NannyConfig(SimpleConfig):
+    home: str
+    todo_file: str
+    max_cases: int
+    max_queue: int
+    wait: int
+    check_interval: int
+    lattice: t.List[int]
+    job_name_pfx: str
+    scheduler: str
+
+
+@dataclass(frozen=True)
+class JobConfig(SimpleConfig):
+    run: str
+    job_type: str
+    step: str
+    io: str
+    wall_time: str
+    ppn: int
+    nodes: int
+    geom: t.List[int]
+    task_type: str | None = None
+    barrier: bool = True
+
+
+def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
+    nanny_params = yaml_params.get("shared_params", {})
+    nanny_params |= yaml_params["nanny"]
+    nanny_params |= yaml_params["submit"]
+    nanny_params |= yaml_params.get("files", {})
+    return build_config(NannyConfig, nanny_params)
+
+
+def get_job_config(job_step: str, yaml_params: t.Dict[str, t.Any]) -> JobConfig:
     job_defaults = yaml_params.get("shared_params", {})
     job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
     if "job_setup" not in yaml_params:
@@ -28,11 +59,15 @@ def get_job_params(
     if get_task_handler(job_type, task_type) is None:
         raise ValueError(f"No task handler found for {job_type}, {task_type}")
 
-    return job_params
+    job_params |= yaml_params["submit"]["layout"]
+    job_params |= yaml_params["submit"]["layout"].get(job_step, {})
+    return build_config(JobConfig, job_params)
 
 
 def get_task_params(
-    job_step: str, yaml_params: t.Dict[str, t.Any], defaults: t.Dict[str, t.Any] | None
+    job_config: JobConfig,
+    yaml_params: t.Dict[str, t.Any],
+    defaults: t.Dict[str, t.Any] | None,
 ) -> t.Tuple[t.Dict[str, t.Any], t.Dict[str, t.Any]]:
     """
     Returns:
@@ -43,9 +78,7 @@ def get_task_params(
     if defaults is None:
         defaults = {}
 
-    job_params = get_job_params(job_step, yaml_params)
-
-    job_type = job_params["job_type"]
+    job_type = job_config.job_type
 
     # Build flattened global params (WITHOUT tasks)
     global_params = (
@@ -61,11 +94,11 @@ def get_task_params(
         yaml_params.get(f"{job_type}_params", {})
         |
         # Load job-specific overrides
-        job_params.get("params", {})
+        job_config.formatting.get("params", {})
     )
 
     # Keep task configs separate
-    task_configs = job_params.get("tasks", {})
+    task_configs = job_config.formatting.get("tasks", {})
 
     return global_params, task_configs
 
@@ -87,13 +120,14 @@ def create_task(
     if cfg:
         param_defaults["cfg"] = cfg
 
+    job_config = get_job_config(job_step, yaml_params)
     # Get separated params
     global_params, task_configs = get_task_params(
-        job_step, yaml_params, defaults=param_defaults
+        job_config, yaml_params, defaults=param_defaults
     )
 
     job_type, task_type = map(
-        get_job_params(job_step, yaml_params).get, ["job_type", "task_type"]
+        lambda x: getattr(job_config, x), ["job_type", "task_type"]
     )
 
     handler = get_task_handler(job_type, task_type)

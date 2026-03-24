@@ -1,7 +1,7 @@
 import typing as t
 import yaml
 
-from pyfm.nanny.setup import create_task
+from pyfm.nanny.core import create_task
 from pyfm import utils
 from pyfm.domain import Outfile
 from pyfm.tasks.hadrons import hadmods
