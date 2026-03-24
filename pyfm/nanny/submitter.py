@@ -6,7 +6,7 @@ import typing as t
 from pyfm import utils
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
-from pyfm.nanny.core import get_job_config, NannyConfig, JobConfig
+from pyfm.nanny.core import get_job_config, get_nanny_config, NannyConfig, JobConfig
 import pyfm.nanny.todo as todo
 
 from functools import reduce
@@ -159,12 +159,12 @@ def get_jobid(scheduler: str, reply: str):
     if isinstance(jobid, bytes):
         jobid = jobid.decode("ASCII")
 
+    return jobid
+
 
 ######################################################################
-def submit_job(nanny_config: NannyConfig, job_config: JobConfig, cfgno_steps):
+def submit_job(nanny_config: NannyConfig, job_config: JobConfig, ncases: int):
     """Submit the job"""
-
-    ncases = len(cfgno_steps)
 
     basenodes = job_config.nodes
     ppj = reduce((lambda x, y: x * y), job_config.geom)
@@ -205,11 +205,7 @@ def submit_job(nanny_config: NannyConfig, job_config: JobConfig, cfgno_steps):
 
     print("\n".join(reply))
 
-    jobid = get_jobid(scheduler, reply)
-    cfgnos = ", ".join(c[0] for c in cfgno_steps)
-    date = subprocess.check_output("date", shell=True).rstrip().decode()
-    print(date, "Submitted job", jobid, "for", cfgnos, "step", job_config.step)
-
+    jobid = get_jobid(nanny_config.scheduler, reply)
     return 0, jobid
 
 
@@ -285,8 +281,14 @@ def nanny_loop(YAML, require_step: str | None = None):
                 # Submit the job
 
                 job_config = get_job_config(step, yaml_params)
-                status, jobid = submit_job(nanny_config, job_config, cfgno_steps)
-                #
+                status, jobid = submit_job(nanny_config, job_config, ncases)
+
+                cfgnos = ", ".join(c[0] for c in cfgno_steps)
+                date = subprocess.check_output("date", shell=True).rstrip().decode()
+                print(
+                    date, "Submitted job", jobid, "for", cfgnos, "step", job_config.step
+                )
+
                 # Job submissions succeeded
                 # Edit the todo_file, marking the lattice queued and
                 # indicating the jobid

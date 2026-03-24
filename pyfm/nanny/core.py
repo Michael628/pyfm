@@ -14,7 +14,6 @@ class NannyConfig(SimpleConfig):
     max_queue: int
     wait: int
     check_interval: int
-    lattice: t.List[int]
     job_name_pfx: str
     scheduler: str
 
@@ -28,6 +27,7 @@ class JobConfig(SimpleConfig):
     wall_time: str
     ppn: int
     nodes: int
+    lattice: t.List[int]
     geom: t.List[int]
     task_type: str | None = None
     barrier: bool = True
