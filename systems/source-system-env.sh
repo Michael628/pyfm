@@ -59,9 +59,9 @@ if [ -f "$(pwd)/env${PYFM_SYSTEM_EXT}.sh" ]; then
 elif [ -f "${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh" ]; then
   echo "Loading: ${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh"
   source "${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh"
-elif [ -f "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh" ]; then
-  echo "Loading: ${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh"
-  source "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env.sh"
+elif [ -f "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env${_EXT_SUFFIX}.sh" ]; then
+  echo "Loading: ${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env${_EXT_SUFFIX}.sh"
+  source "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env${_EXT_SUFFIX}.sh"
 else
   echo "No env.sh found for system '${CONFIG_SYSTEM}'"
   return 1
