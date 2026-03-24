@@ -180,6 +180,7 @@ def submit_job(nanny_config: NannyConfig, job_config: JobConfig, ncases: int):
     lattice = ".".join(map(str, job_config.lattice))
 
     # Append the number of cases to the step tag, as in A -> A3
+    os.environ["WORKDIR"] = nanny_config.home
     os.environ["NP"] = NP
     os.environ["PPN"] = str(ppn)
     os.environ["PPJ"] = str(ppj)

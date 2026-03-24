@@ -31,6 +31,12 @@ class ConfigBuilder:
             f.name: f.type for f in fields(config_class)
         }
 
+    @property
+    def file_path(self) -> str | None:
+        if "home" in self._format_params:
+            return self._format_params["home"]
+        return None
+
     def format_input_params(self):
         """Formats any string values in the config_data dictionary that contain format_data key replacements."""
 
@@ -142,15 +148,15 @@ class ConfigBuilder:
             self._config_fields.items(), cond=lambda x: x is Outfile
         )
 
-    def with_files(self, files_config: t.Dict[str, t.Any]):
+    def with_files(self, file_params: t.Dict[str, t.Any]):
         def find_file_label(field_name) -> t.Iterator[str | None]:
             """Tries to find appropriate file parameter label. If `_task_fields[field_name]` contains a string already
-            it will try using that value as a key in files_config. Otherwise it will try `file_name` itself.
+            it will try using that value as a key in file_params. Otherwise it will try `field_name` as a file name itself.
             """
 
             match field_value := self._input_params.get(field_name, None):
                 case str():
-                    if field_value in files_config:
+                    if field_value in file_params:
                         yield field_value
                     else:
                         utils.get_logger().debug(
@@ -163,7 +169,7 @@ class ConfigBuilder:
                 case _:
                     match field_name:
                         case str():
-                            if field_name in files_config:
+                            if field_name in file_params:
                                 yield field_name
                             else:
                                 utils.get_logger().debug(
@@ -176,20 +182,22 @@ class ConfigBuilder:
                                 f"Unexpected parameter found when searching for Outfile param: {field_name}"
                             )
 
-        file_path: str = files_config.get(
-            "home", ""
+        file_path: str = file_params.get(
+            "home", None
         )  # WARNING: depracated location for files->home param
+        file_path = file_path or self.file_path
+
         for field in self.iterate_outfiles():
             match field.container:
                 case field.container.SIMPLE:
                     if label := next(find_file_label(field.name)):
                         self.with_field(
                             field.name,
-                            Outfile.from_param(label, file_path, files_config[label]),
+                            Outfile.from_param(label, file_path, file_params[label]),
                         )
                 case field.container.LIST:
                     vals = [
-                        Outfile.from_param(l, file_path, files_config[l])
+                        Outfile.from_param(l, file_path, file_params[l])
                         for l in find_file_label(field.name)
                         if l is not None
                     ]
