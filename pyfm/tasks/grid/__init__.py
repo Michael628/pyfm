@@ -62,14 +62,15 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
         mass="0.0" if not config.epack_config.load else None,
         **irl_kwargs,
     )
-    if config.skip_high_modes:
-        highModeActions = []
-        sources = []
-    else:
+    corr = []
+    highModeActions = []
+    sources = []
+    if not config.skip_high_modes:
         highModeActions = [
             gridmods.action(str(config.high_modes_config.mass[m]))
             for m in config.high_modes_config.masses
         ]
+
         sources = [
             gridmods.random_wall_source(
                 t_step=str(config.high_modes_config.time),
@@ -83,6 +84,39 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
                 config.high_modes_config.dt,
             )
         ]
+
+        for op, con in contraction_gen(config.high_modes_config):
+            mass_label = con.mass_label(config.high_modes_config.mass)
+            corr.append(
+                gridmods.contraction(
+                    quark=gridmods.spin_taste(
+                        gammas=con.quark.gamma.gamma_string,
+                        apply_g5=str(con.quark.apply_g5).lower(),
+                    ),
+                    antiquark=gridmods.spin_taste(
+                        gammas=con.antiquark.gamma.gamma_string,
+                        apply_g5=str(con.antiquark.apply_g5).lower(),
+                    ),
+                    sink=gridmods.spin_taste(
+                        gammas=con.sink.gamma.gamma_string,
+                        apply_g5=str(con.sink.apply_g5).lower(),
+                    ),
+                    lma_output=hadrons_to_grid_filestem(
+                        config.high_modes_config.high_modes.filestem, config.series
+                    ).format(
+                        mass=mass_label,
+                        dset="ranLL",
+                        gamma_label=op.gamma.name.lower(),
+                    ),
+                    ama_output=hadrons_to_grid_filestem(
+                        config.high_modes_config.high_modes.filestem, config.series
+                    ).format(
+                        mass=mass_label,
+                        dset="ama",
+                        gamma_label=op.gamma.name.lower(),
+                    ),
+                )
+            )
     if config.skip_meson:
         a2a = []
     else:
@@ -99,48 +133,18 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
             for op, gammas in config.meson_config.operations.group_by_mass_and_shift()
         ]
 
-    corr = []
-    for op, con in contraction_gen(config.high_modes_config):
-        mass_label = con.mass_label(config.high_modes_config.mass)
-        corr.append(
-            gridmods.contraction(
-                quark=gridmods.spin_taste(
-                    gammas=con.quark.gamma.gamma_string,
-                    apply_g5=str(con.quark.apply_g5).lower(),
-                ),
-                antiquark=gridmods.spin_taste(
-                    gammas=con.antiquark.gamma.gamma_string,
-                    apply_g5=str(con.antiquark.apply_g5).lower(),
-                ),
-                sink=gridmods.spin_taste(
-                    gammas=con.sink.gamma.gamma_string,
-                    apply_g5=str(con.sink.apply_g5).lower(),
-                ),
-                lma_output=hadrons_to_grid_filestem(
-                    config.high_modes_config.high_modes.filestem, config.series
-                ).format(
-                    mass=mass_label,
-                    dset="ranLL",
-                    gamma_label=op.gamma.name.lower(),
-                ),
-                ama_output=hadrons_to_grid_filestem(
-                    config.high_modes_config.high_modes.filestem, config.series
-                ).format(
-                    mass=mass_label,
-                    dset="ama",
-                    gamma_label=op.gamma.name.lower(),
-                ),
-            )
-        )
+    optional = dict(
+        sources=dict(elem=sources) if sources else None,
+        corr=dict(elem=corr) if corr else None,
+        a2a=dict(elem=a2a) if a2a else None,
+        highModeActions=dict(elem=highModeActions) if highModeActions else None,
+    )
     return dict(
         gauge=gauge,
         epack=epack_params,
-        highModeActions=dict(elem=highModeActions),
-        sources=dict(elem=sources),
         lma=gridmods.lma(),
         mpcg=gridmods.mpcg(),
-        corr=dict(elem=corr),
-        a2a=dict(elem=a2a),
+        **{k: v for k, v in optional.items() if v is not None},
     )
 
 
