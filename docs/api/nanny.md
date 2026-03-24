@@ -18,9 +18,9 @@ Manages automated HPC job submission (SLURM, PBS, LSF) via todo files.
 
 ::: pyfm.nanny.inputgen
 
-## Setup
+## Core
 
-::: pyfm.nanny.setup
+::: pyfm.nanny.core
 
 ## Todo Files
 

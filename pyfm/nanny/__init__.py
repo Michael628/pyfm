@@ -5,10 +5,11 @@ from pyfm.nanny.validator import (
     audit_outfiles,
 )
 from pyfm.nanny.aggregator import aggregate_task_data, load_data, process_data
-from pyfm.nanny.submitter import nanny_loop
-
+from pyfm.nanny.submitter import nanny_loop, JobConfig, NannyConfig
 
 __all__ = [
+    "JobConfig",
+    "NannyConfig",
     "check_jobs",
     "nanny_loop",
     "audit_outfiles",

@@ -66,7 +66,7 @@ def read_todo(todo_file):
 def key_todo_entries(td):
     """Sort key for todo entries with format x.nnnn"""
 
-    (stream, cfg) = td.split(".")
+    stream, cfg = td.split(".")
     return "{0:s}{1:010d}".format(stream, int(cfg))
 
 
@@ -113,7 +113,7 @@ def find_next_task(
 
 
 def find_next_unfinished_task(
-    line: list[str], require_step: str | None = None
+    line: list[str], step_request: str | None = None
 ) -> t.Tuple | None:
     """Examine todo line looking for unfinished task that is ready to run."""
 
@@ -122,7 +122,7 @@ def find_next_unfinished_task(
 
     skip_states = ["X", "XXfix", "Q", "Qcont", "C"]
     cond = lambda x: not any(x.endswith(state) for state in skip_states) and (
-        require_step is None or x.startswith(require_step)
+        step_request is None or x.startswith(step_request)
     )
     return find_next_task(line, cond)
 
