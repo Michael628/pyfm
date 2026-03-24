@@ -128,5 +128,9 @@ class HandlerRegistry:
         return handler_key in cls._handlers
 
     @classmethod
-    def list_registered_types(cls) -> List[str]:
-        return list(cls._handlers.keys())
+    def list_registered_types(cls, scope: str | None = None) -> List[str]:
+        keys = list(cls._handlers.keys())
+        if scope is not None:
+            prefix = f"{scope}_"
+            keys = [k for k in keys if k.startswith(prefix)]
+        return keys

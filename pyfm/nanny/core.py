@@ -3,7 +3,7 @@ from pydantic.dataclasses import dataclass
 
 from pyfm.domain import ConfigBase, ConfigHandler, SimpleConfig
 from pyfm.core.builder import build_config
-from pyfm.tasks import get_task_handler, register_task
+from pyfm.tasks import get_task_handler, list_registered_types, register_task
 
 
 @dataclass(frozen=True)
@@ -22,6 +22,7 @@ class NannyConfig(SimpleConfig):
 class JobConfig(SimpleConfig):
     run: str
     job_type: str
+    tasks: t.Dict[str, t.Any]
     step: str
     io: str
     wall_time: str
@@ -43,7 +44,8 @@ def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
 
 def get_job_config(job_step: str, yaml_params: t.Dict[str, t.Any]) -> JobConfig:
     job_defaults = yaml_params.get("shared_params", {})
-    job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
+    # job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
+    job_defaults |= {"step": job_step}
     if "job_setup" not in yaml_params:
         raise ValueError("No `job_setup` parameters provided.")
     if job_step not in yaml_params["job_setup"]:
@@ -51,13 +53,15 @@ def get_job_config(job_step: str, yaml_params: t.Dict[str, t.Any]) -> JobConfig:
 
     job_params = job_defaults | yaml_params.get("job_setup").get(job_step)
 
-    job_type, task_type = job_params["job_type"], job_params["task_type"]
-
-    if job_type != "hadrons":
-        job_params["task_type"] = task_type = None
+    job_type, task_type = job_params.get("job_type", None), job_params.get(
+        "task_type", None
+    )
 
     if get_task_handler(job_type, task_type) is None:
-        raise ValueError(f"No task handler found for {job_type}, {task_type}")
+        raise ValueError(
+            f"No task handler found for job_type={job_type!r}, task_type={task_type!r}. "
+            f"Registered types: {list_registered_types()}"
+        )
 
     job_params |= yaml_params["submit"]["layout"]
     job_params |= yaml_params["submit"]["layout"].get(job_step, {})
@@ -71,9 +75,9 @@ def get_task_params(
 ) -> t.Tuple[t.Dict[str, t.Any], t.Dict[str, t.Any]]:
     """
     Returns:
-        (global_params, task_configs)
+        (global_params, task_params)
         - global_params: Flattened parameter hierarchy for overrides
-        - task_configs: Unflattened task configuration structure
+        - task_params: Unflattened task configuration structure
     """
     if defaults is None:
         defaults = {}
@@ -98,9 +102,9 @@ def get_task_params(
     )
 
     # Keep task configs separate
-    task_configs = job_config.formatting.get("tasks", {})
+    task_params = job_config.tasks
 
-    return global_params, task_configs
+    return global_params, task_params
 
 
 def create_task(
@@ -122,7 +126,7 @@ def create_task(
 
     job_config = get_job_config(job_step, yaml_params)
     # Get separated params
-    global_params, task_configs = get_task_params(
+    global_params, task_params = get_task_params(
         job_config, yaml_params, defaults=param_defaults
     )
 
@@ -137,8 +141,8 @@ def create_task(
 
     file_params = yaml_params.get("files", {})
 
-    # Merge task_configs into global_params under '_tasks' key
-    config_params = global_params | {"_tasks": task_configs}
+    # Merge task_params into global_params under '_tasks' key
+    config_params = global_params | {"_tasks": task_params}
 
     handler.config = build_config(
         config_type,

@@ -55,6 +55,10 @@ def get_task_handler(
         return None
 
 
+def list_registered_types() -> t.List[str]:
+    return HandlerRegistry.list_registered_types(scope="nanny")
+
+
 def register_task(config: t.Type, *funcs, **kwfuncs):
     def default_preprocess_fn(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         """Default preprocessing function that unwraps _tasks key to overwrite other params."""
