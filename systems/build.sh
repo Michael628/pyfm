@@ -163,6 +163,10 @@ function parse_flags() {
           BUILD_COMPONENTS="${BUILD_COMPONENTS} hmilc"
         shift
       ;;
+      --milc)
+          BUILD_COMPONENTS="${BUILD_COMPONENTS} milc"
+        shift
+      ;;
       --grid|--hadrons|--hmilc|--glma)
           BUILD_COMPONENTS="${BUILD_COMPONENTS} ${1:2}"
         shift
@@ -346,7 +350,17 @@ function build-component() {
       GIT_BRANCH="feature/LMI-develop"
       SRCDIR=${PYFMTOPDIR}/Hadrons
       ;;
-    hmilc)
+    milc)
+      GIT_REPO=https://github.com/milc-qcd/milc_qcd
+      GIT_BRANCH="develop"
+      SRCDIR=${PYFMTOPDIR}/milc_qcd
+      ;;
+    quda)
+      GIT_REPO=https://github.com/lattice/quda
+      GIT_BRANCH="develop"
+      SRCDIR=${PYFMTOPDIR}/quda
+      ;;
+    hmilc|hlma)
       GIT_REPO=https://github.com/Michael628/HadronsMILC
       GIT_BRANCH="develop"
       SRCDIR=${PYFMTOPDIR}/HadronsMILC
@@ -378,7 +392,9 @@ function build-component() {
 
 	# Fetch Eigen package, set up Make.inc files and create Grid configure
 	pushd ${SRCDIR}
-	./bootstrap.sh
+  if [ -f bootstrap.sh ]; then
+    ./bootstrap.sh
+  fi
 	popd
 
 	# Configure only if not already configured
@@ -387,11 +403,17 @@ function build-component() {
   fi
 	mkdir -p ${BUILDDIR}
 	pushd ${BUILDDIR}
-	if [ ! -f Makefile ]
+
+  source_config_params
+
+  # milc has no configure step — milc_configure only sets env vars for make
+  if [ "${SOURCE}" = "milc" ]; then
+    echo "Setting up MILC environment in ${BUILDDIR}"
+    milc_configure "${INSTALLDIR}" "${PYFMTOPDIR}"
+    status=$?
+  elif [ ! -f Makefile ]
 	then
 	  echo "Configuring ${SOURCE} in ${BUILDDIR}"
-
-    source_config_params
 
     case ${SOURCE} in
       grid)
@@ -406,7 +428,11 @@ function build-component() {
         glma_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
       ;;
-      hmilc)
+      quda)
+        quda_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
+        status=$?
+      ;;
+      hmilc|hlma)
         hmilc_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
       ;;
@@ -421,11 +447,40 @@ function build-component() {
   if [ "$SKIP_MAKE" = 'true' ]; then
 
     echo "Building in ${BUILDDIR}"
+    case ${SOURCE} in
+    milc)
+        cd ${SRCDIR}/ks_imp_utilities
+      cp ../Makefile .
+      make clean
+      make -j 1 make_links_hisq >> $BUILDDIR/compile.out 2>&1
+      ;;
+    quda)
+      cmake --build . -j$THREADS -v  >> compile.out 2>&1
+      ;;
+    *)
     make V=1 -k -j$THREADS >> compile.out 2>&1
-
+      ;;
+    esac
     echo "Installing in ${INSTALLDIR}"
-    make install >> compile.out 2>&1
+    case ${SOURCE} in
+    milc)
+        if [ ! -f $SRCDIR/ks_imp_utilities/make_links_hisq ]; then
+          status=1
+        else
+          mkdir -p $INSTALLDIR/bin/
+          mv $SRCDIR/ks_imp_utilities/make_links_hisq $INSTALLDIR/bin/
+          status=0
+        fi
+        ;;
+    quda)
+      cmake --install . >> compile.out 2>&1
     status=$?
+      ;;
+    *)
+      make install >> compile.out 2>&1
+    status=$?
+      ;;
+    esac
     if [[ $status -ne 0 ]]; then
       echo "${SOURCE} compilation failed."
       echo "See ${BUILDDIR}/compile.out:"
