@@ -27,7 +27,7 @@ if [ $PYFM_RUNTIME_ENV = "true" ]; then
   export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9
 
   # System-specific runtime environment setup
-  export OMP_NUM_THREADS=4
+  export OMP_NUM_THREADS=8
   export MPICH_OFI_NIC_POLICY=GPU
   # export MPIR_CVAR_ENABLE_GPU=1
   export MPICH_CH4_SHM=XPMEM
