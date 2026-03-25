@@ -1,0 +1,7 @@
+a.60 smear_X 1000001 hadrons 0
+a.100 smear_XXfix 1000002 hadrons 0
+b.60 smear_X 1000003 hadrons_Q 1000004 contract 0
+b.100 smear_X 1000005 hadrons_Qcont 1000006 contract 0
+b.140 smear_X 1000007 hadrons_X 1000008 contract 0
+c.60 smear 0
+c.100 smear_X 1000009 hadrons_X 1000010 contract_X 1000011

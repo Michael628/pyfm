@@ -1,0 +1,153 @@
+#Parameters for LMI running
+shared_params:
+  logging_level: DEBUG
+  mass:
+    u: 0.001524
+    l: 0.002426
+    d: 0.003328
+  ens: "4444"
+  lattice: [4, 4, 4, 4]
+  time: 4
+  space: 4
+  runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
+
+contract_params:
+  hardware: "cpu"
+  diagram_params:
+    pion_local:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 200
+      outfile: contract
+    vec_local_u:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+        new_mass: "u"
+        evalfile: "eval"
+      gammas:
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
+      eig_range:
+        min: 0
+        max: 200
+      outfile: contract
+    vec_onelink_ld:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        - file: "meson"
+          mass: "l"
+        - file: "meson"
+          mass: "l"
+          new_mass: "d"
+          evalfile: "eval"
+      gammas:
+        - "GX_G1"
+        - "GY_G1"
+        - "GZ_G1"
+      eig_range:
+        min: 0
+        max: 200
+      outfile: contract
+    vec_onelink:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "GX_G1"
+        - "GY_G1"
+        - "GZ_G1"
+      eig_range:
+        min: 0
+        max: 200
+      outfile: contract
+    axial_vec_local:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "G5X_G5X"
+        - "G5Y_G5Y"
+        - "G5Z_G5Z"
+      eig_range:
+        min: 0
+        max: 200
+      outfile: contract
+    axial_vec_onelink:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "G5X_G5"
+        - "G5Y_G5"
+        - "G5Z_G5"
+      eig_range:
+        min: 0
+        max: 200
+      outfile: contract
+
+submit:
+  scheduler: SLURM
+  # scheduler: INTERACTIVE
+  job_name_pfx: LMI
+  layout:
+    ppn: 4 # Number of processes per node
+    contract:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+
+
+job_setup:
+  contract:
+    run: contract.sh
+    job_type: contract
+    tasks:
+      diagrams:
+        - pion_local
+        - vec_local_u
+        - vec_onelink
+        - vec_onelink_ld
+        - axial_vec_local
+        - axial_vec_onelink
+    io: "contract"
+    wall_time: "8:00:00"
+    params:
+      eigs: 100
+      dt: 1
+      noise: 1
+
+
+files:
+  home: /home/mlynch/Work/pyfm/example/workspace/work-dir
+  meson:
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
+    good_size: 1286000
+  contract:
+    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
+    good_size: 400
+  eval:
+    filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 4400

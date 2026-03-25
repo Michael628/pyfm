@@ -111,7 +111,7 @@ class DiagramConfig(CompositeConfig):
 
     @property
     def mass_label(self) -> str:
-        return "_m".join(set(m.get_mass_label() for m in self.mesons))
+        return "_m".join(dict.fromkeys(m.get_mass_label() for m in self.mesons))
 
 
 @dataclass(frozen=True)
