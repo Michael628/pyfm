@@ -11,7 +11,7 @@ diagrams:
     mesons:
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: &id001
         d: 0.003328
@@ -24,7 +24,7 @@ diagrams:
         updated: null
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: *id001
       mass_shift:
@@ -33,7 +33,7 @@ diagrams:
         updated: null
     outfile:
       ext: .20.h5
-      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m002426/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_a
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_a
       good_size: 400
     symmetric: true
   axial_vec_onelink:
@@ -48,7 +48,7 @@ diagrams:
     mesons:
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: &id002
         d: 0.003328
@@ -61,7 +61,7 @@ diagrams:
         updated: null
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: *id002
       mass_shift:
@@ -70,7 +70,7 @@ diagrams:
         updated: null
     outfile:
       ext: .20.h5
-      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m002426/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_a
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_a
       good_size: 400
     symmetric: true
   pion_local:
@@ -83,7 +83,7 @@ diagrams:
     mesons:
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: &id003
         d: 0.003328
@@ -96,7 +96,7 @@ diagrams:
         updated: null
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: *id003
       mass_shift:
@@ -105,7 +105,7 @@ diagrams:
         updated: null
     outfile:
       ext: .20.h5
-      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m002426/pion_local/a2aLL/corr_pion_local_a2aLL_m002426_a
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/a2aLL/corr_pion_local_a2aLL_m002426_a
       good_size: 400
     symmetric: true
   vec_local_u:
@@ -120,11 +120,11 @@ diagrams:
     mesons:
     - evalfile:
         ext: .20.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv{eigs}a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
         good_size: 4400
       file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: &id004
         d: 0.003328
@@ -137,11 +137,11 @@ diagrams:
         updated: u
     - evalfile:
         ext: .20.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv{eigs}a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
         good_size: 4400
       file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: *id004
       mass_shift:
@@ -150,7 +150,7 @@ diagrams:
         updated: u
     outfile:
       ext: .20.h5
-      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m001524/vec_local/a2aLL/corr_vec_local_a2aLL_m001524_a
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/a2aLL/corr_vec_local_a2aLL_m001524_a
       good_size: 400
     symmetric: true
   vec_onelink:
@@ -165,7 +165,7 @@ diagrams:
     mesons:
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: &id005
         d: 0.003328
@@ -178,7 +178,7 @@ diagrams:
         updated: null
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass: *id005
       mass_shift:
@@ -187,7 +187,7 @@ diagrams:
         updated: null
     outfile:
       ext: .20.h5
-      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m002426/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_a
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_a
       good_size: 400
     symmetric: true
   vec_onelink_ld:
@@ -202,7 +202,7 @@ diagrams:
     mesons:
     - file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass:
         d: 0.003328
@@ -215,11 +215,11 @@ diagrams:
         updated: null
     - evalfile:
         ext: .20.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv{eigs}a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
         good_size: 4400
       file:
         ext: .20/{gamma}_0_0_0.h5
-        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/mesons/m002426/mf_a
+        filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a
         good_size: 1286000
       mass:
         d: 0.003328
@@ -232,9 +232,9 @@ diagrams:
         updated: d
     outfile:
       ext: .20.h5
-      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e{eigs}n{noise}dt{dt}/correlators/m002426_m003328/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_m003328_a
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426_m003328/vec_onelink/a2aLL/corr_vec_onelink_a2aLL_m002426_m003328_a
       good_size: 400
     symmetric: true
 logging_level: DEBUG
-runid: LMI-RW-series-a-{eigs}-eigs-{noise}-noise
+runid: LMI-RW-series-a-100-eigs-1-noise
 time: 4

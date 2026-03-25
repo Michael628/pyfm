@@ -30,6 +30,7 @@ class JobConfig(SimpleConfig):
     nodes: int
     lattice: t.List[int]
     geom: t.List[int]
+    params: t.Dict[str, t.Any]
     task_type: str | None = None
     barrier: bool = True
 
@@ -45,7 +46,7 @@ def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
 def get_job_config(job_step: str, yaml_params: t.Dict[str, t.Any]) -> JobConfig:
     job_defaults = yaml_params.get("shared_params", {})
     # job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
-    job_defaults |= {"step": job_step}
+    job_defaults |= {"step": job_step, "params": {}}
     if "job_setup" not in yaml_params:
         raise ValueError("No `job_setup` parameters provided.")
     if job_step not in yaml_params["job_setup"]:
@@ -98,7 +99,7 @@ def get_task_params(
         yaml_params.get(f"{job_type}_params", {})
         |
         # Load job-specific overrides
-        job_config.formatting.get("params", {})
+        job_config.params
     )
 
     # Keep task configs separate
