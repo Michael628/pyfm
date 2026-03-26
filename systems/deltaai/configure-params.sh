@@ -44,7 +44,7 @@ function hadrons_configure() {
     --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
-function hmilc_configure() {
+function hlma_configure() {
   local INSTALLDIR=$1
   
 

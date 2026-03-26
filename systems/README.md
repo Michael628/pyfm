@@ -82,7 +82,7 @@ Each system is a subdirectory here (e.g. `perlmutter/`, `scalar/`). A system may
 
 | File | Purpose |
 |---|---|
-| `configure-params.sh` | Defines `grid_configure`, `hadrons_configure`, `hmilc_configure`, `glma_configure`, `dependency_configure` shell functions |
+| `configure-params.sh` | Defines `grid_configure`, `hadrons_configure`, `hlma_configure`, `glma_configure`, `dependency_configure` shell functions |
 | `env.sh` | Loads modules and sets environment variables before building |
 
 Configuration is layered in this order (later sources override earlier ones):
@@ -132,7 +132,7 @@ function glma_configure() {
     --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
 }
 
-function hmilc_configure() {
+function hlma_configure() {
   local INSTALLDIR=$1
   
 
