@@ -20,8 +20,13 @@ def tasks_data_dir():
 
 
 @pytest.fixture
-def params(tasks_data_dir):
-    return utils.io.load_param(str(tasks_data_dir / "params.yaml"))
+def hadrons_params(tasks_data_dir):
+    return utils.io.load_param(str(tasks_data_dir / "params_hadrons.yaml"))
+
+
+@pytest.fixture
+def grid_params(tasks_data_dir):
+    return utils.io.load_param(str(tasks_data_dir / "params_grid.yaml"))
 
 
 @pytest.fixture
