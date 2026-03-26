@@ -17,9 +17,15 @@ def gauge_files(link: str, fatlink: str, longlink: str) -> t.Dict:
     return dict(type="file", link=link, fatlink=fatlink, longlink=longlink)
 
 
-def action(mass: str) -> t.Dict:
+def action(label: str, mass: str) -> t.Dict:
     return dict(
-        boundary="1 1 1 1", mass=mass, c1="1.0", c2="1.0", tad="1.0", twist="0 0 0"
+        label=label,
+        boundary="1 1 1 1",
+        mass=mass,
+        c1="1.0",
+        c2="1.0",
+        tad="1.0",
+        twist="0 0 0",
     )
 
 
@@ -70,7 +76,7 @@ def epack(
     if op_type == "solve":
         if mass is None:
             raise ValueError('mass must be specified for epack type "solve"')
-        epack["action"] = action(mass)
+        epack["action"] = action("irl", mass)
         epack["irl"] = irl(**irl_kwargs)
 
     return epack
@@ -110,18 +116,24 @@ def spin_taste(gammas: str, apply_g5: str = "true") -> t.Dict:
 
 
 def contraction(
+    antiquark_solver: str,
+    antiquark_action: str,
+    quark_solver: str,
+    quark_action: str,
     quark: t.Dict,
     antiquark: t.Dict,
     sink: t.Dict,
-    lma_output: str,
-    ama_output: str,
+    output: str,
 ) -> t.Dict:
     return dict(
+        antiquarkAction=antiquark_action,
+        antiquarkSolver=antiquark_solver,
+        quarkAction=quark_action,
+        quarkSolver=quark_solver,
         quark=quark,
         antiquark=antiquark,
         sink=sink,
-        lmaOutput=lma_output,
-        amaOutput=ama_output,
+        output=output,
     )
 
 
@@ -134,7 +146,7 @@ def meson_field(
 ) -> t.Dict:
     return dict(
         block=block,
-        action=action(mass),
+        action=action("a2a", mass),
         output=output,
         spinTaste=spin_taste(**spin_taste_kwargs),
         mom=dict(elem=" ".join(mom)),
