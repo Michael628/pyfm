@@ -32,6 +32,8 @@ class GridLMIConfig(CompositeConfig):
 
     key: t.ClassVar[str] = "grid"
 
+    solver_map: t.ClassVar[t.Dict[str, str]] = {"ranLL": "lma", "ama": "mpcg"}
+
 
 def hadrons_to_grid_filestem(filestem: str, series: str) -> str:
     return filestem.removesuffix(f"_{series}").removesuffix("_t{tsource}")
@@ -53,11 +55,19 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
     irl_kwargs = (
         config.epack_config.lanczos.to_string() if not config.epack_config.load else {}
     )
+    eigfile = (
+        config.epack_config.eig.filestem
+        if config.epack_config.load or config.epack_config.save_eigs
+        else ""
+    )
+    evalfile = (
+        config.epack_config.eval.filestem if config.epack_config.save_evals else ""
+    )
     epack_params = gridmods.epack(
         op_type,
-        config.epack_config.eig.filestem,
+        eigfile,
         str(config.epack_config.eigs),
-        config.epack_config.eval.filestem,
+        evalfile,
         multifile=str(config.epack_config.multifile).lower(),
         mass="0.0" if not config.epack_config.load else None,
         **irl_kwargs,
@@ -67,7 +77,7 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
     sources = []
     if not config.skip_high_modes:
         highModeActions = [
-            gridmods.action(str(config.high_modes_config.mass[m]))
+            gridmods.action(m, str(config.high_modes_config.mass[m]))
             for m in config.high_modes_config.masses
         ]
 
@@ -86,9 +96,15 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
         ]
 
         for op, con in contraction_gen(config.high_modes_config):
+            solver_label = con.solver_label
             mass_label = con.mass_label(config.high_modes_config.mass)
+
             corr.append(
                 gridmods.contraction(
+                    quark_solver=config.solver_map[con.quark.solver],
+                    quark_action=con.quark.mass,
+                    antiquark_solver=config.solver_map[con.antiquark.solver],
+                    antiquark_action=con.antiquark.mass,
                     quark=gridmods.spin_taste(
                         gammas=con.quark.gamma.gamma_string,
                         apply_g5=str(con.quark.apply_g5).lower(),
@@ -101,18 +117,11 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
                         gammas=con.sink.gamma.gamma_string,
                         apply_g5=str(con.sink.apply_g5).lower(),
                     ),
-                    lma_output=hadrons_to_grid_filestem(
+                    output=hadrons_to_grid_filestem(
                         config.high_modes_config.high_modes.filestem, config.series
                     ).format(
                         mass=mass_label,
-                        dset="ranLL",
-                        gamma_label=op.gamma.name.lower(),
-                    ),
-                    ama_output=hadrons_to_grid_filestem(
-                        config.high_modes_config.high_modes.filestem, config.series
-                    ).format(
-                        mass=mass_label,
-                        dset="ama",
+                        dset=solver_label,
                         gamma_label=op.gamma.name.lower(),
                     ),
                 )

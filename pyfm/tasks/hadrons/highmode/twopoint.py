@@ -21,7 +21,7 @@ class TwoPointOp(t.NamedTuple):
 
     def mass_label(self, masses: MassDict) -> str:
         return "_m".join(
-            set(
+            dict.fromkeys(
                 masses.to_string(m, True)
                 for m in [self.quark.mass, self.antiquark.mass]
             )
@@ -29,7 +29,7 @@ class TwoPointOp(t.NamedTuple):
 
     @property
     def solver_label(self) -> str:
-        return "_".join(set([self.quark.solver, self.antiquark.solver]))
+        return "_".join(dict.fromkeys([self.quark.solver, self.antiquark.solver]))
 
 
 def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
