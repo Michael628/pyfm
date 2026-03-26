@@ -11,6 +11,7 @@ function grid_configure() {
   local INSTALLDIR=$1
   
   ${PYFMTOPDIR}/Grid/configure \
+   --prefix=${INSTALLDIR} \
    --enable-debug \
    --enable-simd=GEN \
    --enable-comms=none \
