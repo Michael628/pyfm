@@ -1,0 +1,173 @@
+#Parameters for LMI running
+shared_params:
+  home: /home/mlynch/Work/pyfm/example/workspace/work-dir
+  logging_level: DEBUG
+  mass:
+    u: 0.001524
+    l: 0.002426
+    d: 0.003328
+  ens: "4444"
+  lattice: [4, 4, 4, 4]
+  time: 4
+  runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
+  tstart: 0 # first source time slice
+  tstop: 3 # tstop = time - 1
+  dt: 1 # spacing between source time slices
+  noise: 1 # leave this as 1
+  eigs: 100 # eigs <= sourceeigs. number of eigenvalues to use in calculation
+  sourceeigs: 100 # number of eigenvalues in source file
+  lanczos:
+    alpha: 0.009 # parameter for lanczos eigensolver
+    beta: 24 # parameter for lanczos eigensolver
+    npoly: 11 # parameter for lanczos eigensolver
+    nstop: 100 # parameter for lanczos eigensolver
+    nk: 120 # parameter for lanczos eigensolver
+    nm: 160 # parameter for lanczos eigensolver
+    residual: 1e-8 # parameter for lanczos eigensolver
+  residual: 1e-8
+  blocksize: 200 # number of fields to contract in meson field kernel
+  overwrite: true # If true, skip CG solves if correlator already exists
+
+submit:
+  scheduler: SLURM
+  # scheduler: INTERACTIVE
+  job_name_pfx: LMI
+  layout:
+    ppn: 4 # Number of processes per node
+    hadrons:
+      nodes: 1
+      geom: [1, 1, 1, 2] # mpi geometry. How full lattice is split between processes.
+    epack_solve:
+      ppn: 1
+      nodes: 1
+      geom: [1, 1, 1, 1]
+    epack_load:
+      ppn: 1
+      nodes: 1
+      geom: [1, 1, 1, 1]
+    high_modes:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+    lma:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+    meson:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+
+# Template and I/O file name keys
+job_setup:
+  epack_solve:
+    run: hadrons.sh
+    io: "epack-solve"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: false
+        save_evals: false
+        save_eigs: false
+  epack_load:
+    run: hadrons.sh
+    io: "epack-load"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: true
+        save_evals: true
+        save_eigs: true
+  lma:
+    run: hadrons.sh
+    io: "full-lma"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: false
+        save_evals: true
+        save_eigs: false
+      meson:
+        gamma:
+          - pion_local
+          - vec_local
+          - vec_onelink
+          - axial_vec_onelink
+          - axial_vec_local
+        mass:
+          - "l" 
+      high_modes:
+        gamma:
+          - pion_local
+          - vec_local
+          - axial_vec_local
+          - axial_vec_onelink
+        mass:
+          - "l"
+          - "u"
+  meson:
+    run: hadrons.sh
+    io: "meson"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: false
+        save_evals: false
+        save_eigs: false
+      meson:
+        gamma:
+          - pion_local
+          - vec_local
+          - vec_onelink
+          - axial_vec_onelink
+        mass:
+          - "l" 
+  high_modes:
+    run: hadrons.sh
+    io: "high-modes"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: true
+        save_evals: false
+        save_eigs: false
+      high_modes:
+        gamma:
+          - pion_local
+          - vec_local
+        mass:
+          - "l"
+          - "u"
+files:
+  fat_links:
+    filestem: lat/scidac/fat{ens}{series}.ildg
+    good_size: 76000
+  long_links:
+    filestem: lat/scidac/lng{ens}{series}.ildg
+    good_size: 76000
+  gauge_links:
+    filestem: lat/scidac/l{ens}{series}.ildg
+    good_size: 76000
+  eig:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 866000
+  eigdir:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 4076866904
+  eval:
+    filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 4400
+  high_modes:
+    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
+    good_size: 3900
+  meson:
+    filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
+    good_size: 1286000
+

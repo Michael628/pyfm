@@ -1,0 +1,41 @@
+#Parameters for LMI running
+shared_params:
+  home: /home/mlynch/Work/pyfm/example/workspace/work-dir
+  logging_level: DEBUG
+  ens: "4444"
+  lattice: [4, 4, 4, 4]
+  time: 4
+  space: 4
+  runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
+
+submit:
+  scheduler: SLURM
+  # scheduler: INTERACTIVE
+  job_name_pfx: LMI
+  layout:
+    ppn: 4 # Number of processes per node
+    smear:
+      ppn: 1
+      nodes: 1
+      geom: [1, 1, 1, 1]
+job_setup:
+  smear:
+    run: smear.slurm
+    job_type: smear
+    tasks:
+      unsmeared_file: "{home}/lat/v5/l{ens}{series}.{cfg}" # Location of unsmeared file
+      node_geometry: "1 1 1 1"
+    io: "smear"
+    wall_time: "0:30:00"
+  
+files:
+  fat_links:
+    filestem: lat/scidac/fat{ens}{series}.ildg
+    good_size: 76000
+  long_links:
+    filestem: lat/scidac/lng{ens}{series}.ildg
+    good_size: 76000
+  gauge_links:
+    filestem: lat/scidac/l{ens}{series}.ildg
+    good_size: 76000
+
