@@ -60,7 +60,7 @@ Build Configuration Options:
 Component Selection:
   --grid             Build Grid library
   --hadrons          Build Hadrons library
-  --app|--hmilc       Build HadronsMILC application
+  --hlma|--app|--hmilc       Build HadronsMILC application
   --glma             Build grid-lma
   --all              Build all components (grid, hadrons, app)
 
@@ -131,7 +131,7 @@ function parse_flags() {
         shift
       ;;
       --all)
-        BUILD_COMPONENTS="grid hadrons hmilc"
+        BUILD_COMPONENTS="grid hadrons hlma"
         shift
       ;;
 
@@ -159,15 +159,15 @@ function parse_flags() {
       ;;
 
       # Components
-      --app)
-          BUILD_COMPONENTS="${BUILD_COMPONENTS} hmilc"
+      --app|--hmilc)
+          BUILD_COMPONENTS="${BUILD_COMPONENTS} hlma"
         shift
       ;;
       --milc)
           BUILD_COMPONENTS="${BUILD_COMPONENTS} milc"
         shift
       ;;
-      --grid|--hadrons|--hmilc|--glma)
+      --grid|--hadrons|--hlma|--glma)
           BUILD_COMPONENTS="${BUILD_COMPONENTS} ${1:2}"
         shift
       ;;
@@ -360,7 +360,7 @@ function build-component() {
       GIT_BRANCH="develop"
       SRCDIR=${PYFMTOPDIR}/quda
       ;;
-    hmilc|hlma)
+    hlma)
       GIT_REPO=https://github.com/Michael628/HadronsMILC
       GIT_BRANCH="develop"
       SRCDIR=${PYFMTOPDIR}/HadronsMILC
@@ -372,7 +372,7 @@ function build-component() {
       ;;
     *)
       echo "Unsupported build type"
-      echo "Usage $0 <grid|hadrons|hmilc|glma>"
+      echo "Usage $0 <grid|hadrons|hlma|glma>"
       exit 1
     esac
 
@@ -432,8 +432,8 @@ function build-component() {
         quda_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
       ;;
-      hmilc|hlma)
-        hmilc_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
+      hlma)
+        hlma_configure "${INSTALLDIR}" "${PYFMTOPDIR}" >> compile.out 2>&1
         status=$?
       ;;
     esac
