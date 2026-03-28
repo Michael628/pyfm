@@ -47,6 +47,8 @@ Dependency Options (build external libraries):
   --lime             Build LIME library
   --hdf5             Build HDF5 library
   --ssl              Build OpenSSL library
+  --qmp              Build QMP library
+  --qio              Build QIO library (requires QMP)
 
 Build Configuration Options:
   --system <name>    Configure system (default: scalar)
@@ -82,6 +84,8 @@ function parse_flags() {
   BUILD_LIME='false'
   BUILD_HDF5='false'
   BUILD_OPENSSL='false'
+  BUILD_QMP='false'
+  BUILD_QIO='false'
   FORCE_REBUILD='false'
   SKIP_MAKE='true'
   BUILD_EXT=''
@@ -128,6 +132,14 @@ function parse_flags() {
       ;;
       --hdf5)
         BUILD_HDF5='true'
+        shift
+      ;;
+      --qmp)
+        BUILD_QMP='true'
+        shift
+      ;;
+      --qio)
+        BUILD_QIO='true'
         shift
       ;;
       --all)
@@ -330,6 +342,49 @@ function dependencies() {
           popd
   fi
 
+  if [ $BUILD_QMP == 'true' ]; then
+          if [ ! -d qmp ]; then
+            git clone https://github.com/usqcd-software/qmp.git
+          fi
+
+          pushd qmp
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
+          dependency_configure "qmp" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
+          status=$?
+          popd
+          if [ $status -ne 0 ]; then
+                  echo "qmp compile failed."
+                  exit 1
+          fi
+          popd
+  fi
+
+  if [ $BUILD_QIO == 'true' ]; then
+          if [ ! -d qio ]; then
+            git clone --recursive https://github.com/usqcd-software/qio.git
+            pushd qio
+            bash autogen.sh
+            popd
+          fi
+
+          pushd qio
+          rm -rf build${PYFM_SYSTEM_EXT}
+          mkdir -p build${PYFM_SYSTEM_EXT}
+          pushd build${PYFM_SYSTEM_EXT}
+          dependency_configure "qio" "${INSTALLDIR}" >> compile.out 2>&1
+          make all install >> compile.out 2>&1
+          status=$?
+          popd
+          if [ $status -ne 0 ]; then
+                  echo "qio compile failed."
+                  exit 1
+          fi
+          popd
+  fi
+
   popd
 
 }
@@ -511,7 +566,8 @@ module list
 # Build dependencies if any were requested
 if [ "$BUILD_GMP" = 'true' ] || [ "$BUILD_MPFR" = 'true' ] || \
    [ "$BUILD_LIME" = 'true' ] || [ "$BUILD_HDF5" = 'true' ] || \
-   [ "$BUILD_OPENSSL" = 'true' ]; then
+   [ "$BUILD_OPENSSL" = 'true' ] || [ "$BUILD_QMP" = 'true' ] || \
+   [ "$BUILD_QIO" = 'true' ]; then
   dependencies
 fi
 
