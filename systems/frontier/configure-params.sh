@@ -79,7 +79,7 @@ function quda_configure() {
       -DCMAKE_CXX_COMPILER="hipcc" \
       -DCMAKE_C_COMPILER="hipcc" \
       -DQUDA_BUILD_SHAREDLIB=ON \
-      -DQUDA_BUILD_ALL_TESTS=ON \
+      -DQUDA_BUILD_ALL_TESTS=OFF \
       -DQUDA_CTEST_DISABLE_BENCHMARKS=ON \
       -DCMAKE_C_STANDARD=99 \
       -DCMAKE_CXX_FLAGS="${MY_CFLAGS}" \
@@ -94,37 +94,26 @@ function quda_configure() {
 function milc_configure() {
   local INSTALLDIR=$1
 
-  # QUDA install path from the build system
-  QUDA_INSTALL=${PYFMTOPDIR}/quda/install${PYFM_SYSTEM_EXT}
-
-  LIBQUDA="-Wl,-rpath ${QUDA_INSTALL}/lib -L${QUDA_INSTALL}/lib -lquda -D__gfx90a --amdgpu-target=gfx90a -Wl,-rpath=${ROCM_PATH}/hiprand/lib -L${ROCM_PATH}/hiprand/lib -Wl,-rpath=${ROCM_PATH}/rocfft/lib -L${ROCM_PATH}/rocfft/lib -lhiprand -lrocfft -Wl,-rpath=${ROCM_PATH}/hipblas/lib -L${ROCM_PATH}/hipblas/lib -lhipblas -Wl,-rpath=${ROCM_PATH}/rocblas/lib -L${ROCM_PATH}/rocblas/lib -lrocblas -Wl,-rpath=${ROCM_PATH}/hip/lib"
-
-  export OFFLOAD=HIP
-  export MY_CC=hipcc
-  export MY_CXX=hipcc
   export COMPILER="gnu"
   export ARCH=""
-  export OPT="-g -ggdb -O3 -Ofast --offload-arch=gfx90a"
+  export OPT="-O3"
   export PATH_TO_NVHPCSDK=""
   export CUDA_HOME=""
-  export LDFLAGS=" --verbose -L${MPICH_DIR}/lib -lmpi"
-  export QUDA_HOME=${QUDA_INSTALL}
-  export WANTQUDA=true
-  export WANT_FN_CG_GPU=true
-  export WANT_FL_GPU=true
-  export WANT_GF_GPU=true
-  export WANT_FF_GPU=true
-  export WANT_MIXED_PRECISION_GPU=2
+  export LDFLAGS="-L${MPICH_DIR}/lib -lmpi"
+  export WANTQUDA=false
+  export WANT_FN_CG_GPU=false
+  export WANT_FL_GPU=false
+  export WANT_GF_GPU=false
+  export WANT_FF_GPU=false
   export PRECISION=2
-  export WANT_GAUGEFIX_OVR_GPU=true
-  export WANT_GSMEAR_GPU=true
+  export WANT_GAUGEFIX_OVR_GPU=false
+  export WANT_GSMEAR_GPU=false
   export MPP=true
   export OMP=true
   export WANTQIO=true
   export WANTQMP=true
-  export QIOPAR=${QUDA_INSTALL}
-  export QMPPAR=${QUDA_INSTALL}
-  export LIBQUDA="${LIBQUDA}"
+  export QIOPAR=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT}
+  export QMPPAR=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT}
   export CGEOM="-DFIX_NODE_GEOM -DFIX_IONODE_GEOM"
   export KSCGMULTI="-DKS_MULTICG=HYBRID "
   export CTIME="-DNERSC_TIME -DCGTIME -DFFTIME -DFLTIME -DGFTIME -DREMAP -DPRTIME -DIOTIME -DGS_TIME"

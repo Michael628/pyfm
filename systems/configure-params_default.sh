@@ -43,6 +43,7 @@ function dependency_configure() {
   CONFIG=${PYFMTOPDIR}/deps/${dep_name}/configure
   pcc=cc
   pcxx=CC
+  DEP_CONFIGURE_ARGS=""
   # Dependency-specific additions
   case ${dep_name} in
     mpfr)
@@ -54,6 +55,12 @@ function dependency_configure() {
     ;;
     openssl)
       CONFIG=${PYFMTOPDIR}/deps/${dep_name}/config
+    ;;
+    qmp)
+      DEP_CONFIGURE_ARGS="--with-qmp-comms-type=MPI"
+    ;;
+    qio)
+      DEP_CONFIGURE_ARGS="--with-qmp=${INSTALLDIR} --enable-qmp-route"
     ;;
   esac
   $CONFIG \
