@@ -1,6 +1,5 @@
 #! /bin/bash
 
-ml miniforge3
 # module reset 
 # module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/Core 
 # module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/oneapi/2025.0.5 
@@ -28,15 +27,15 @@ if [ $PYFM_RUNTIME_ENV = "true" ]; then
   export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9
 
   # System-specific runtime environment setup
+  export OMP_NUM_THREADS=8
+  export MPICH_OFI_NIC_POLICY=GPU
   # export MPIR_CVAR_ENABLE_GPU=1
+  export MPICH_CH4_SHM=XPMEM
   # export MPIR_CVAR_DEBUG_SUMMARY=1
   # export MPICH_DBG_LEVEL=VERBOSE
   # export MPICH_DBG_CLASS=ALL
   # export SYCL_UR_TRACE=2 # shows every kernel launch
   # export ONEAPI_DEVICE_SELECTOR=opencl:gpu # sometimes gives more info
-  export OMP_NUM_THREADS=8
-  export MPICH_OFI_NIC_POLICY=GPU
-  export MPICH_CH4_SHM=XPMEM
 fi
 
 # Legacy comments from peter boyle
