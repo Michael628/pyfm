@@ -31,6 +31,7 @@ class JobConfig(SimpleConfig):
     lattice: t.List[int]
     geom: t.List[int]
     params: t.Dict[str, t.Any]
+    node_minimum: int | None = None
     task_type: str | None = None
     barrier: bool = True
 

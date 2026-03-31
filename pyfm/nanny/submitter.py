@@ -191,7 +191,13 @@ def submit_job(nanny_config: NannyConfig, job_config: JobConfig, ncases: int):
 
     job_name = nanny_config.job_name_pfx + "-" + job_config.step + str(ncases)
 
-    cmd = get_submit_command(nanny_config, job_config, job_name, nodes, int(NP))
+    job_nodes = (
+        nodes
+        if job_config.node_minimum is None
+        else max(nodes, job_config.node_minimum)
+    )
+
+    cmd = get_submit_command(nanny_config, job_config, job_name, job_nodes, int(NP))
 
     # Run the job submission command
     print(cmd)
