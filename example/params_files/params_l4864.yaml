@@ -1,5 +1,6 @@
 #Parameters for LMI running
 shared_params:
+  home: /lustre1/stgmugm2/mlynch/gm2/l{ens}
   mass:
     u: 0.00119
     l: 0.001907
@@ -246,7 +247,6 @@ job_setup:
             - "l"
 
 files:
-  home: /lustre1/stgmugm2/mlynch/gm2/l{ens}
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg
     good_size: 76000
