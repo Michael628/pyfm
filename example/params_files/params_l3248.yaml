@@ -1,5 +1,6 @@
 #Parameters for LMI running
 shared_params:
+  home: /work/nvme/sok/mlynch28/l3248f211b580m002426m06730m8447 # Location of work directory
   mass:
     u: 0.001524
     l: 0.002426
@@ -249,7 +250,6 @@ job_setup:
             - "l"
 
 files: # labels and corresponding locations of all input and output files used in the jobs above
-  home: /work/nvme/sok/mlynch28/l3248f211b580m002426m06730m8447 # Location of work directory
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg
     good_size: 905900000
