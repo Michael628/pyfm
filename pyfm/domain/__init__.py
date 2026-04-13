@@ -1,5 +1,6 @@
 from pyfm.domain.buildertypes import ConfigBuilder
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig, SerializableEnum
+from pyfm.domain.hooks import BuildHooks, BuildHooksRegistry
 from pyfm.domain.registry import HandlerRegistry, ConfigHandler
 from pyfm.domain.outfiles import Outfile
 from pyfm.domain.protocols import (
@@ -15,6 +16,8 @@ from pyfm.domain.datapipe import DataPipe, WrappedDataPipe
 from pyfm.domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
 
 __all__ = [
+    "BuildHooks",
+    "BuildHooksRegistry",
     "ConfigBuilder",
     "ConfigBase",
     "SimpleConfig",
