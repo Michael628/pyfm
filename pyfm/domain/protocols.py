@@ -27,7 +27,7 @@ class ConfigPreprocessorProtocol(t.Protocol):
 
 @t.runtime_checkable
 class ConfigPostprocessorProtocol(t.Protocol):
-    def postprocess_config(self) -> "ConfigPostProcessorProtocol":
+    def postprocess_config(self) -> "ConfigPostprocessorProtocol":
         """Perform any necessary modifications to subconfigs after they have been built."""
         ...
 
@@ -35,30 +35,46 @@ class ConfigPostprocessorProtocol(t.Protocol):
 @t.runtime_checkable
 class ConfigValidatorProtocol(t.Protocol):
     def validate(self) -> None:
-        """Validate config after construction and postprocessing.
+        """Validate config after construction and postprocessing."""
+        ...
 
-        This method is called as the final phase of config building, after all
-        postprocessing has been applied. The validator function receives the config
-        as the first parameter (auto-injected by ConfigHandler) and should raise
-        exceptions if validation fails.
-        """
+
+# ---------------------------------------------------------------------------
+# Task-handler protocols — config is an explicit first parameter in all methods
+# ---------------------------------------------------------------------------
+
+@t.runtime_checkable
+class InputBuilderProtocol(t.Protocol):
+    """Handler that can generate input parameters for an external program."""
+
+    def build_input_params(self, config: t.Any) -> t.Any:
+        """Generate input parameters; *config* is passed explicitly by the caller."""
         ...
 
 
 @t.runtime_checkable
-class TaskHandlerProtocol(t.Protocol):
-    """A handler that can independently generate inputs for external programs.
+class OutfileCatalogProtocol(t.Protocol):
+    """Handler that can enumerate expected output files."""
 
-    Any handler satisfying this protocol is complete and standalone.
-    External code (scripts, CLI tools) should only use handlers satisfying this.
+    def create_outfile_catalog(self, config: t.Any) -> t.Any:
+        """Return a catalog of expected output files for *config*."""
+        ...
 
-    Requires build_input_params, and create_outfile_catalog.
+
+@t.runtime_checkable
+class AggregatorProtocol(t.Protocol):
+    """Handler that can supply aggregation parameters."""
+
+    def build_aggregator_params(self, config: t.Any) -> t.Any:
+        """Return aggregation parameters for *config*."""
+        ...
+
+
+@t.runtime_checkable
+class TaskHandlerProtocol(InputBuilderProtocol, OutfileCatalogProtocol, t.Protocol):
+    """Composite protocol: a fully standalone task handler.
+
+    Any handler satisfying this protocol has both ``build_input_params`` and
+    ``create_outfile_catalog``.  External code (scripts, CLI tools) should
+    only consume handlers that satisfy this protocol.
     """
-
-    def build_input_params(self, config) -> t.Any:
-        """Generate complete input with no external dependencies."""
-        ...
-
-    def create_outfile_catalog(self, config) -> t.Any:
-        """List expected output files."""
-        ...

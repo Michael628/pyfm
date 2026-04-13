@@ -1,7 +1,7 @@
 from pyfm.domain.buildertypes import ConfigBuilder
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig, SerializableEnum
+from pyfm.domain.registry import TaskHandler, HandlerRegistry
 from pyfm.domain.hooks import BuildHooks, BuildHooksRegistry
-from pyfm.domain.registry import HandlerRegistry, ConfigHandler
 from pyfm.domain.outfiles import Outfile
 from pyfm.domain.protocols import (
     FromDictProtocol,
@@ -9,6 +9,9 @@ from pyfm.domain.protocols import (
     ConfigPreprocessorProtocol,
     ConfigPostprocessorProtocol,
     ConfigValidatorProtocol,
+    InputBuilderProtocol,
+    OutfileCatalogProtocol,
+    AggregatorProtocol,
     TaskHandlerProtocol,
 )
 from pyfm.domain.ops import Gamma, OpList, MassDict
@@ -22,15 +25,18 @@ __all__ = [
     "ConfigBase",
     "SimpleConfig",
     "CompositeConfig",
-    "HandlerRegistry",
-    "ConfigHandler",
     "SerializableEnum",
+    "TaskHandler",
+    "HandlerRegistry",
     "Outfile",
     "FromDictProtocol",
     "FormattableProtocol",
     "ConfigPreprocessorProtocol",
     "ConfigPostprocessorProtocol",
     "ConfigValidatorProtocol",
+    "InputBuilderProtocol",
+    "OutfileCatalogProtocol",
+    "AggregatorProtocol",
     "TaskHandlerProtocol",
     "MassDict",
     "Gamma",
