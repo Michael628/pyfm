@@ -98,6 +98,8 @@ def write_files(
             format = format or "hdf5"
         case ".csv":
             format = format or "csv"
+        case ".parquet":
+            format = format or "parquet"
         case ".npy" | ".p":
             format = format or "dict"
         case _:
@@ -112,6 +114,15 @@ def write_files(
     elif format == "hdf5":
         out_filestem = stem + ".h5"
         fn = lambda data, fname: data.to_hdf(fname, key="corr", mode="w")
+    elif format == "parquet":
+        try:
+            import pyarrow  # noqa: F401
+        except ImportError:
+            raise NotImplementedError(
+                "Parquet support requires pyarrow. Install with: pip install pyfm[parquet]"
+            )
+        out_filestem = stem + ".parquet"
+        fn = lambda data, fname: data.to_parquet(fname)
     elif format == "dict":
         dict_depth = kwargs.pop("dict_depth")
         out_filestem = stem

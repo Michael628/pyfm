@@ -1,7 +1,6 @@
 import os
 import typing as t
 
-from concurrent.futures import ThreadPoolExecutor
 import h5py
 import numpy as np
 import pandas as pd
@@ -31,8 +30,18 @@ def get_pickle_loader(filename: str, _: t.Dict, **kwargs):
 
 def get_csv_loader(filename: str, _: t.Dict[str, str], **kwargs):
 
-    data = None
     return pd.read_csv(filename)
+
+
+def get_parquet_loader(filename: str, _: t.Dict[str, str], **kwargs):
+    try:
+        import pyarrow  # noqa: F401
+    except ImportError:
+        raise NotImplementedError(
+            "Parquet support requires pyarrow. Install with: pip install pyfm[parquet]"
+        )
+
+    return pd.read_parquet(filename)
 
 
 def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
@@ -81,8 +90,10 @@ def get_file_loader(file_path: str):
             return get_hdf5_loader
         case ".csv":
             return get_csv_loader
+        case ".parquet":
+            return get_parquet_loader
         case _:
-            raise ValueError("File must have extension '.p' or '.h5'")
+            raise ValueError("File must have extension '.p', '.h5', '.csv', or '.parquet'")
 
 
 def load_files(
@@ -94,21 +105,9 @@ def load_files(
     skip_file_set: t.List[str] | None = None,
     **kwargs,
 ) -> WrappedDataPipe | pd.DataFrame:
-    def file_loader_wrapper(file_loader, filename: str, repl: t.Dict) -> pd.DataFrame:
-        utils.get_logger().debug(f"Loading file: {filename}")
-        new_data: pd.DataFrame = file_loader(filename, repl)
-
-        if len(repl) != 0:
-            new_data[list(repl.keys())] = tuple(repl.values())
-
-        return repl, new_data
-
     def file_factory():
-        def get_filename(filename, reps):
-            return filename, reps
-
         file_repls = utils.io.process_files(
-            filestem, get_filename, replacements, regex, wildcard_fill
+            filestem, lambda f, r: (f, r), replacements, regex, wildcard_fill
         )
 
         if skip_file_set:
@@ -119,31 +118,15 @@ def load_files(
             raise ValueError(f"No files found for file search pattern: {file0}")
 
         file_loader = partial(get_file_loader(file_repls[0][0]), **kwargs)
-        flw = partial(file_loader_wrapper, file_loader)
-
-        group_cols = []
-        if len(file_repls) > 0:
-            group_cols = list(file_repls[0][1].keys())
-
+        group_cols = list(file_repls[0][1].keys())
         GroupTuple = utils.create_group_tuple(*group_cols)
 
-        def temp(*args):
-            fname, rep = args[0]
-            return flw(fname, rep)
-
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            results = executor.map(temp, file_repls)
-
-        result_gen = ((GroupTuple(**g), r) for g, r in results)
-        try:
-            first = next(result_gen)
-        except StopIteration:
-            # No results
-            yield (GroupTuple(), pd.DataFrame())
-            return
-
-        yield first
-        yield from result_gen
+        for filename, repl in file_repls:
+            utils.get_logger().debug(f"Loading file: {filename}")
+            df = file_loader(filename, repl)
+            if repl:
+                df[list(repl.keys())] = tuple(repl.values())
+            yield GroupTuple(**repl), df
 
     if aggregate:
         return WrappedDataPipe(file_factory).agg()
