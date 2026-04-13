@@ -1,6 +1,7 @@
 """Tests for TaskHandler, HandlerRegistry, and associated Protocols (issue #3)."""
 import pytest
-from pyfm.domain.registry import TaskHandler, HandlerRegistry
+from pyfm.domain import task_registry
+from pyfm.domain.task_registry import TaskHandler
 from pyfm.domain.protocols import (
     InputBuilderProtocol,
     OutfileCatalogProtocol,
@@ -44,9 +45,9 @@ def build_aggregator_params_stub(config):
 
 @pytest.fixture(autouse=True)
 def reset_registry():
-    HandlerRegistry.clear()
+    task_registry.clear()
     yield
-    HandlerRegistry.clear()
+    task_registry.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -169,43 +170,43 @@ class TestProtocolSatisfaction:
 
 
 # ---------------------------------------------------------------------------
-# HandlerRegistry.register
+# task_registry.register
 # ---------------------------------------------------------------------------
 
 class TestRegister:
     def test_register_minimal(self):
-        HandlerRegistry.register("task_a", FakeConfig)
-        handler = HandlerRegistry.get("task_a")
+        task_registry.register("task_a", FakeConfig)
+        handler = task_registry.get("task_a")
         assert handler.config_type is FakeConfig
 
     def test_register_with_all_callables(self):
-        HandlerRegistry.register(
+        task_registry.register(
             "task_a",
             FakeConfig,
             build_input_params=build_input_params_stub,
             create_outfile_catalog=create_outfile_catalog_stub,
             build_aggregator_params=build_aggregator_params_stub,
         )
-        handler = HandlerRegistry.get("task_a")
+        handler = task_registry.get("task_a")
         assert handler.build_input_params is build_input_params_stub
         assert handler.create_outfile_catalog is create_outfile_catalog_stub
         assert handler.build_aggregator_params is build_aggregator_params_stub
 
     def test_register_duplicate_key_raises_value_error(self):
-        HandlerRegistry.register("task_a", FakeConfig)
+        task_registry.register("task_a", FakeConfig)
         with pytest.raises(ValueError, match="already registered"):
-            HandlerRegistry.register("task_a", AnotherConfig)
+            task_registry.register("task_a", AnotherConfig)
 
     def test_register_unknown_callable_raises_type_error(self):
         with pytest.raises(TypeError, match="Unknown callable keyword"):
-            HandlerRegistry.register("task_a", FakeConfig, invalid_fn=lambda c: None)
+            task_registry.register("task_a", FakeConfig, invalid_fn=lambda c: None)
 
     def test_register_different_keys_independent(self):
-        HandlerRegistry.register("task_a", FakeConfig, build_input_params=build_input_params_stub)
-        HandlerRegistry.register("task_b", AnotherConfig, create_outfile_catalog=create_outfile_catalog_stub)
+        task_registry.register("task_a", FakeConfig, build_input_params=build_input_params_stub)
+        task_registry.register("task_b", AnotherConfig, create_outfile_catalog=create_outfile_catalog_stub)
 
-        ha = HandlerRegistry.get("task_a")
-        hb = HandlerRegistry.get("task_b")
+        ha = task_registry.get("task_a")
+        hb = task_registry.get("task_b")
 
         assert ha.config_type is FakeConfig
         assert hb.config_type is AnotherConfig
@@ -216,67 +217,67 @@ class TestRegister:
 
 
 # ---------------------------------------------------------------------------
-# HandlerRegistry.get
+# task_registry.get
 # ---------------------------------------------------------------------------
 
 class TestGet:
     def test_get_missing_key_raises_key_error(self):
         with pytest.raises(KeyError, match="no_such_key"):
-            HandlerRegistry.get("no_such_key")
+            task_registry.get("no_such_key")
 
     def test_get_returns_task_handler(self):
-        HandlerRegistry.register("task_a", FakeConfig)
-        result = HandlerRegistry.get("task_a")
+        task_registry.register("task_a", FakeConfig)
+        result = task_registry.get("task_a")
         assert isinstance(result, TaskHandler)
 
     def test_get_returns_correct_handler(self):
-        HandlerRegistry.register("task_a", FakeConfig, build_input_params=build_input_params_stub)
-        HandlerRegistry.register("task_b", AnotherConfig)
+        task_registry.register("task_a", FakeConfig, build_input_params=build_input_params_stub)
+        task_registry.register("task_b", AnotherConfig)
 
-        assert HandlerRegistry.get("task_a").config_type is FakeConfig
-        assert HandlerRegistry.get("task_b").config_type is AnotherConfig
+        assert task_registry.get("task_a").config_type is FakeConfig
+        assert task_registry.get("task_b").config_type is AnotherConfig
 
     def test_get_then_isinstance_check(self):
         """Demonstrate Protocol satisfaction check at lookup time."""
-        HandlerRegistry.register(
+        task_registry.register(
             "complete",
             FakeConfig,
             build_input_params=build_input_params_stub,
             create_outfile_catalog=create_outfile_catalog_stub,
         )
-        HandlerRegistry.register("partial", FakeConfig)
+        task_registry.register("partial", FakeConfig)
 
-        complete = HandlerRegistry.get("complete")
-        partial = HandlerRegistry.get("partial")
+        complete = task_registry.get("complete")
+        partial = task_registry.get("partial")
 
         assert isinstance(complete, TaskHandlerProtocol)
         assert not isinstance(partial, TaskHandlerProtocol)
 
 
 # ---------------------------------------------------------------------------
-# HandlerRegistry.clear
+# task_registry.clear
 # ---------------------------------------------------------------------------
 
 class TestClear:
     def test_clear_removes_all_handlers(self):
-        HandlerRegistry.register("task_a", FakeConfig)
-        HandlerRegistry.register("task_b", AnotherConfig)
-        HandlerRegistry.clear()
+        task_registry.register("task_a", FakeConfig)
+        task_registry.register("task_b", AnotherConfig)
+        task_registry.clear()
 
         with pytest.raises(KeyError):
-            HandlerRegistry.get("task_a")
+            task_registry.get("task_a")
         with pytest.raises(KeyError):
-            HandlerRegistry.get("task_b")
+            task_registry.get("task_b")
 
     def test_clear_allows_re_registration(self):
-        HandlerRegistry.register("task_a", FakeConfig)
-        HandlerRegistry.clear()
+        task_registry.register("task_a", FakeConfig)
+        task_registry.clear()
         # Should not raise after clear.
-        HandlerRegistry.register("task_a", AnotherConfig)
-        assert HandlerRegistry.get("task_a").config_type is AnotherConfig
+        task_registry.register("task_a", AnotherConfig)
+        assert task_registry.get("task_a").config_type is AnotherConfig
 
     def test_clear_on_empty_registry_is_safe(self):
-        HandlerRegistry.clear()  # already empty — must not raise
+        task_registry.clear()  # already empty — must not raise
 
 
 # ---------------------------------------------------------------------------
@@ -285,11 +286,11 @@ class TestClear:
 
 class TestNoBannedMachinery:
     def test_config_handler_not_importable(self):
-        import pyfm.domain.registry as reg_module
+        import pyfm.domain.task_registry as reg_module
         assert not hasattr(reg_module, "ConfigHandler")
 
     def test_registry_module_does_not_import_inspect(self):
-        import pyfm.domain.registry as reg_module
+        import pyfm.domain.task_registry as reg_module
         import sys
         # inspect is not used in the new registry
         source_file = reg_module.__file__
