@@ -1,7 +1,9 @@
 from pyfm.domain.buildertypes import ConfigBuilder
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig, SerializableEnum
-from pyfm.domain.registry import TaskHandler, HandlerRegistry
-from pyfm.domain.hooks import BuildHooks, BuildHooksRegistry
+from pyfm.domain.task_registry import TaskHandler
+from pyfm.domain import task_registry
+from pyfm.domain.build_hooks import BuildHooks
+from pyfm.domain import build_hooks
 from pyfm.domain.outfiles import Outfile
 from pyfm.domain.protocols import (
     FromDictProtocol,
@@ -20,14 +22,14 @@ from pyfm.domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
 
 __all__ = [
     "BuildHooks",
-    "BuildHooksRegistry",
+    "build_hooks",
     "ConfigBuilder",
     "ConfigBase",
     "SimpleConfig",
     "CompositeConfig",
     "SerializableEnum",
     "TaskHandler",
-    "HandlerRegistry",
+    "task_registry",
     "Outfile",
     "FromDictProtocol",
     "FormattableProtocol",
