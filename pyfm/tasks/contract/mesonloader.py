@@ -6,21 +6,21 @@ from pyfm.a2a.types import MesonLoaderConfig
 from pyfm.tasks.register import register_task
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Preprocessing for MesonLoaderConfig."""
-    task_data = params.get("_tasks", {})
+    preprocessor_params = params.pop("_preprocessor", {})
 
     # Flatten params and task_data
-    result = params | task_data
+    combined_params = params | preprocessor_params
 
     # Build mass_shift from combined data
     mass_shift = {
-        key.removeprefix("mass_"): result[key]
+        key.removeprefix("mass_"): combined_params[key]
         for key in ["mass_original", "mass_updated", "milc_mass"]
-        if key in result
+        if key in combined_params
     }
 
-    return params | task_data | {"_tasks": {}, "mass_shift": mass_shift}
+    return combined_params | dict(mass_shift=mass_shift)
 
 
 def build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.Any]:

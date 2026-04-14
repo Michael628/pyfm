@@ -383,3 +383,135 @@ class TestListContainerComposite:
         )
         build_config(MultiPartConfig, params)
         assert len(part_pre_calls) == 2
+
+
+# ---------------------------------------------------------------------------
+# _preprocessor routing — SIMPLE container
+# ---------------------------------------------------------------------------
+
+class TestPreprocessorRoutingSimple:
+    def test_subconfig_receives_its_slice(self):
+        """Builder routes _preprocessor[subconfig_key] to the child's preprocess hook."""
+        received = {}
+
+        def part_pre(p):
+            received["preprocessor"] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        params = make_params(
+            _preprocessor={"part": {"color": "routed"}},
+        )
+        build_config(BoxConfig, params)
+        assert received["preprocessor"] == {"color": "routed"}
+
+    def test_missing_subconfig_key_defaults_to_empty(self):
+        """When _preprocessor has no entry for a subconfig, child receives {}."""
+        received = {}
+
+        def part_pre(p):
+            received["preprocessor"] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        params = make_params(_preprocessor={})
+        build_config(BoxConfig, params)
+        assert received["preprocessor"] == {}
+
+    def test_absent_preprocessor_defaults_to_empty(self):
+        """When _preprocessor is entirely absent, child receives {}."""
+        received = {}
+
+        def part_pre(p):
+            received["preprocessor"] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_config(BoxConfig, make_params())
+        assert received["preprocessor"] == {}
+
+    def test_parent_preprocessor_consumes_and_routes(self):
+        """Parent preprocess sets _preprocessor; builder routes the child's slice."""
+        received = {}
+
+        def box_pre(p):
+            return p | {"_preprocessor": {"part": {"color": "injected"}}}
+
+        def part_pre(p):
+            received["preprocessor"] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(BoxConfig, preprocess=box_pre)
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_config(BoxConfig, make_params())
+        assert received["preprocessor"] == {"color": "injected"}
+
+    def test_child_preprocessor_uses_routed_slice(self):
+        """Child's preprocessor applies its routed _preprocessor slice to produce config fields."""
+        def part_pre(p):
+            return p | p.get("_preprocessor", {})
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        params = make_params(
+            color="original",
+            _preprocessor={"part": {"color": "overridden"}},
+        )
+        config = build_config(BoxConfig, params)
+        assert config.part_config.color == "overridden"
+
+    def test_sibling_subconfig_slices_are_independent(self):
+        """Each subconfig key receives only its own slice, not the full _preprocessor."""
+        received = {}
+
+        def part_pre(p):
+            received["part_preprocessor"] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        params = make_params(
+            _preprocessor={
+                "part": {"color": "for-part"},
+                "other": {"color": "for-other"},
+            },
+        )
+        build_config(BoxConfig, params)
+        assert received["part_preprocessor"] == {"color": "for-part"}
+
+
+# ---------------------------------------------------------------------------
+# _preprocessor routing — LIST container
+# ---------------------------------------------------------------------------
+
+class TestPreprocessorRoutingList:
+    def test_list_items_each_receive_subconfig_slice(self):
+        """Each item in a LIST container receives the subconfig's _preprocessor slice."""
+        received = []
+
+        def part_list_pre(p):
+            received.append(p.get("_preprocessor"))
+            return p
+
+        build_hooks.register(PartListConfig, preprocess=part_list_pre)
+        params = make_params(
+            part_list_config=[{"tag": "a"}, {"tag": "b"}],
+            _preprocessor={"part_list": {"extra": "value"}},
+        )
+        build_config(MultiPartConfig, params)
+        assert len(received) == 2
+        assert all(r == {"extra": "value"} for r in received)
+
+    def test_list_missing_slice_defaults_to_empty(self):
+        """LIST items receive {} when their subconfig key is absent from _preprocessor."""
+        received = []
+
+        def part_list_pre(p):
+            received.append(p.get("_preprocessor"))
+            return p
+
+        build_hooks.register(PartListConfig, preprocess=part_list_pre)
+        params = make_params(
+            part_list_config=[{"tag": "x"}, {"tag": "y"}],
+            _preprocessor={},
+        )
+        build_config(MultiPartConfig, params)
+        assert all(r == {} for r in received)

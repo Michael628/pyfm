@@ -9,19 +9,15 @@ import pandas as pd
 from pyfm.tasks.contract import diagram as dmod
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Preprocessing for ContractConfig."""
-    task_data = params.get("_tasks", {})
+    preprocessor_params = params.pop("_preprocessor", {})
 
-    if subconfig is None:
-        return (
-            params
-            | {k: v for k, v in task_data.items() if k != "diagrams"}
-            | {"_tasks": task_data.get("diagrams", {})}
-        )
+    # Flatten params and task_data
+    combined_params = params | preprocessor_params
 
-    diagrams = task_data
-    diagram_params = params.get("diagram_params", [])
+    diagrams = combined_params.pop("diagrams", [])
+    diagram_params = combined_params.pop("diagram_params", {})
 
     if isinstance(diagrams, list) and len(diagrams) == 0:
         raise ValueError("No diagrams provided in config parameters")
@@ -31,10 +27,11 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         if d not in diagram_params:
             raise ValueError(f"Diagram {d} not found in diagram_params")
 
-    return params | {
-        "_tasks": {},
-        "diagrams": {k: v for k, v in diagram_params.items() if k in diagrams},
-    }
+    return combined_params | dict(
+        _preprocessor=dict(
+            diagrams={k: v for k, v in diagram_params.items() if k in diagrams}
+        ),
+    )
 
 
 def build_input_params(
