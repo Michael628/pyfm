@@ -118,29 +118,46 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
     return HadronsInput(modules=modules, schedule=schedule)
 
 
-def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
-    def generate_outfile_formatting():
-        """
-        A generator function that yields file formatting details for different
-        components of the task configuration.
+def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+    """Preprocessing for MesonConfig.
 
-        Yields:
-            Tuple[Dict[str, Any], str]: A dictionary of replacements and the
-            corresponding output file path for each component.
-        """
+    Handles routing of task data to 'operations' field to avoid collision
+    between MassDict (from params['mass']) and OpList mass labels (from params['_tasks']['mass']).
+    """
+    # Extract task configs (contains gamma, mass lists for OpList)
+    task_data = params.get("_tasks", {})
 
-        for op in config.operations.op_list:
-            res = {
-                "gamma": op.gamma.gamma_list,
-                "mass": [config.mass.to_string(m, True) for m in op.mass],
-            }
-            yield res, config.meson
+    # Get field names from MesonConfig, excluding 'mass'
+    # - 'mass' comes from top-level params (MassDict)
+    config_fields = {f.name for f in fields(MesonConfig) if f.name != "mass"}
 
-    outfile_generator = generate_outfile_formatting()
+    return (
+        params
+        | {
+            "operations": {
+                k: v for k, v in task_data.items() if k not in config_fields
+            },
+            "_tasks": {},
+        }
+        | {k: v for k, v in task_data.items() if k in config_fields}
+    )
 
-    df = utils.io.catalog_files(outfile_generator)
 
-    return df
+def postprocess_config(config: MesonConfig) -> MesonConfig:
+    # Backward compatibility. Convert local operation into pion_local and vec_local
+    try:
+        local_index = config.op_list.index(Gamma.LOCAL)
+    except ValueError:
+        return config
+
+    local_op = config.op_list.pop(local_index)
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.VEC_LOCAL, mass=local_op.mass)
+    )
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.PION_LOCAL, mass=local_op.mass)
+    )
+    return config
 
 
 def preprocess_params(params: t.Dict) -> t.Dict:
