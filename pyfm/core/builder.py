@@ -2,13 +2,9 @@ import typing as t
 from pyfm.domain import (
     ConfigBase,
     ConfigBuilder,
-    ConfigPreprocessorProtocol,
     CompositeConfig,
     SimpleConfig,
-    HandlerRegistry,
-    ConfigHandler,
-    ConfigPostprocessorProtocol,
-    ConfigValidatorProtocol,
+    build_hooks,
 )
 
 from pyfm import utils
@@ -16,72 +12,54 @@ from pyfm import utils
 
 def build_config(
     config_type,
-    config_params: t.Dict[str, t.Any],
+    params: t.Dict[str, t.Any],
     file_params: t.Dict[str, t.Any] | None = None,
-    get_handler: t.Callable[[None], ConfigHandler] | None = None,
 ) -> ConfigBase:
     """Build a configuration object from input parameters.
 
-    Execution phases:
-    1. Preprocessing: Call preprocess_params if handler provides it
+    Hooks for *config_type* are looked up from the global ``build_hooks``
+    registry and applied in the following order:
+
+    1. Preprocessing: ``hooks.preprocess(params)`` — transform raw params
     2. Construction: Build config recursively (subconfigs built first)
-    3. Postprocessing: Call postprocess_config if handler provides it
-    4. Validation: Call validate if config implements ValidatableConfig
+    3. Postprocessing: ``hooks.postprocess(config)`` — transform built config
+    4. Validation: ``hooks.validate(config)`` — assert invariants
     """
 
     if file_params is None:
         file_params = {}
 
-    def preproc_fn(par):
-        if get_handler is not None:
-            handler = get_handler(config_type)
-            if isinstance(handler, ConfigPreprocessorProtocol):
-                return handler.preprocess_params(par)
-        return par
+    hooks = build_hooks.get(config_type)
+
+    def preprocess(raw_params: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        if hooks is not None and hooks.preprocess is not None:
+            return hooks.preprocess(raw_params)
+        return raw_params
 
     def postproc_and_validate(config: ConfigBase) -> ConfigBase:
-        """Apply postprocessing and validation to a built config."""
-        if get_handler is None:
+        if hooks is None:
             return config
-
-        handler = get_handler(config_type)
-        handler.config = config
-
-        # Phase 3: Postprocessing
-        if isinstance(handler, ConfigPostprocessorProtocol):
-            handler.config = handler.postprocess_config()
-
-        # Phase 4: Validation
-        if isinstance(handler, ConfigValidatorProtocol):
-            handler.validate()
-
-        return handler.config
+        if hooks.postprocess is not None:
+            config = hooks.postprocess(config)
+        if hooks.validate is not None:
+            hooks.validate(config)
+        return config
 
     def new_builder(build_params: t.Dict[str, t.Any]) -> ConfigBuilder:
-        """Return new ConfigBuilder.
-        Builder is loaded with `config_params` after wrapping with all preprocessors, if provided.
-        """
         return ConfigBuilder(config_type).with_yaml(build_params)
 
     def build_simple_config() -> SimpleConfig:
-        processed_params = preproc_fn(config_params, None)
+        processed_params = preprocess(params)
         config = new_builder(processed_params).with_files(file_params).build()
         return postproc_and_validate(config)
 
     def build_composite_config() -> CompositeConfig:
         """Return new CompositeConfig after recursively building all subconfigs."""
 
-        processed_params = preproc_fn(config_params)
+        processed_params = preprocess(params)
 
         subconfigs = {}
         for subconfig_label, field in config_type.get_subconfigs().items():
-
-            # Remove "_config" suffix to get clean key
-            subconfig_key = subconfig_label.removesuffix("_config")
-
-            # Preprocess for subconfig
-            processed_sub_params = preproc_fn(processed_params, subconfig_key)
-
             match field.container:
                 case field.container.SIMPLE:
                     sub_params = processed_params | {
@@ -90,7 +68,7 @@ def build_config(
                         )
                     }
                     subconfigs[field.name] = build_config(
-                        field.type, sub_params, file_params, get_handler
+                        field.type, processed_params, file_params
                     )
                 case field.container.LIST:
                     preprocessor_slice = processed_params.get(
@@ -118,7 +96,7 @@ def build_config(
                     subconfigs[field.name] = []
                     for sub_par in param_list:
                         subconfigs[field.name].append(
-                            build_config(field.type, sub_par, file_params, get_handler)
+                            build_config(field.type, sub_par, file_params)
                         )
 
                 case field.container.DICT:
@@ -139,7 +117,6 @@ def build_config(
                             field.type,
                             processed_params | subconfig_params,
                             file_params,
-                            get_handler,
                         )
 
         config = (
