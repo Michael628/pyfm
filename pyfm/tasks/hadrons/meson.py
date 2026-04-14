@@ -138,5 +138,18 @@ def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
     return df
 
 
-# Register GaugeConfig as the config for 'hadrons_gauge' task type
-register_task(MesonConfig, build_input_params, create_outfile_catalog)
+def preprocess_params(params: t.Dict) -> t.Dict:
+    """Merge the _preprocessor slice into params, wrapping in 'operations' if needed."""
+    sub = params.get("_preprocessor", {})
+    if "operations" not in sub:
+        sub = {"operations": sub}
+    return params | sub
+
+
+# Register MesonConfig as the config for 'hadrons_meson' task type
+register_task(
+    MesonConfig,
+    build_input_params,
+    create_outfile_catalog,
+    preprocess_params=preprocess_params,
+)

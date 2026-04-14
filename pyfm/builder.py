@@ -23,11 +23,11 @@ def build_config(
     if file_params is None:
         file_params = {}
 
-    def preproc_fn(par, sub):
+    def preproc_fn(par):
         if get_handler is not None:
             handler = get_handler(config_type)
             if isinstance(handler, ConfigPreprocessorProtocol):
-                return handler.preprocess_params(par, subconfig=sub)
+                return handler.preprocess_params(par)
         return par
 
     def new_builder(build_params: t.Dict[str, t.Any]) -> ConfigBuilder:
@@ -37,37 +37,50 @@ def build_config(
         return ConfigBuilder(config_type).with_yaml(build_params)
 
     def build_simple_config() -> SimpleConfig:
-        processed_params = preproc_fn(config_params, None)
+        processed_params = preproc_fn(config_params)
 
         return new_builder(processed_params).with_files(file_params).build()
 
     def build_composite_config() -> CompositeConfig:
         """Return new CompositeConfig after recursively building all subconfigs."""
 
-        processed_params = preproc_fn(config_params, None)
+        processed_params = preproc_fn(config_params)
 
         subconfigs = {}
         for subconfig_label, field in config_type.get_subconfigs().items():
-
-            processed_sub_params = preproc_fn(processed_params, subconfig_label)
+            subconfig_key = subconfig_label.removesuffix("_config")
 
             match field.container:
                 case field.container.SIMPLE:
+                    sub_params = processed_params | {
+                        "_preprocessor": processed_params.get("_preprocessor", {}).get(
+                            subconfig_key, {}
+                        )
+                    }
                     subconfigs[field.name] = build_config(
-                        field.type, processed_sub_params, file_params, get_handler
+                        field.type, sub_params, file_params, get_handler
                     )
                 case field.container.LIST:
+                    preprocessor_slice = processed_params.get(
+                        "_preprocessor", {}
+                    ).get(subconfig_key, {})
                     # Convert all params into list of params
-                    if field.name not in processed_sub_params:
-                        param_list = [processed_sub_params]
-                    elif not isinstance(processed_sub_params[field.name], list):
+                    if field.name not in processed_params:
                         param_list = [
-                            processed_sub_params | processed_sub_params[field.name]
+                            processed_params | {"_preprocessor": preprocessor_slice}
+                        ]
+                    elif not isinstance(processed_params[field.name], list):
+                        param_list = [
+                            processed_params
+                            | processed_params[field.name]
+                            | {"_preprocessor": preprocessor_slice}
                         ]
                     else:
                         param_list = [
-                            processed_sub_params | sub_par
-                            for sub_par in processed_sub_params[field.name]
+                            processed_params
+                            | sub_par
+                            | {"_preprocessor": preprocessor_slice}
+                            for sub_par in processed_params[field.name]
                         ]
 
                     subconfigs[field.name] = []
@@ -78,8 +91,8 @@ def build_config(
 
                 case field.container.DICT:
                     param_provided = (
-                        subconfig_label in processed_sub_params
-                        and isinstance(processed_sub_params[subconfig_label], dict)
+                        subconfig_label in processed_params
+                        and isinstance(processed_params[subconfig_label], dict)
                     )
                     if not param_provided:
                         raise ValueError(
@@ -87,12 +100,12 @@ def build_config(
                         )
 
                     subconfigs[subconfig_label] = {}
-                    for key, subconfig_params in processed_sub_params[
+                    for key, subconfig_params in processed_params[
                         subconfig_label
                     ].items():
                         subconfigs[subconfig_label][key] = build_config(
                             field.type,
-                            processed_sub_params | subconfig_params,
+                            processed_params | subconfig_params,
                             file_params,
                             get_handler,
                         )

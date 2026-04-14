@@ -9,9 +9,9 @@ import pandas as pd
 from pyfm.tasks.contract import diagram as dmod
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    diagrams = params.get("diagrams", [])
-    diagram_params = params.get("diagram_params", [])
+def preprocess_params(params: t.Dict) -> t.Dict:
+    diagrams = params.get("_preprocessor", {}).get("diagrams", [])
+    diagram_params = params.get("diagram_params", {})
 
     if isinstance(diagrams, list) and len(diagrams) == 0:
         raise ValueError("No diagrams provided in config parameters")

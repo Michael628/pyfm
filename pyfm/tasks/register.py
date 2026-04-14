@@ -49,3 +49,16 @@ def register_task(config: t.Type, *funcs, **kwfuncs):
 
     for method_name, fn in kwfuncs.items():
         HandlerRegistry.register_function(handler_key, fn, method_name)
+
+    # Register default preprocessor if one has not been explicitly provided.
+    # The default merges the _preprocessor slice (routed by the builder) into
+    # the top-level params so child configs receive their params directly.
+    handler = HandlerRegistry.get_handler(handler_key)
+    if not hasattr(handler, "preprocess_params"):
+
+        def _default_preprocessor(params: t.Dict) -> t.Dict:
+            return params | params.get("_preprocessor", {})
+
+        HandlerRegistry.register_function(
+            handler_key, _default_preprocessor, "preprocess_params"
+        )

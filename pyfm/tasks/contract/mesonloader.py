@@ -8,7 +8,7 @@ from pyfm.domain import (
 from pyfm.tasks.register import register_task
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     mass_shift = {}
 
     for key in ["mass_original", "mass_updated", "milc_mass"]:

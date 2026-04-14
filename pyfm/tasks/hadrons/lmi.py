@@ -35,69 +35,30 @@ def __post_init__(self):
         raise ValueError("Epack parameters must be set to perform meson calculation")
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Perform any necessary modifications to task input parameters before they
     are passed to the subtask constructor.
     """
+    preprocessor = params.get("_preprocessor", {})
 
-    # preprocessing top-level config
-    if subconfig is None:
-        # Skip configs where user provides no input
-        optional_configs = ["meson", "high_modes", "epack"]
-        skip_optional = {f"skip_{k}": True for k in optional_configs if k not in params}
-        return params | skip_optional
-
-    key = subconfig.removesuffix("_config")
-
-    sub_params = params.get(key, {})
-
-    if key == "high_modes" or key == "meson" and "operations" not in sub_params:
-        sub_params = {"operations": sub_params}
+    # Skip configs where user provides no _preprocessor entry
+    optional_configs = ["meson", "high_modes", "epack"]
+    skip_optional = {
+        f"skip_{k}": True for k in optional_configs if k not in preprocessor
+    }
 
     action_name = "stag_mass_{mass}"
     solver_name = "stag_{solver}_mass_{mass}"
     low_modes_name = "evecs_mass_{mass}"
     shift_gauge_name = "gauge"
-    if key == "meson":
-        return (
-            params
-            | {
-                "action_name": action_name,
-                "low_modes_name": low_modes_name,
-            }
-            | sub_params
-        )
-    elif key == "gauge":
-        return (
-            params
-            | {
-                "action_name": action_name,
-            }
-            | sub_params
-        )
-    elif key == "epack":
-        return (
-            params
-            | {
-                "action_name": action_name,
-                "low_modes_name": low_modes_name,
-            }
-            | sub_params
-        )
-    elif key == "high_modes":
-        return (
-            params
-            | {
-                "shift_gauge_name": shift_gauge_name,
-                "action_name": action_name,
-                "solver_name": solver_name,
-                "low_modes_name": low_modes_name,
-                "skip_low_modes": "epack" not in params,
-            }
-            | sub_params
-        )
-    else:
-        raise ValueError(f"Unknown subconfig: {subconfig}")
+
+    return params | skip_optional | {
+        "action_name": action_name,
+        "solver_name": solver_name,
+        "low_modes_name": low_modes_name,
+        "shift_gauge_name": shift_gauge_name,
+        "skip_low_modes": "epack" not in preprocessor,
+    }
 
 
 def postprocess_config(config: LMIConfig) -> LMIConfig:

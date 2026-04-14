@@ -130,7 +130,7 @@ job_setup:
   smear:
     run: smear.sh
     job_type: smear
-    tasks:
+    _preprocessor:
       unsmeared_file: "/home/mlynch/Work/pyfm/example/work-dir/lat/v5/l{ens}{series}.{cfg}"
       node_geometry: "1 1 1 1"
     io: "test-l4444-smear"
@@ -138,7 +138,7 @@ job_setup:
   contract:
     run: contract.sh
     job_type: contract
-    tasks:
+    _preprocessor:
       diagrams:
         - pion_local
         - vec_local
@@ -155,7 +155,7 @@ job_setup:
     wall_time: "24:00:00"
     job_type: hadrons
     task_type: lmi
-    tasks:
+    _preprocessor:
       epack:
         load: false
         save_evals: true

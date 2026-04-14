@@ -72,8 +72,8 @@ def get_task_params(
         # Load job-specific overrides
         job_params.get("params", {})
         |
-        # Load task-specific parameters
-        job_params.get("tasks", {})
+        # Load task-specific preprocessor inputs
+        {"_preprocessor": job_params.get("_preprocessor", {})}
     )
     return task_params
 

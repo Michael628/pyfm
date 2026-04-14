@@ -111,10 +111,10 @@ submit:
 
 # Template and I/O file name keys
 job_setup:
-  smear: 
+  smear:
     run: smear.slurm
     job_type: smear
-    tasks:
+    _preprocessor:
       unsmeared_file: '/pscratch/sd/m/mlynch/gm2/LMI/l3248f211b580m002426m06730m8447.tau/lat/v5/l{ens}{series}.{cfg}'
       node_geometry: "1 1 2 2"
     io: 'test-l3248-smear'
@@ -122,7 +122,7 @@ job_setup:
   contract:
     run: contract.slurm
     job_type: contract
-    tasks:
+    _preprocessor:
       diagrams:
       - pion_local
       - vec_local
@@ -133,13 +133,13 @@ job_setup:
       eigs: 1000
       dt: 1
       noise: 1
-  hadrons: 
+  hadrons:
     run: hadrons.slurm
     job_type: hadrons
     task_type: lmi
     io: 'test-l3248-hadrons'
     wall_time: "24:00:00"
-    tasks:
+    _preprocessor:
       epack:
         load: true
         save_evals: false

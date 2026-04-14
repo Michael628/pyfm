@@ -34,10 +34,7 @@ def build_input_params(config: DiagramConfig) -> t.Dict[str, t.Any]:
     return yaml_params
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    if subconfig is None:
-        return params
-
+def preprocess_params(params: t.Dict) -> t.Dict:
     new_mesons = []
     mesons = params.get("mesons", [])
     if not isinstance(mesons, list):
