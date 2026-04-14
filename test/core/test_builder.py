@@ -9,7 +9,7 @@ Coverage:
 """
 import pytest
 from dataclasses import field
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from pydantic.dataclasses import dataclass
 
@@ -47,6 +47,13 @@ class MultiPartConfig(CompositeConfig):
     """Composite config that embeds a list of PartListConfigs."""
     part_list_config: List[PartListConfig] = field(default_factory=list)
     name: str = ""
+
+
+@dataclass(frozen=True)
+class DictPartsConfig(CompositeConfig):
+    """Composite config with a DICT container of PartConfig children."""
+    parts_config: Dict[str, PartConfig] = field(default_factory=dict)
+    title: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -349,25 +356,38 @@ class TestCompositeConfigWithHooks:
 # ---------------------------------------------------------------------------
 
 class TestListContainerComposite:
-    def test_list_subconfig_no_list_param(self):
-        """When the list field is absent, a single subconfig is built from the full params."""
-        params = make_params(tag="single", name="mylist")
+    def test_list_subconfig_empty_preprocessor_list(self):
+        """LIST container with missing or empty _preprocessor slice yields []."""
+        params = make_params(name="empty", _preprocessor={"part_list_config": []})
         config = build_config(MultiPartConfig, params)
-        assert isinstance(config, MultiPartConfig)
-        assert isinstance(config.part_list_config, list)
-        assert len(config.part_list_config) == 1
-        assert config.part_list_config[0].tag == "single"
+        assert config.part_list_config == []
 
-    def test_list_subconfig_with_list_param(self):
-        """When the list field is provided as a list, one subconfig is built per entry."""
+        params2 = make_params(name="missing")
+        config2 = build_config(MultiPartConfig, params2)
+        assert config2.part_list_config == []
+
+    def test_list_subconfig_from_preprocessor_list(self):
+        """LIST items are taken only from _preprocessor[field_name] as a list of dicts."""
         params = make_params(
             name="multi",
-            part_list_config=[{"tag": "a"}, {"tag": "b"}, {"tag": "c"}],
+            _preprocessor={
+                "part_list_config": [{"tag": "a"}, {"tag": "b"}, {"tag": "c"}],
+            },
         )
         config = build_config(MultiPartConfig, params)
         assert len(config.part_list_config) == 3
         tags = [s.tag for s in config.part_list_config]
         assert tags == ["a", "b", "c"]
+
+    def test_list_subconfig_rejects_non_list_preprocessor(self):
+        with pytest.raises(TypeError, match="must be a list"):
+            build_config(
+                MultiPartConfig,
+                make_params(
+                    name="bad",
+                    _preprocessor={"part_list_config": {"tag": "not-a-list"}},
+                ),
+            )
 
     def test_list_subconfig_hooks_applied_per_item(self):
         """Subconfig hooks are applied to each item in a list container."""
@@ -379,7 +399,7 @@ class TestListContainerComposite:
 
         build_hooks.register(PartListConfig, preprocess=part_pre)
         params = make_params(
-            part_list_config=[{"tag": "x"}, {"tag": "y"}],
+            _preprocessor={"part_list_config": [{"tag": "x"}, {"tag": "y"}]},
         )
         build_config(MultiPartConfig, params)
         assert len(part_pre_calls) == 2
@@ -400,7 +420,7 @@ class TestPreprocessorRoutingSimple:
 
         build_hooks.register(PartConfig, preprocess=part_pre)
         params = make_params(
-            _preprocessor={"part": {"color": "routed"}},
+            _preprocessor={"part_config": {"color": "routed"}},
         )
         build_config(BoxConfig, params)
         assert received["preprocessor"] == {"color": "routed"}
@@ -435,7 +455,7 @@ class TestPreprocessorRoutingSimple:
         received = {}
 
         def box_pre(p):
-            return p | {"_preprocessor": {"part": {"color": "injected"}}}
+            return p | {"_preprocessor": {"part_config": {"color": "injected"}}}
 
         def part_pre(p):
             received["preprocessor"] = p.get("_preprocessor")
@@ -454,7 +474,7 @@ class TestPreprocessorRoutingSimple:
         build_hooks.register(PartConfig, preprocess=part_pre)
         params = make_params(
             color="original",
-            _preprocessor={"part": {"color": "overridden"}},
+            _preprocessor={"part_config": {"color": "overridden"}},
         )
         config = build_config(BoxConfig, params)
         assert config.part_config.color == "overridden"
@@ -470,8 +490,8 @@ class TestPreprocessorRoutingSimple:
         build_hooks.register(PartConfig, preprocess=part_pre)
         params = make_params(
             _preprocessor={
-                "part": {"color": "for-part"},
-                "other": {"color": "for-other"},
+                "part_config": {"color": "for-part"},
+                "noise_config": {"color": "for-noise"},
             },
         )
         build_config(BoxConfig, params)
@@ -483,8 +503,8 @@ class TestPreprocessorRoutingSimple:
 # ---------------------------------------------------------------------------
 
 class TestPreprocessorRoutingList:
-    def test_list_items_each_receive_subconfig_slice(self):
-        """Each item in a LIST container receives the subconfig's _preprocessor slice."""
+    def test_list_items_merge_params_from_preprocessor_entries(self):
+        """LIST children are built from merged params + each _preprocessor list entry."""
         received = []
 
         def part_list_pre(p):
@@ -493,15 +513,19 @@ class TestPreprocessorRoutingList:
 
         build_hooks.register(PartListConfig, preprocess=part_list_pre)
         params = make_params(
-            part_list_config=[{"tag": "a"}, {"tag": "b"}],
-            _preprocessor={"part_list": {"extra": "value"}},
+            _preprocessor={
+                "part_list_config": [
+                    {"tag": "a", "extra": "value"},
+                    {"tag": "b", "extra": "value"},
+                ],
+            },
         )
         build_config(MultiPartConfig, params)
         assert len(received) == 2
-        assert all(r == {"extra": "value"} for r in received)
+        assert all(r == {} for r in received)
 
     def test_list_missing_slice_defaults_to_empty(self):
-        """LIST items receive {} when their subconfig key is absent from _preprocessor."""
+        """Each LIST child receives an empty _preprocessor routing dict."""
         received = []
 
         def part_list_pre(p):
@@ -510,8 +534,67 @@ class TestPreprocessorRoutingList:
 
         build_hooks.register(PartListConfig, preprocess=part_list_pre)
         params = make_params(
-            part_list_config=[{"tag": "x"}, {"tag": "y"}],
-            _preprocessor={},
+            _preprocessor={"part_list_config": [{"tag": "x"}, {"tag": "y"}]},
         )
         build_config(MultiPartConfig, params)
         assert all(r == {} for r in received)
+
+
+# ---------------------------------------------------------------------------
+# _preprocessor routing — DICT container
+# ---------------------------------------------------------------------------
+
+
+class TestDictContainerComposite:
+    def test_dict_subconfig_empty_params_dict(self):
+        params = make_params(title="t", parts_config={})
+        config = build_config(DictPartsConfig, params)
+        assert config.parts_config == {}
+
+    def test_dict_subconfig_builds_one_child_per_key(self):
+        params = make_params(
+            title="crate",
+            parts_config={"a": {"color": "red", "size": 1}, "b": {"color": "blue", "size": 2}},
+        )
+        config = build_config(DictPartsConfig, params)
+        assert set(config.parts_config.keys()) == {"a", "b"}
+        assert config.parts_config["a"].color == "red"
+        assert config.parts_config["b"].size == 2
+
+    def test_dict_per_key_preprocessor_slices(self):
+        received: Dict[str, Any] = {}
+
+        def part_pre(p):
+            received[p.get("color", "")] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        params = make_params(
+            title="x",
+            parts_config={"left": {"color": "L"}, "right": {"color": "R"}},
+            _preprocessor={
+                "parts_config": {
+                    "left": {"size": 9},
+                    "right": {"size": 7},
+                }
+            },
+        )
+        build_config(DictPartsConfig, params)
+        assert received["L"] == {"size": 9}
+        assert received["R"] == {"size": 7}
+
+    def test_dict_missing_preprocessor_key_per_entry_defaults_empty(self):
+        received = {}
+
+        def part_pre(p):
+            received[p["color"]] = p.get("_preprocessor")
+            return p
+
+        build_hooks.register(PartConfig, preprocess=part_pre)
+        params = make_params(
+            title="y",
+            parts_config={"only": {"color": "c"}},
+            _preprocessor={"parts_config": {}},
+        )
+        build_config(DictPartsConfig, params)
+        assert received["c"] == {}
