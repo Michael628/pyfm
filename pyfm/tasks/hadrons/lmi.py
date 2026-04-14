@@ -25,7 +25,7 @@ class LMIConfig(CompositeConfig):
     key: t.ClassVar[str] = "hadrons_lmi"
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Perform any necessary modifications to task input parameters before they
     are passed to the subtask constructor.
     """
@@ -36,27 +36,39 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
     SHIFT_GAUGE_NAME = "gauge"
 
     # Extract task configs (may not exist for all callers)
-    task_configs = params.get("_tasks", {})
+    preprocessor_params = params.pop("_preprocessor", {})
 
-    # preprocessing top-level config
-    if subconfig is None:
-        # Skip configs where user provides no input
-        optional_configs = ["meson", "high_modes", "epack"]
-        overwrites = {
-            f"skip_{k}": True for k in optional_configs if k not in task_configs
-        }
-    else:
-        # subconfig is already without "_config" suffix (e.g., "meson")
-        overwrites = {
-            "shift_gauge_name": SHIFT_GAUGE_NAME,
-            "action_name": ACTION_NAME,
-            "solver_name": SOLVER_NAME,
-            "low_modes_name": LOW_MODES_NAME,
-            "skip_low_modes": "epack" not in task_configs,
-            "_tasks": task_configs.get(subconfig, {}),
-        }
+    # Skip configs where user provides no input
+    optional_configs = ["meson", "high_modes", "epack"]
+    skip_flags = {
+        f"skip_{k}": True for k in optional_configs if k not in preprocessor_params
+    }
 
-    return params | overwrites
+    # Set defaults for child configs
+    child_preprocessor = dict(
+        gauge_config=dict(action_name=ACTION_NAME),
+        epack_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        meson_config=dict(
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        high_modes_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+            solver_name=SOLVER_NAME,
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            skip_low_modes="epack" not in preprocessor_params,
+        ),
+    )
+
+    # Update child processor with corresponding params passed to parent
+    for k, v in preprocessor_params.items():
+        child_preprocessor[f"{k}_config"] |= v
+
+    return params | skip_flags | dict(_preprocessor=child_preprocessor)
 
 
 def validate_config(config: LMIConfig) -> None:
@@ -92,7 +104,9 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
     # 2. EPACK section: generate actions then compute
     if not config.skip_epack:
         epack_masses = config.epack_config.masses
-        actions = gauge.build_action_modules(config.gauge_config, dp_masses=epack_masses)
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=epack_masses
+        )
         modules |= actions.modules
         schedule += actions.schedule
 
@@ -108,14 +122,18 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
             epack_mass_shifts.extend(config.high_modes_config.masses)
 
         if epack_mass_shifts:
-            mass_shifts_input = epack.build_epack_mass_shifts(config.epack_config, epack_mass_shifts)
+            mass_shifts_input = epack.build_epack_mass_shifts(
+                config.epack_config, epack_mass_shifts
+            )
             modules |= mass_shifts_input.modules
             schedule += mass_shifts_input.schedule
 
     # 3. MESON section: generate actions then compute
     if not config.skip_meson:
         meson_masses = config.meson_config.masses
-        actions = gauge.build_action_modules(config.gauge_config, dp_masses=meson_masses)
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=meson_masses
+        )
         modules |= actions.modules
         schedule += actions.schedule
 

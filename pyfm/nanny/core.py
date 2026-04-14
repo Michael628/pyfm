@@ -143,8 +143,8 @@ def create_task(
 
     file_params = yaml_params.get("files", {})
 
-    # Merge task_params into global_params under '_tasks' key
-    config_params = global_params | {"_tasks": task_params}
+    # Merge task_params into global_params under '_preprocessor' key
+    config_params = global_params | {"_preprocessor": task_params}
 
     handler.config = build_config(
         config_type,

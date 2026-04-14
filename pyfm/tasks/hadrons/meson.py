@@ -26,6 +26,7 @@ class MesonConfig(SimpleConfig):
     meson: Outfile
     overwrite: bool = False
     apply_g5: bool = False
+    shift_gauge_name: str | None = None
 
     key: t.ClassVar[str] = "hadrons_meson"
 
@@ -88,7 +89,13 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
         assert len(op_type.mass) == 1, "Grouped operations should each have only 1 mass"
         op_label = op_type.gamma.name.lower()
         mass_label = op_type.mass[0]
-        gauge = "" if op_type.gamma.local else "gauge"
+        gauge = "" if op_type.gamma.local else config.shift_gauge_name
+
+        if gauge is None:
+            assert not op_type.gamma.local
+            raise ValueError(
+                "shift_gauge_name must be provided to meson config for non-local operations."
+            )
 
         if not config.overwrite:
             gammas = get_incomplete_gammas(config, gammas, mass_label, bad_files)
@@ -118,28 +125,28 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
     return HadronsInput(modules=modules, schedule=schedule)
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Preprocessing for MesonConfig.
 
     Handles routing of task data to 'operations' field to avoid collision
-    between MassDict (from params['mass']) and OpList mass labels (from params['_tasks']['mass']).
+    between MassDict (from params['mass']) and OpList mass labels (from params['_preprocessor']['mass']).
     """
     # Extract task configs (contains gamma, mass lists for OpList)
-    task_data = params.get("_tasks", {})
+    preprocessor_params = params.pop("_preprocessor", {})
 
     # Get field names from MesonConfig, excluding 'mass'
     # - 'mass' comes from top-level params (MassDict)
+    # !NOTE: Don't squash params['mass']
     config_fields = {f.name for f in fields(MesonConfig) if f.name != "mass"}
 
     return (
         params
         | {
             "operations": {
-                k: v for k, v in task_data.items() if k not in config_fields
+                k: v for k, v in preprocessor_params.items() if k not in config_fields
             },
-            "_tasks": {},
         }
-        | {k: v for k, v in task_data.items() if k in config_fields}
+        | {k: v for k, v in preprocessor_params.items() if k in config_fields}
     )
 
 

@@ -62,33 +62,43 @@ def build_config(
         for subconfig_label, field in config_type.get_subconfigs().items():
             match field.container:
                 case field.container.SIMPLE:
-                    subconfigs[field.name] = build_config(
-                        field.type, processed_params, file_params
+                    sub_params = processed_params | {
+                        "_preprocessor": processed_params.get("_preprocessor", {}).get(
+                            subconfig_label, {}
+                        )
+                    }
+                    subconfigs[subconfig_label] = build_config(
+                        field.type, sub_params, file_params
                     )
                 case field.container.LIST:
+                    subconfig_key = subconfig_label.removesuffix("_config")
                     # Convert all params into list of params
-                    if field.name not in processed_params:
+                    if subconfig_label not in processed_params:
                         param_list = [processed_params]
-                    elif not isinstance(processed_params[field.name], list):
+                    elif not isinstance(processed_params[subconfig_label], list):
                         param_list = [
-                            processed_params | processed_params[field.name]
+                            processed_params | processed_params[subconfig_label]
                         ]
                     else:
                         param_list = [
                             processed_params | sub_par
-                            for sub_par in processed_params[field.name]
+                            for sub_par in processed_params[subconfig_label]
                         ]
 
-                    subconfigs[field.name] = []
+                    subconfigs[subconfig_label] = []
                     for sub_par in param_list:
-                        subconfigs[field.name].append(
-                            build_config(field.type, sub_par, file_params)
+                        routed = sub_par | {
+                            "_preprocessor": processed_params.get(
+                                "_preprocessor", {}
+                            ).get(subconfig_label, {})
+                        }
+                        subconfigs[subconfig_label].append(
+                            build_config(field.type, routed, file_params)
                         )
 
                 case field.container.DICT:
-                    param_provided = (
-                        subconfig_label in processed_params
-                        and isinstance(processed_params[subconfig_label], dict)
+                    param_provided = subconfig_label in processed_params and isinstance(
+                        processed_params[subconfig_label], dict
                     )
                     if not param_provided:
                         raise ValueError(

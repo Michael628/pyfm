@@ -37,9 +37,6 @@ class EpackConfig(SimpleConfig):
     def masses(self) -> t.List[str]:
         return [] if self.load == True else ["zero"]
 
-    def __post_init__(self):
-        pass
-
 
 def build_input_params(config: EpackConfig) -> HadronsInput:
     modules = {}
