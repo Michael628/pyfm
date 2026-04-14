@@ -47,7 +47,6 @@ class TestGetSubmitCommand:
             formatting={},
             logging_level="INFO",
             runid="test-run",
-            params={},
         )
 
     def test_slurm(self, nanny_config, job_config):
@@ -59,9 +58,7 @@ class TestGetSubmitCommand:
 
         nc = replace(nanny_config, scheduler="PBS")
         cmd = get_submit_command(nc, job_config, "test-h1", 2, 8)
-        assert (
-            cmd == f"qsub -l nodes=2 -l walltime=01:00:00 -N test-h1 {job_config.run}"
-        )
+        assert cmd == f"qsub -l nodes=2 -l walltime=01:00:00 -N test-h1 {job_config.run}"
 
     def test_lsf(self, nanny_config, job_config):
         from dataclasses import replace
@@ -103,10 +100,7 @@ class TestGetJobid:
         assert get_jobid("INTERACTIVE", reply) == "0000"
 
     def test_cobalt(self):
-        reply = [
-            "** Project 'semileptonic'; job rerouted to queue 'prod-short'",
-            "1607897",
-        ]
+        reply = ["** Project 'semileptonic'; job rerouted to queue 'prod-short'", "1607897"]
         assert get_jobid("Cobalt", reply) == "1607897"
 
 
@@ -185,8 +179,6 @@ class TestMarkQueuedTodoEntries:
             "a.60": ["a.60", "smear", "0"],
         }
         cfgno_steps = [["a.60", 1]]
-        mark_queued_todo_entries(
-            "smear", cfgno_steps, "99999", todo_list, barrier=False
-        )
+        mark_queued_todo_entries("smear", cfgno_steps, "99999", todo_list, barrier=False)
         assert todo_list["a.60"][1] == "smear_Qcont"
         assert todo_list["a.60"][2] == "99999"

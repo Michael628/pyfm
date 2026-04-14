@@ -13,29 +13,30 @@ from pyfm.tasks.hadrons.highmode import sib, twopoint
 from pyfm import utils
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Preprocessing for HighModeConfig.
 
     Handles routing of task data to 'operations' field to avoid collision
-    between MassDict (from params['mass']) and OpList mass labels (from params['_tasks']['mass']).
+    between MassDict (from params['mass']) and OpList mass labels (from params['_preprocessor']['mass']).
     """
     # Extract task configs (contains gamma, mass lists for OpList)
-    task_data = params.get("_tasks", {})
+    preprocessor_params = params.pop("_preprocessor", {})
 
-    # Get field names from MesonConfig, excluding 'mass'
+    # Get field names from HighModeConfig, excluding 'mass'
     # - 'mass' comes from top-level params (MassDict)
+    # !NOTE: Don't squash params['mass']
     config_fields = {f.name for f in fields(HighModeConfig) if f.name != "mass"}
 
     return (
         params
         | {
             "operations": {
-                k: v for k, v in task_data.items() if k not in config_fields
+                k: v for k, v in preprocessor_params.items() if k not in config_fields
             },
-            "_tasks": {},
         }
-        | {k: v for k, v in task_data.items() if k in config_fields}
+        | {k: v for k, v in preprocessor_params.items() if k in config_fields}
     )
+
 
 def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
     def generate_outfile_formatting():
@@ -52,7 +53,6 @@ def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
     df = utils.io.catalog_files(outfile_generator)
 
     return df
-
 
 
 def build_input_params(config: HighModeConfig) -> HadronsInput:
@@ -95,8 +95,10 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
             )
             schedule.append(name)
 
-        cg_solver_labels: t.List = [s for s in config.get_solver_labels(skip_cross=True) if "ama" in s]
-        print (cg_solver_labels)
+        cg_solver_labels: t.List = [
+            s for s in config.get_solver_labels(skip_cross=True) if "ama" in s
+        ]
+        print(cg_solver_labels)
         for resid, sl in zip(map(str, config.residual), cg_solver_labels):
             name = config.solver_name.format(solver=sl, mass=mass_label)
 

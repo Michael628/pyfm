@@ -18,7 +18,7 @@ class FormattableProtocol(t.Protocol):
 
 @t.runtime_checkable
 class ConfigPreprocessorProtocol(t.Protocol):
-    def preprocess_params(self, params: t.Dict, subconfig: str | None = None) -> t.Dict:
+    def preprocess_params(self, params: t.Dict) -> t.Dict:
         """Perform any necessary modifications to config input parameters before they
         are passed to the config constructor.
         """

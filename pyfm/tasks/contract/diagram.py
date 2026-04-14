@@ -32,18 +32,16 @@ def build_input_params(config: DiagramConfig) -> t.Dict[str, t.Any]:
     return yaml_params
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
+def preprocess_params(params: t.Dict) -> t.Dict:
     """Preprocessing for DiagramConfig."""
-    task_data = params.get("_tasks", {})
+    preprocessor_params = params.pop("_preprocessor", {})
 
-    # Default flatten: params | task_data, clear _tasks
-    result = params | {"_tasks": {}} | task_data
+    # Flatten params and task_data
+    combined_params = params | preprocessor_params
 
-    if subconfig is None:
-        return result
+    # Always rename mass fields in mesons
+    mesons = combined_params.pop("mesons", [])
 
-    # Rename mass fields in mesons
-    mesons = result.get("mesons", [])
     if not isinstance(mesons, list):
         mesons = [mesons]
     new_mesons = [
@@ -57,7 +55,7 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         for m in mesons
     ]
 
-    return result | {"mesons": new_mesons}
+    return combined_params | dict(_preprocessor=dict(mesons=new_mesons))
 
 
 def build_aggregator_params(config: DiagramConfig, average: bool) -> t.Dict:
