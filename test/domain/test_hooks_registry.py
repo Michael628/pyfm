@@ -39,9 +39,11 @@ def validate_stub(config):
 @pytest.fixture(autouse=True)
 def reset_registry():
     """Clear the registry before (and after) every test for isolation."""
+    saved = dict(build_hooks._registry)
     build_hooks.clear()
     yield
     build_hooks.clear()
+    build_hooks._registry.update(saved)
 
 
 # ---------------------------------------------------------------------------

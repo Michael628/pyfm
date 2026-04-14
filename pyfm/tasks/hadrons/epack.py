@@ -31,8 +31,6 @@ class EpackConfig(SimpleConfig):
     save_eigs: bool = False
     save_evals: bool = True
 
-    key: t.ClassVar[str] = "hadrons_epack"
-
     @property
     def masses(self) -> t.List[str]:
         return [] if self.load == True else ["zero"]
@@ -131,6 +129,16 @@ def create_outfile_catalog(config: EpackConfig) -> pd.DataFrame:
     return df
 
 
+def preprocess_params(params: t.Dict) -> t.Dict:
+    """Preprocessing for EpackConfig.
+
+    Merges task-specific overrides from _tasks into the top-level params so
+    that fields like ``load``, ``save_eigs``, and ``save_evals`` can be set
+    per-job-step without appearing in the shared_params section.
+    """
+    return params | params.get("_tasks", {})
+
+
 def validate_config(config: EpackConfig) -> None:
     """Validate EpackConfig after construction and postprocessing.
 
@@ -151,8 +159,10 @@ def validate_config(config: EpackConfig) -> None:
 
 # Register EpackConfig with all handlers
 register_task(
+    "hadrons_epack",
     EpackConfig,
-    build_input_params,
-    create_outfile_catalog,
+    build_input_params=build_input_params,
+    create_outfile_catalog=create_outfile_catalog,
     validate=validate_config,
+    preprocess=preprocess_params,
 )

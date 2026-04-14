@@ -60,23 +60,29 @@ def build_config(
 
         subconfigs = {}
         for subconfig_label, field in config_type.get_subconfigs().items():
+            # Apply per-subconfig preprocessing if the hook exists
+            if hooks is not None and hooks.preprocess_subconfig is not None:
+                sub_params = hooks.preprocess_subconfig(processed_params, subconfig_label)
+            else:
+                sub_params = processed_params
+
             match field.container:
                 case field.container.SIMPLE:
                     subconfigs[field.name] = build_config(
-                        field.type, processed_params, file_params
+                        field.type, sub_params, file_params
                     )
                 case field.container.LIST:
                     # Convert all params into list of params
-                    if field.name not in processed_params:
-                        param_list = [processed_params]
-                    elif not isinstance(processed_params[field.name], list):
+                    if field.name not in sub_params:
+                        param_list = [sub_params]
+                    elif not isinstance(sub_params[field.name], list):
                         param_list = [
-                            processed_params | processed_params[field.name]
+                            sub_params | sub_params[field.name]
                         ]
                     else:
                         param_list = [
-                            processed_params | sub_par
-                            for sub_par in processed_params[field.name]
+                            sub_params | sub_par
+                            for sub_par in sub_params[field.name]
                         ]
 
                     subconfigs[field.name] = []
@@ -87,8 +93,8 @@ def build_config(
 
                 case field.container.DICT:
                     param_provided = (
-                        subconfig_label in processed_params
-                        and isinstance(processed_params[subconfig_label], dict)
+                        subconfig_label in sub_params
+                        and isinstance(sub_params[subconfig_label], dict)
                     )
                     if not param_provided:
                         raise ValueError(
@@ -96,12 +102,12 @@ def build_config(
                         )
 
                     subconfigs[subconfig_label] = {}
-                    for key, subconfig_params in processed_params[
+                    for key, subconfig_params in sub_params[
                         subconfig_label
                     ].items():
                         subconfigs[subconfig_label][key] = build_config(
                             field.type,
-                            processed_params | subconfig_params,
+                            sub_params | subconfig_params,
                             file_params,
                         )
 

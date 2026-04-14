@@ -9,19 +9,31 @@ import pandas as pd
 from pyfm.tasks.contract import diagram as dmod
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    """Preprocessing for ContractConfig."""
+def preprocess_params(params: t.Dict) -> t.Dict:
+    """Top-level preprocessing for ContractConfig.
+
+    Extracts non-diagram entries from _tasks into top-level params and sets
+    _tasks to the list of diagram names to include.
+    """
     task_data = params.get("_tasks", {})
+    return (
+        params
+        | {k: v for k, v in task_data.items() if k != "diagrams"}
+        | {"_tasks": task_data.get("diagrams", {})}
+    )
 
-    if subconfig is None:
-        return (
-            params
-            | {k: v for k, v in task_data.items() if k != "diagrams"}
-            | {"_tasks": task_data.get("diagrams", {})}
-        )
 
-    diagrams = task_data
-    diagram_params = params.get("diagram_params", [])
+def preprocess_subconfig(params: t.Dict, subconfig_label: str) -> t.Dict:
+    """Per-subconfig preprocessing for ContractConfig.
+
+    For the ``diagrams`` DICT container, constructs the diagrams dict by
+    filtering ``diagram_params`` down to the requested diagram names.
+    """
+    if subconfig_label != "diagrams":
+        return params
+
+    diagrams = params.get("_tasks", {})
+    diagram_params = params.get("diagram_params", {})
 
     if isinstance(diagrams, list) and len(diagrams) == 0:
         raise ValueError("No diagrams provided in config parameters")
@@ -70,9 +82,11 @@ def create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
 
 # Register ContractConfig as the config for 'contract' task type
 register_task(
+    "contract",
     ContractConfig,
-    build_input_params,
-    build_aggregator_params,
-    create_outfile_catalog,
-    preprocess_params,
+    build_input_params=build_input_params,
+    create_outfile_catalog=create_outfile_catalog,
+    build_aggregator_params=build_aggregator_params,
+    preprocess=preprocess_params,
+    preprocess_subconfig=preprocess_subconfig,
 )

@@ -30,8 +30,6 @@ class GridLMIConfig(CompositeConfig):
     skip_meson: bool = False
     skip_high_modes: bool = False
 
-    key: t.ClassVar[str] = "grid"
-
     solver_map: t.ClassVar[t.Dict[str, str]] = {"ranLL": "lma", "ama": "mpcg"}
 
 
@@ -159,11 +157,13 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
 
 # Register GridLMIConfig with all handlers
 register_task(
+    "grid",
     GridLMIConfig,
-    lmi.create_outfile_catalog,
-    build_input_params,
-    lmi.build_aggregator_params,
-    lmi.preprocess_params,
+    build_input_params=build_input_params,
+    create_outfile_catalog=lmi.create_outfile_catalog,
+    build_aggregator_params=lmi.build_aggregator_params,
+    preprocess=lmi.preprocess_params,
+    preprocess_subconfig=lmi.preprocess_subconfig,
     validate=lmi.validate_config,
 )
 

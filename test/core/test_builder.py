@@ -67,9 +67,11 @@ def make_params(**extra):
 @pytest.fixture(autouse=True)
 def reset_hooks():
     """Clear the build_hooks registry before and after every test."""
+    saved = dict(build_hooks._registry)
     build_hooks.clear()
     yield
     build_hooks.clear()
+    build_hooks._registry.update(saved)
 
 
 # ---------------------------------------------------------------------------

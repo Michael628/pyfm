@@ -110,6 +110,11 @@ def get(key: str) -> TaskHandler:
     return _handlers[key]
 
 
+def list_keys() -> list:
+    """Return all registered handler keys."""
+    return list(_handlers)
+
+
 def clear() -> None:
     """Remove all registered handlers. Intended for test isolation."""
     _handlers.clear()

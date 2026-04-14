@@ -22,41 +22,43 @@ class LMIConfig(CompositeConfig):
     skip_meson: bool = False
     skip_high_modes: bool = False
 
-    key: t.ClassVar[str] = "hadrons_lmi"
 
+def preprocess_params(params: t.Dict) -> t.Dict:
+    """Top-level preprocessing for LMIConfig.
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    """Perform any necessary modifications to task input parameters before they
-    are passed to the subtask constructor.
+    Determines which optional subconfigs to skip based on available task configs.
     """
+    task_configs = params.get("_tasks", {})
+    optional_configs = ["meson", "high_modes", "epack"]
+    overwrites = {
+        f"skip_{k}": True for k in optional_configs if k not in task_configs
+    }
+    return params | overwrites
 
+
+def preprocess_subconfig(params: t.Dict, subconfig_label: str) -> t.Dict:
+    """Per-subconfig preprocessing for LMIConfig.
+
+    Routes _tasks for each subconfig and injects template strings required by
+    GaugeConfig, EpackConfig, MesonConfig, and HighModeConfig.
+    """
     ACTION_NAME = "stag_mass_{mass}"
     SOLVER_NAME = "stag_{solver}_mass_{mass}"
     LOW_MODES_NAME = "evecs_mass_{mass}"
     SHIFT_GAUGE_NAME = "gauge"
 
-    # Extract task configs (may not exist for all callers)
     task_configs = params.get("_tasks", {})
+    # subconfig_label is e.g. "meson_config" — strip the "_config" suffix
+    subconfig_key = subconfig_label.removesuffix("_config")
 
-    # preprocessing top-level config
-    if subconfig is None:
-        # Skip configs where user provides no input
-        optional_configs = ["meson", "high_modes", "epack"]
-        overwrites = {
-            f"skip_{k}": True for k in optional_configs if k not in task_configs
-        }
-    else:
-        # subconfig is already without "_config" suffix (e.g., "meson")
-        overwrites = {
-            "shift_gauge_name": SHIFT_GAUGE_NAME,
-            "action_name": ACTION_NAME,
-            "solver_name": SOLVER_NAME,
-            "low_modes_name": LOW_MODES_NAME,
-            "skip_low_modes": "epack" not in task_configs,
-            "_tasks": task_configs.get(subconfig, {}),
-        }
-
-    return params | overwrites
+    return params | {
+        "shift_gauge_name": SHIFT_GAUGE_NAME,
+        "action_name": ACTION_NAME,
+        "solver_name": SOLVER_NAME,
+        "low_modes_name": LOW_MODES_NAME,
+        "skip_low_modes": "epack" not in task_configs,
+        "_tasks": task_configs.get(subconfig_key, {}),
+    }
 
 
 def validate_config(config: LMIConfig) -> None:
@@ -172,10 +174,12 @@ def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
 
 # Register LMIConfig with all handlers
 register_task(
+    "hadrons_lmi",
     LMIConfig,
-    create_outfile_catalog,
-    build_input_params,
-    build_aggregator_params,
-    preprocess_params,
+    build_input_params=build_input_params,
+    create_outfile_catalog=create_outfile_catalog,
+    build_aggregator_params=build_aggregator_params,
+    preprocess=preprocess_params,
+    preprocess_subconfig=preprocess_subconfig,
     validate=validate_config,
 )

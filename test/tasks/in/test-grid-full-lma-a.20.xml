@@ -360,7 +360,7 @@
       </action>
       <checker>odd</checker>
       <evalSave>/home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a</evalSave>
-      <file>/home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eig4444nv100a</file>
+      <file></file>
       <irl>
         <evenEigen>false</evenEigen>
         <lanczosParams>

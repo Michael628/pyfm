@@ -78,8 +78,6 @@ class HighModeConfig(SimpleConfig):
     correlator_strategy: CorrelatorStrategy = CorrelatorStrategy.TWOPOINT
     residual: t.List[float] = Field(default=[1e-8])
 
-    key: t.ClassVar[str] = "hadrons_high_modes"
-
     @property
     def tsource_range(self) -> t.List[int]:
         return list(range(self.tstart, self.tstop + 1, self.dt))

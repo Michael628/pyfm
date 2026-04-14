@@ -32,18 +32,26 @@ def build_input_params(config: DiagramConfig) -> t.Dict[str, t.Any]:
     return yaml_params
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    """Preprocessing for DiagramConfig."""
+def preprocess_params(params: t.Dict) -> t.Dict:
+    """Top-level preprocessing for DiagramConfig.
+
+    Flattens _tasks into the top-level params.
+    """
     task_data = params.get("_tasks", {})
+    return params | {"_tasks": {}} | task_data
 
-    # Default flatten: params | task_data, clear _tasks
-    result = params | {"_tasks": {}} | task_data
 
-    if subconfig is None:
-        return result
+def preprocess_subconfig(params: t.Dict, subconfig_label: str) -> t.Dict:
+    """Per-subconfig preprocessing for DiagramConfig.
 
-    # Rename mass fields in mesons
-    mesons = result.get("mesons", [])
+    For the ``mesons`` LIST container, renames ``mass`` → ``mass_original``
+    and ``new_mass`` → ``mass_updated`` in each meson entry so that
+    MesonLoaderConfig can construct its ``mass_shift`` field correctly.
+    """
+    if subconfig_label != "mesons":
+        return params
+
+    mesons = params.get("mesons", [])
     if not isinstance(mesons, list):
         mesons = [mesons]
     new_mesons = [
@@ -56,8 +64,7 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         )
         for m in mesons
     ]
-
-    return result | {"mesons": new_mesons}
+    return params | {"mesons": new_mesons}
 
 
 def build_aggregator_params(config: DiagramConfig, average: bool) -> t.Dict:
@@ -133,9 +140,11 @@ def create_outfile_catalog(config: DiagramConfig) -> pd.DataFrame:
 
 
 register_task(
+    "contract_diagram",
     DiagramConfig,
     build_input_params=build_input_params,
     create_outfile_catalog=create_outfile_catalog,
     build_aggregator_params=build_aggregator_params,
-    preprocess_params=preprocess_params,
+    preprocess=preprocess_params,
+    preprocess_subconfig=preprocess_subconfig,
 )

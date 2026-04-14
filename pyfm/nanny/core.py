@@ -1,12 +1,15 @@
 import typing as t
-from pydantic.dataclasses import dataclass
+from dataclasses import dataclass
 
-from pyfm.domain import ConfigBase, ConfigHandler, SimpleConfig
+from pydantic.dataclasses import dataclass as pydantic_dataclass
+
+from pyfm.domain import ConfigBase, SimpleConfig
+from pyfm.domain.task_registry import TaskHandler
 from pyfm.core.builder import build_config
-from pyfm.tasks import get_task_handler, list_registered_types, register_task
+from pyfm.tasks.register import get_task_handler, list_registered_types
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class NannyConfig(SimpleConfig):
     home: str
     todo_file: str
@@ -18,7 +21,7 @@ class NannyConfig(SimpleConfig):
     scheduler: str
 
 
-@dataclass(frozen=True)
+@pydantic_dataclass(frozen=True)
 class JobConfig(SimpleConfig):
     run: str
     job_type: str
@@ -36,6 +39,32 @@ class JobConfig(SimpleConfig):
     barrier: bool = True
 
 
+@dataclass(frozen=True)
+class Task:
+    """Immutable binding of a ``TaskHandler`` to a built config instance.
+
+    Returned by :func:`create_task`.  Adapts the TaskHandler interface (which
+    takes *config* explicitly) to the nanny callers' interface (which call
+    methods without passing config).
+    """
+
+    handler: TaskHandler
+    config: ConfigBase
+    key: str
+
+    def build_input_params(self) -> t.Any:
+        return self.handler.build_input_params(self.config)
+
+    def create_outfile_catalog(self) -> t.Any:
+        return self.handler.create_outfile_catalog(self.config)
+
+    def build_aggregator_params(self, *args, **kwargs) -> t.Any:
+        return self.handler.build_aggregator_params(self.config, *args, **kwargs)
+
+    def format_string(self, to_format: str) -> str:
+        return self.config.format_string(to_format)
+
+
 def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
     nanny_params = yaml_params.get("shared_params", {})
     nanny_params |= yaml_params["nanny"]
@@ -46,7 +75,6 @@ def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
 
 def get_job_config(job_step: str, yaml_params: t.Dict[str, t.Any]) -> JobConfig:
     job_defaults = yaml_params.get("shared_params", {})
-    # job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
     job_defaults |= {"step": job_step, "params": {}}
     if "job_setup" not in yaml_params:
         raise ValueError("No `job_setup` parameters provided.")
@@ -114,9 +142,12 @@ def create_task(
     yaml_params: t.Dict[str, t.Any],
     series: str | None = None,
     cfg: str | None = None,
-) -> ConfigHandler:
-    """Create a new ConfigHandler. If the relevant task type is found, the returned object will have
-    methods corresponding to all functions assigned to the task in the corresponding task file.
+) -> Task:
+    """Build a config and bind it to its handler, returning a :class:`Task`.
+
+    The returned ``Task`` provides convenience methods that call handler
+    functions with the config passed explicitly, while keeping the nanny
+    caller interface unchanged.
     """
     param_defaults = {
         "logging_level": "INFO",
@@ -127,39 +158,23 @@ def create_task(
         param_defaults["cfg"] = cfg
 
     job_config = get_job_config(job_step, yaml_params)
-    # Get separated params
     global_params, task_params = get_task_params(
         job_config, yaml_params, defaults=param_defaults
     )
 
-    job_type, task_type = map(
-        lambda x: getattr(job_config, x), ["job_type", "task_type"]
-    )
+    job_type = job_config.job_type
+    task_type = job_config.task_type
 
     handler = get_task_handler(job_type, task_type)
-    assert handler is not None, f"No get_task_handler found for {job_type}, {task_type}"
+    assert handler is not None, f"No handler found for {job_type}, {task_type}"
 
-    config_type = handler.get_config_type()
-
+    config_type = handler.config_type
     file_params = yaml_params.get("files", {})
 
     # Merge task_params into global_params under '_tasks' key
     config_params = global_params | {"_tasks": task_params}
 
-    handler.config = build_config(
-        config_type,
-        config_params,
-        file_params,
-        get_handler=lambda x: get_task_handler(config=x, strict=False),
-    )
+    config = build_config(config_type, config_params, file_params)
 
-    # Register a default function for formatting variables found in strings in config parameters
-    def format_string(config: ConfigBase, to_format: str) -> str:
-        try:
-            return config.format_string(to_format)
-        except KeyError as e:
-            raise ValueError(f"Couldn't find key in parameters: {e}")
-
-    register_task(handler.get_config_type(), format_string)
-
-    return handler
+    key = "_".join([job_type, task_type]) if task_type else job_type
+    return Task(handler=handler, config=config, key=key)

@@ -1,81 +1,101 @@
 import typing as t
-from pyfm.domain import (
-    HandlerRegistry,
-    ConfigHandler,
-    ConfigPreprocessorProtocol,
-    TaskHandlerProtocol,
-)
-
+from pyfm.domain import task_registry, build_hooks
+from pyfm.domain.task_registry import TaskHandler
+from pyfm.domain.protocols import TaskHandlerProtocol
 from pyfm import utils
 
+_TASK_REGISTRY_FIELDS = frozenset(
+    {"build_input_params", "create_outfile_catalog", "build_aggregator_params"}
+)
+_BUILD_HOOKS_FIELDS = frozenset({"preprocess", "postprocess", "validate", "preprocess_subconfig"})
 
-def get_task_key(
-    job_type: str | None = None,
-    task_type: str | None = None,
-    config: t.Type | None = None,
-) -> str | None:
-    scope = "nanny"
-    if job_type is not None:
-        handler_key = "_".join([job_type, task_type] if task_type else [job_type])
-    elif config is not None:
-        try:
-            handler_key = config.key
-        except AttributeError:
-            utils.get_logger().debug(f"Config key not provided for: {config}")
-            return None
-    else:
-        raise ValueError(f"Must provide either `job_type` or `config` parameter.")
 
-    handler_key = HandlerRegistry.get_handler_key(scope, handler_key)
+def register_task(key: str, config_type: t.Type, **kwargs) -> None:
+    """Register a task by splitting callables across two registries.
 
-    return handler_key
+    Domain functions (``build_input_params``, ``create_outfile_catalog``,
+    ``build_aggregator_params``) are stored in the ``task_registry``.
+
+    Build hooks (``preprocess``, ``postprocess``, ``validate``) are stored in
+    the ``build_hooks`` registry, keyed by *config_type*.
+
+    Parameters
+    ----------
+    key:
+        Unique string identifier for this handler (e.g. ``"hadrons_lmi"``).
+    config_type:
+        The config class to register.
+    **kwargs:
+        Any combination of the domain-function and build-hook keywords listed
+        above.  Unknown keywords raise ``TypeError``.
+    """
+    unknown = set(kwargs) - _TASK_REGISTRY_FIELDS - _BUILD_HOOKS_FIELDS
+    if unknown:
+        raise TypeError(
+            f"Unknown keyword(s): {unknown}. "
+            f"Valid: {_TASK_REGISTRY_FIELDS | _BUILD_HOOKS_FIELDS}"
+        )
+
+    registry_kwargs = {k: v for k, v in kwargs.items() if k in _TASK_REGISTRY_FIELDS}
+    hooks_kwargs = {k: v for k, v in kwargs.items() if k in _BUILD_HOOKS_FIELDS}
+
+    task_registry.register(key, config_type, **registry_kwargs)
+    if hooks_kwargs:
+        build_hooks.register(config_type, **hooks_kwargs)
 
 
 def get_task_handler(
     job_type: str | None = None,
     task_type: str | None = None,
-    config: t.Type | None = None,
     strict: bool = True,
-) -> ConfigHandler | None:
-    handler_key = get_task_key(job_type, task_type, config)
+) -> TaskHandler | None:
+    """Return the ``TaskHandler`` for the given job/task type combination.
+
+    Parameters
+    ----------
+    job_type:
+        The top-level job type string (e.g. ``"hadrons"``).
+    task_type:
+        Optional sub-type string (e.g. ``"lmi"``).  When provided the lookup
+        key is ``"{job_type}_{task_type}"``; otherwise it is just *job_type*.
+    strict:
+        When ``True`` (default) raises if the handler does not satisfy
+        ``TaskHandlerProtocol``.
+
+    Returns
+    -------
+    TaskHandler | None
+        The registered handler, or ``None`` if not found.
+    """
+    if job_type is None:
+        raise ValueError("Must provide job_type")
+
+    key = "_".join([job_type, task_type]) if task_type else job_type
 
     try:
-        handler = HandlerRegistry.get_handler(handler_key)
-        # Enforce that only complete, standalone handlers are returned
+        handler = task_registry.get(key)
         if strict and not isinstance(handler, TaskHandlerProtocol):
             raise ValueError(
-                f"Handler '{handler_key}' does not satisfy TaskHandlerProtocol. "
-                f"It is not a complete, standalone handler and cannot be used directly. "
-                f"It may be missing required build_input_params, create_outfile_catalog, "
-                f"or format_string methods."
+                f"Handler '{key}' does not satisfy TaskHandlerProtocol. "
+                "It may be missing required build_input_params or "
+                "create_outfile_catalog callables."
             )
         return handler
-    except ValueError as e:
+    except (KeyError, ValueError) as e:
         utils.get_logger().debug(str(e))
         return None
 
 
+def get_task_key(
+    job_type: str | None = None,
+    task_type: str | None = None,
+) -> str | None:
+    """Return the registry key for a job/task type combination."""
+    if job_type is None:
+        return None
+    return "_".join([job_type, task_type]) if task_type else job_type
+
+
 def list_registered_types() -> t.List[str]:
-    return HandlerRegistry.list_registered_types(scope="nanny")
-
-
-def register_task(config: t.Type, *funcs, **kwfuncs):
-    def default_preprocess_fn(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-        """Default preprocessing function that unwraps _tasks key to overwrite other params."""
-        return params | params.get("_tasks", {})
-
-    handler_key = get_task_key(config=config)
-
-    handler = HandlerRegistry.register_config(handler_key, config)
-
-    if len(funcs) > 0:
-        HandlerRegistry.register_functions(handler_key, *funcs)
-
-    for method_name, fn in kwfuncs.items():
-        HandlerRegistry.register_function(handler_key, fn, method_name)
-
-    # Provide default preprocessing function for tasks if not explicitly defined
-    if not isinstance(handler, ConfigPreprocessorProtocol):
-        HandlerRegistry.register_function(
-            handler_key, default_preprocess_fn, "preprocess_params"
-        )
+    """Return all registered handler keys."""
+    return task_registry.list_keys()

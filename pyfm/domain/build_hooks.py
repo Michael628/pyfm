@@ -9,6 +9,7 @@ class BuildHooks:
     preprocess: Optional[Callable] = None
     postprocess: Optional[Callable] = None
     validate: Optional[Callable] = None
+    preprocess_subconfig: Optional[Callable] = None
 
 
 # ---------------------------------------------------------------------------
@@ -17,7 +18,7 @@ class BuildHooks:
 
 _registry: Dict[Type, BuildHooks] = {}
 
-_VALID_HOOKS = {"preprocess", "postprocess", "validate"}
+_VALID_HOOKS = {"preprocess", "postprocess", "validate", "preprocess_subconfig"}
 
 
 def register(config_type: Type, **hooks: Callable) -> None:
@@ -29,7 +30,8 @@ def register(config_type: Type, **hooks: Callable) -> None:
         The config class to attach hooks to.
     **hooks:
         Keyword arguments accepted: ``preprocess``, ``postprocess``,
-        ``validate``.  Any other key raises a ``TypeError``.
+        ``validate``, ``preprocess_subconfig``.  Any other key raises a
+        ``TypeError``.
 
     Raises
     ------

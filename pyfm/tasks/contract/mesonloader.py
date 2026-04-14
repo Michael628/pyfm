@@ -37,7 +37,8 @@ def build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.Any]:
 
 
 register_task(
+    "contract_mesonloader",
     MesonLoaderConfig,
     build_input_params=build_input_params,
-    preprocess_params=preprocess_params,
+    preprocess=preprocess_params,
 )
