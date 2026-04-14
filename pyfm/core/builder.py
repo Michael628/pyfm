@@ -7,8 +7,6 @@ from pyfm.domain import (
     build_hooks,
 )
 
-from pyfm import utils
-
 
 def build_config(
     config_type,
@@ -53,65 +51,86 @@ def build_config(
         config = new_builder(processed_params).with_files(file_params).build()
         return postproc_and_validate(config)
 
+    def _preprocessor_root(processed: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
+        """Return the nested routing table under ``_preprocessor`` (possibly empty)."""
+        root = processed.get("_preprocessor")
+        return root if isinstance(root, dict) else {}
+
     def build_composite_config() -> CompositeConfig:
-        """Return new CompositeConfig after recursively building all subconfigs."""
+        """Build a ``CompositeConfig`` by recursively constructing each subconfig field.
+
+        After the composite type's ``preprocess`` hook, ``_preprocessor`` is a nested
+        routing table keyed by **exact** subconfig field names (the same keys as
+        ``get_subconfigs()``).
+
+        **SIMPLE:** ``_preprocessor[subconfig_label]`` is a dict (default ``{}``). That
+        dict is passed as the child's ``_preprocessor`` when calling ``build_config``.
+
+        **LIST:** ``_preprocessor[subconfig_label]`` must be a list (default ``[]`` if
+        the key is missing). Each element is merged onto ``processed_params`` for one
+        list item. ``processed_params[subconfig_label]`` is not used. A non-list value
+        raises ``TypeError``.
+
+        **DICT:** ``processed_params[subconfig_label]`` maps child keys to per-key param
+        dicts. ``_preprocessor[subconfig_label]`` is a dict mapping those same keys to
+        per-child preprocessor dicts (default ``{}`` per key). Each child is built from
+        ``processed_params | sub_params | {"_preprocessor": slice}``.
+        """
 
         processed_params = preprocess(params)
+        prep = _preprocessor_root(processed_params)
 
         subconfigs = {}
         for subconfig_label, field in config_type.get_subconfigs().items():
             match field.container:
                 case field.container.SIMPLE:
-                    sub_params = processed_params | {
-                        "_preprocessor": processed_params.get("_preprocessor", {}).get(
-                            subconfig_label, {}
+                    slice_ = prep.get(subconfig_label, {})
+                    if not isinstance(slice_, dict):
+                        raise TypeError(
+                            f"_preprocessor[{subconfig_label!r}] must be a dict for a "
+                            f"SIMPLE subconfig, got {type(slice_).__name__}"
                         )
-                    }
+                    sub_params = processed_params | {"_preprocessor": slice_}
                     subconfigs[subconfig_label] = build_config(
                         field.type, sub_params, file_params
                     )
                 case field.container.LIST:
-                    subconfig_key = subconfig_label.removesuffix("_config")
-                    # Convert all params into list of params
-                    if subconfig_label not in processed_params:
-                        param_list = [processed_params]
-                    elif not isinstance(processed_params[subconfig_label], list):
-                        param_list = [
-                            processed_params | processed_params[subconfig_label]
-                        ]
-                    else:
-                        param_list = [
-                            processed_params | sub_par
-                            for sub_par in processed_params[subconfig_label]
-                        ]
-
+                    raw_list = prep.get(subconfig_label, [])
+                    if not isinstance(raw_list, list):
+                        raise TypeError(
+                            f"_preprocessor[{subconfig_label!r}] must be a list for a "
+                            f"LIST subconfig, got {type(raw_list).__name__}"
+                        )
                     subconfigs[subconfig_label] = []
-                    for sub_par in param_list:
-                        routed = sub_par | {
-                            "_preprocessor": processed_params.get(
-                                "_preprocessor", {}
-                            ).get(subconfig_label, {})
-                        }
+                    for sub_par in raw_list:
+                        if not isinstance(sub_par, dict):
+                            raise TypeError(
+                                f"Each entry of _preprocessor[{subconfig_label!r}] "
+                                f"must be a dict, got {type(sub_par).__name__}"
+                            )
+                        routed = processed_params | {"_preprocessor": sub_par}
                         subconfigs[subconfig_label].append(
                             build_config(field.type, routed, file_params)
                         )
 
                 case field.container.DICT:
-                    param_provided = subconfig_label in processed_params and isinstance(
-                        processed_params[subconfig_label], dict
-                    )
-                    if not param_provided:
-                        raise ValueError(
-                            f"Expected key {subconfig_label} not found in params."
+                    key_slices = prep.get(subconfig_label, {})
+                    if not isinstance(key_slices, dict):
+                        raise TypeError(
+                            f"_preprocessor[{subconfig_label!r}] must be a dict for a "
+                            f"DICT subconfig, got {type(key_slices).__name__}"
                         )
 
                     subconfigs[subconfig_label] = {}
-                    for key, subconfig_params in processed_params[
-                        subconfig_label
-                    ].items():
+                    for key, slice_ in key_slices.items():
+                        if not isinstance(slice_, dict):
+                            raise TypeError(
+                                f"_preprocessor[{subconfig_label!r}][{key!r}] must be "
+                                f"a dict, got {type(slice_).__name__}"
+                            )
                         subconfigs[subconfig_label][key] = build_config(
                             field.type,
-                            processed_params | subconfig_params,
+                            processed_params | {"_preprocessor": slice_},
                             file_params,
                         )
 
