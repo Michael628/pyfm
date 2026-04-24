@@ -1,5 +1,6 @@
 #Parameters for LMI running
 shared_params:
+  home: PYFM_WORKSPACE_TOPDIR/l{ens} # Location of work directory
   mass:
     l: 0.000569
   logging_level: DEBUG
@@ -89,8 +90,7 @@ nanny:
   check_interval: 30
 
 submit:
-  scheduler: PBS
-  # scheduler: INTERACTIVE
+  scheduler: PYFM_WORKSPACE_SCHEDULER
   job_name_pfx: LMI
   layout:
     ppn: 12
@@ -140,7 +140,7 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear:
-    run: smear.pbs
+    run: example.pbs
     job_type: smear
     tasks:
       unsmeared_file: 'lat/v5/l{ens}{series}.{cfg}'
@@ -148,7 +148,7 @@ job_setup:
     io: links
     wall_time: "2:00:00"
   contract:
-    run: contract.pbs
+    run: example.pbs
     job_type: contract
     tasks:
       diagrams:
@@ -158,7 +158,7 @@ job_setup:
     io: "contract-e{eigs}-n{noise}"
     wall_time: "3:00:00"
   noacc:
-    run: grid-noacc.pbs
+    run: example.pbs
     io: "grid-noacc-irl-{nodes}nodes"
     # wall_time: "12:00:00"
     wall_time: "03:00:00"
@@ -173,7 +173,7 @@ job_setup:
         save_eigs: false
         multifile: false
   irl:
-    run: grid.pbs
+    run: example.pbs
     io: "grid-irl-{nodes}nodes"
     # wall_time: "12:00:00"
     wall_time: "03:00:00"
@@ -188,14 +188,14 @@ job_setup:
         save_eigs: false
         multifile: false
   benchmark:
-    run: benchmark.pbs
+    run: example.pbs
     io: "benchmark"
     wall_time: "00:20:00"
     job_type: grid
     tasks:
       nothing: 'done'
   test:
-    run: grid.pbs
+    run: example.pbs
     io: "test-e{eigs}-n{noise}"
     wall_time: "12:00:00"
     # wall_time: "00:20:00"
@@ -221,7 +221,7 @@ job_setup:
         mass:
           - "l"
   grid:
-    run: grid.pbs
+    run: example.pbs
     io: "grid-lma-e{eigs}-n{noise}"
     wall_time: "12:00:00"
     # wall_time: "00:20:00"
@@ -248,7 +248,6 @@ job_setup:
           - "l"
 
 files:
-  home: /lus/flare/projects/HadronicGMinus2/mlynch/gm2/l{ens}
   fat_links:
     filestem: "lat/scidac/fat{ens}{series}.ildg"
     good_size: 115964119440

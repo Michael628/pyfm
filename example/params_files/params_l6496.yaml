@@ -1,5 +1,6 @@
 # Parameters for LMI running
 submit_params:
+  home: PYFM_WORKSPACE_TOPDIR/l{ens} # Location of work directory
   # logging_level: DEBUG
   ens: '6496f211b630m001326m03636m4313'
   time: 96
@@ -119,7 +120,7 @@ nanny:
   check_interval: 30
 
 submit:
-  scheduler: SLURM
+  scheduler: PYFM_WORKSPACE_SCHEDULER
   # scheduler: INTERACTIVE
   job_name_pfx: LMI
   layout:
@@ -138,7 +139,7 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear: 
-    run: smear.slurm
+    run: example.slurm
     job_type: smear
     tasks:
       unsmeared_file: '/pscratch/sd/d/dclarke/l96192f211b672m0008m022m260/lat/v5/l{ens}{series}.{cfg}'
@@ -146,7 +147,7 @@ job_setup:
     io: links
     wall_time: "3:00:00"
   contract:
-    run: contract.slurm
+    run: example.slurm
     job_type: contract
     tasks:
       diagrams:
@@ -158,7 +159,7 @@ job_setup:
     io: contract
     wall_time: "8:00:00"
   hadrons: 
-    run: hadrons.slurm
+    run: example.slurm
     io: 'eig-lma-meson-e{eigs}-n{noise}'
     wall_time: "24:00:00"
     tasks:
@@ -185,7 +186,6 @@ job_setup:
           - 'l'
 
 files:
-  home: /pscratch/sd/d/dclarke/l96192f211b672m0008m022m260
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg
     good_size: 115964110000

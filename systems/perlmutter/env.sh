@@ -13,6 +13,7 @@ if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
   # export QUDA_RESOURCE_PATH=tunecache
   # mkdir -p tunecache
 
+  export PYFM_BIND_SCRIPT=${PYFMTOPDIR}/pyfm/systems/${PYFM_SYSTEM_EXT}/bind-gpu.sh
   export QUDA_ENABLE_GDR=1
   export QUDA_MILC_HISQ_RECONSTRUCT=13
   export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9

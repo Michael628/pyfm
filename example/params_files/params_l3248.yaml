@@ -1,6 +1,6 @@
 #Parameters for LMI running
 shared_params:
-  home: /work/nvme/sok/mlynch28/l3248f211b580m002426m06730m8447 # Location of work directory
+  home: PYFM_WORKSPACE_TOPDIR/l{ens} # Location of work directory
   mass:
     u: 0.001524
     l: 0.002426
@@ -169,7 +169,7 @@ nanny:
   check_interval: 30 # Wait interval between checks for job completion
 
 submit:
-  scheduler: SLURM
+  scheduler: PYFM_WORKSPACE_SCHEDULER
   # scheduler: INTERACTIVE
   job_name_pfx: LMI
   layout:
@@ -196,7 +196,7 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear:
-    run: smear.slurm
+    run: example.slurm
     job_type: smear
     tasks:
       unsmeared_file: "lat/v5/l{ens}{series}.{cfg}" # Location of unsmeared file
@@ -204,7 +204,7 @@ job_setup:
     io: "smear"
     wall_time: "0:30:00"
   contract:
-    run: contract.slurm # script filename to be submitted to job scheduler
+    run: example.slurm # script filename to be submitted to job scheduler
     job_type: contract
     tasks:
       diagrams:
@@ -218,7 +218,7 @@ job_setup:
     io: "contract-e{eigs}-n{noise}"
     wall_time: "0:30:00"
   hadrons:
-    run: hadrons.slurm
+    run: example.slurm
     io: "lma-e{eigs}-n{noise}"
     wall_time: "1:00:00"
     job_type: hadrons
