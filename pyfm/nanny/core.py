@@ -1,9 +1,10 @@
 import typing as t
 from pydantic.dataclasses import dataclass
 
-from pyfm.domain import ConfigBase, ConfigHandler, SimpleConfig
+from pyfm.domain import ConfigBase, SimpleConfig
+from pyfm.domain.task_registry import TaskHandler
 from pyfm.core.builder import build_config
-from pyfm.tasks import get_task_handler, list_registered_types, register_task
+from pyfm.tasks import get_task_handler, get_task_key, list_registered_types
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,43 @@ class JobConfig(SimpleConfig):
     node_minimum: int | None = None
     task_type: str | None = None
     barrier: bool = True
+
+
+class BoundTaskHandler:
+    """Wraps a frozen TaskHandler + built config, exposing handler callables as
+    bound methods (config pre-applied) and providing .key and .config access.
+
+    This replaces the old mutable ConfigHandler so callers in validator.py,
+    aggregator.py, and inputgen.py continue to work without changes.
+    """
+
+    def __init__(self, handler: TaskHandler, config: ConfigBase, task_key: str) -> None:
+        self._handler = handler
+        self._config = config
+        self._task_key = task_key
+
+    @property
+    def config(self) -> ConfigBase:
+        return self._config
+
+    @property
+    def key(self) -> str:
+        return self._task_key
+
+    def format_string(self, to_format: str) -> str:
+        try:
+            return self._config.format_string(to_format)
+        except KeyError as e:
+            raise ValueError(f"Couldn't find key in parameters: {e}")
+
+    def __getattr__(self, name: str) -> t.Any:
+        callable_fn = getattr(self._handler, name)
+        config = self._config
+
+        def _bound(*args, **kwargs):
+            return callable_fn(config, *args, **kwargs)
+
+        return _bound
 
 
 def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
@@ -114,9 +152,12 @@ def create_task(
     yaml_params: t.Dict[str, t.Any],
     series: str | None = None,
     cfg: str | None = None,
-) -> ConfigHandler:
-    """Create a new ConfigHandler. If the relevant task type is found, the returned object will have
-    methods corresponding to all functions assigned to the task in the corresponding task file.
+) -> BoundTaskHandler:
+    """Build a task config and return a BoundTaskHandler.
+
+    The returned object exposes handler callables as bound methods (config
+    pre-applied) and provides .key and .config access, replicating the old
+    ConfigHandler interface without requiring a mutable handler.
     """
     param_defaults = {
         "logging_level": "INFO",
@@ -127,7 +168,6 @@ def create_task(
         param_defaults["cfg"] = cfg
 
     job_config = get_job_config(job_step, yaml_params)
-    # Get separated params
     global_params, task_params = get_task_params(
         job_config, yaml_params, defaults=param_defaults
     )
@@ -139,27 +179,14 @@ def create_task(
     handler = get_task_handler(job_type, task_type)
     assert handler is not None, f"No get_task_handler found for {job_type}, {task_type}"
 
-    config_type = handler.get_config_type()
-
     file_params = yaml_params.get("files", {})
-
-    # Merge task_params into global_params under '_preprocessor' key
     config_params = global_params | {"_preprocessor": task_params}
 
-    handler.config = build_config(
-        config_type,
+    config = build_config(
+        handler.config_type,
         config_params,
         file_params,
-        get_handler=lambda x: get_task_handler(config=x, strict=False),
     )
 
-    # Register a default function for formatting variables found in strings in config parameters
-    def format_string(config: ConfigBase, to_format: str) -> str:
-        try:
-            return config.format_string(to_format)
-        except KeyError as e:
-            raise ValueError(f"Couldn't find key in parameters: {e}")
-
-    register_task(handler.get_config_type(), format_string)
-
-    return handler
+    task_key = get_task_key(job_type, task_type)
+    return BoundTaskHandler(handler, config, task_key)

@@ -44,6 +44,7 @@ class TestGetSubmitCommand:
             nodes=2,
             lattice=[16, 16, 16, 32],
             geom=[1, 1, 1, 4],
+            params={},
             formatting={},
             logging_level="INFO",
             runid="test-run",
