@@ -83,7 +83,7 @@ job_setup:
       epack:
         load: false
         save_evals: true
-        save_eigs: false
+        save_eigs: true
       meson:
         gamma:
           - pion_local

@@ -369,7 +369,11 @@ class TestListContainerComposite:
         assert config2.part_list_config == []
 
     def test_list_subconfig_from_preprocessor_list(self):
-        """LIST items are taken only from _preprocessor[field_name] as a list of dicts."""
+        """LIST items are taken from _preprocessor[field_name]; child preprocess merges them."""
+        def part_list_pre(p):
+            return p | p.get("_preprocessor", {})
+
+        build_hooks.register(PartListConfig, preprocess=part_list_pre)
         params = make_params(
             name="multi",
             _preprocessor={
@@ -396,8 +400,9 @@ class TestListContainerComposite:
         part_pre_calls = []
 
         def part_pre(p):
-            part_pre_calls.append(p.get("tag", ""))
-            return p
+            # _preprocessor carries the per-item dict; child opts in to merging it
+            part_pre_calls.append(p.get("_preprocessor", {}).get("tag", ""))
+            return p | p.get("_preprocessor", {})
 
         build_hooks.register(PartListConfig, preprocess=part_pre)
         params = make_params(
@@ -405,6 +410,7 @@ class TestListContainerComposite:
         )
         build_config(MultiPartConfig, params)
         assert len(part_pre_calls) == 2
+        assert part_pre_calls == ["x", "y"]
 
 
 # ---------------------------------------------------------------------------
@@ -505,8 +511,8 @@ class TestPreprocessorRoutingSimple:
 # ---------------------------------------------------------------------------
 
 class TestPreprocessorRoutingList:
-    def test_list_items_merge_params_from_preprocessor_entries(self):
-        """LIST children are built from merged params + each _preprocessor list entry."""
+    def test_list_items_routed_as_preprocessor(self):
+        """Each LIST child receives its list entry as _preprocessor, not merged into params."""
         received = []
 
         def part_list_pre(p):
@@ -524,22 +530,24 @@ class TestPreprocessorRoutingList:
         )
         build_config(MultiPartConfig, params)
         assert len(received) == 2
-        assert all(r == {} for r in received)
+        assert received[0] == {"tag": "a", "extra": "value"}
+        assert received[1] == {"tag": "b", "extra": "value"}
 
-    def test_list_missing_slice_defaults_to_empty(self):
-        """Each LIST child receives an empty _preprocessor routing dict."""
+    def test_list_child_merges_preprocessor_when_opted_in(self):
+        """Child preprocess hook decides how to apply its _preprocessor slice."""
         received = []
 
         def part_list_pre(p):
             received.append(p.get("_preprocessor"))
-            return p
+            return p | p.get("_preprocessor", {})
 
         build_hooks.register(PartListConfig, preprocess=part_list_pre)
         params = make_params(
             _preprocessor={"part_list_config": [{"tag": "x"}, {"tag": "y"}]},
         )
-        build_config(MultiPartConfig, params)
-        assert all(r == {} for r in received)
+        config = build_config(MultiPartConfig, params)
+        assert [s.tag for s in config.part_list_config] == ["x", "y"]
+        assert received == [{"tag": "x"}, {"tag": "y"}]
 
 
 # ---------------------------------------------------------------------------

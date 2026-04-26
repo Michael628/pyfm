@@ -67,8 +67,8 @@ def build_config(
         dict is passed as the child's ``_preprocessor`` when calling ``build_config``.
 
         **LIST:** ``_preprocessor[subconfig_label]`` must be a list (default ``[]`` if
-        the key is missing). Each element is merged onto ``processed_params`` for one
-        list item. ``processed_params[subconfig_label]`` is not used. A non-list value
+        the key is missing). Each element is passed as the child's ``_preprocessor`` --
+        the child's own preprocess hook decides how to apply it. A non-list value
         raises ``TypeError``.
 
         **DICT:** ``processed_params[subconfig_label]`` maps child keys to per-key param
@@ -114,6 +114,12 @@ def build_config(
                         )
 
                 case field.container.DICT:
+                    key_params = processed_params.get(subconfig_label, {})
+                    if not isinstance(key_params, dict):
+                        raise TypeError(
+                            f"params[{subconfig_label!r}] must be a dict for a "
+                            f"DICT subconfig, got {type(key_params).__name__}"
+                        )
                     key_slices = prep.get(subconfig_label, {})
                     if not isinstance(key_slices, dict):
                         raise TypeError(
@@ -122,7 +128,13 @@ def build_config(
                         )
 
                     subconfigs[subconfig_label] = {}
-                    for key, slice_ in key_slices.items():
+                    for key, sub_par in key_params.items():
+                        if not isinstance(sub_par, dict):
+                            raise TypeError(
+                                f"params[{subconfig_label!r}][{key!r}] must be "
+                                f"a dict, got {type(sub_par).__name__}"
+                            )
+                        slice_ = key_slices.get(key, {})
                         if not isinstance(slice_, dict):
                             raise TypeError(
                                 f"_preprocessor[{subconfig_label!r}][{key!r}] must be "
@@ -130,7 +142,7 @@ def build_config(
                             )
                         subconfigs[subconfig_label][key] = build_config(
                             field.type,
-                            processed_params | {"_preprocessor": slice_},
+                            processed_params | sub_par | {"_preprocessor": slice_},
                             file_params,
                         )
 

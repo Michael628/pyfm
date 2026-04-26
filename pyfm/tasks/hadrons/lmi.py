@@ -51,6 +51,7 @@ def preprocess_params(params: t.Dict) -> t.Dict:
             low_modes_name=LOW_MODES_NAME,
         ),
         meson_config=dict(
+            action_name=ACTION_NAME,
             shift_gauge_name=SHIFT_GAUGE_NAME,
             low_modes_name=LOW_MODES_NAME,
         ),

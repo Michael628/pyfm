@@ -130,6 +130,11 @@ def create_outfile_catalog(config: DiagramConfig) -> pd.DataFrame:
     return utils.io.catalog_files(outfile_generator)
 
 
+def validate_config(config: DiagramConfig) -> None:
+    if len(config.mesons) == 0:
+        raise ValueError("DiagramConfig.mesons must not be empty")
+
+
 register_task(
     "contract_diagram",
     DiagramConfig,
@@ -137,4 +142,5 @@ register_task(
     create_outfile_catalog=create_outfile_catalog,
     build_aggregator_params=build_aggregator_params,
     preprocess_params=preprocess_params,
+    validate=validate_config,
 )

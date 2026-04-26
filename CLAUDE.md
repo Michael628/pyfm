@@ -42,6 +42,19 @@ Config construction in `pyfm/core/builder.py` follows four ordered phases:
 
 Use `validate_config` (not `__post_init__`) for all validation logic, since it runs after postprocessing on the complete config.
 
+#### `_preprocessor` - parent-to-child context injection
+
+`_preprocessor` is a routing table that a parent's `preprocess` hook injects into `params` to pass context down to child configs during recursive construction. It is **never** a field on any config class -- it exists only during the build traversal.
+
+**The contract:** the parent curates what each child receives; the child's own `preprocess` hook decides how to apply it. The default behaviour is to merge `_preprocessor` contents directly into the child's params, but a child hook may handle conflicts differently. **Never bypass the child's preprocess hook by injecting data directly into its params** -- that removes the child's ability to control the merge.
+
+Structure by container type:
+- **SIMPLE:** `_preprocessor[field_name]` is a dict passed as the child's `_preprocessor`
+- **LIST:** `_preprocessor[field_name]` is a list; each element is passed as the corresponding child's `_preprocessor`
+- **DICT:** `params[field_name]` maps keys to per-child param dicts; `_preprocessor[field_name]` maps those same keys to per-child preprocessor dicts
+
+See `build_composite_config()` in `pyfm/core/builder.py` and `lmi.py`'s `preprocess_params` for the canonical example.
+
 ### Adding a New Task
 
 See `pyfm/tasks/hadrons/lmi.py` as the exemplary implementation. The minimal pattern:
@@ -81,7 +94,7 @@ handler = get_task_handler(job_type="hadrons", task_type="lmi")
 
 # Config building from YAML
 from pyfm.core.builder import build_config
-config = build_config(ConfigType, yaml_params, file_params, get_handler=get_task_handler)
+config = build_config(ConfigType, yaml_params, file_params)
 
 # String template formatting (unmatched keys left as literals)
 path = config.format_string("/path/{series}/{cfg}")

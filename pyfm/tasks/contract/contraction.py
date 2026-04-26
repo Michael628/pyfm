@@ -27,10 +27,10 @@ def preprocess_params(params: t.Dict) -> t.Dict:
         if d not in diagram_params:
             raise ValueError(f"Diagram {d} not found in diagram_params")
 
+    filtered_diagrams = {k: v for k, v in diagram_params.items() if k in diagrams}
     return combined_params | dict(
-        _preprocessor=dict(
-            diagrams={k: v for k, v in diagram_params.items() if k in diagrams}
-        ),
+        diagrams={k: {} for k in filtered_diagrams},
+        _preprocessor=dict(diagrams=filtered_diagrams),
     )
 
 
@@ -65,6 +65,11 @@ def create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
     return pd.concat(df)
 
 
+def validate_config(config: ContractConfig) -> None:
+    if len(config.diagrams) == 0:
+        raise ValueError("ContractConfig.diagrams must not be empty")
+
+
 # Register ContractConfig as the config for 'contract' task type
 register_task(
     "contract",
@@ -73,4 +78,5 @@ register_task(
     build_aggregator_params,
     create_outfile_catalog,
     preprocess_params,
+    validate=validate_config,
 )
