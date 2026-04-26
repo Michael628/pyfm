@@ -24,8 +24,8 @@ def get_outfiles(
 ) -> pd.DataFrame | None:
 
     task = create_task(job_step, yaml_data, series, cfg)
-    if isinstance(task, TaskOutputProtocol):
-        return task.create_outfile_catalog()
+    if isinstance(task.handler, TaskOutputProtocol):
+        return task.handler.create_outfile_catalog(task.config)
     else:
         utils.get_logger().debug(
             "create_outfile_catalog not implemented for task. Skipping validation."

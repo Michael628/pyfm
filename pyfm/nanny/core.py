@@ -37,41 +37,10 @@ class JobConfig(SimpleConfig):
     barrier: bool = True
 
 
-class BoundTaskHandler:
-    """Wraps a frozen TaskHandler + built config, exposing handler callables as
-    bound methods (config pre-applied) and providing .key and .config access.
-
-    This replaces the old mutable ConfigHandler so callers in validator.py,
-    aggregator.py, and inputgen.py continue to work without changes.
-    """
-
-    def __init__(self, handler: TaskHandler, config: ConfigBase, task_key: str) -> None:
-        self._handler = handler
-        self._config = config
-        self._task_key = task_key
-
-    @property
-    def config(self) -> ConfigBase:
-        return self._config
-
-    @property
-    def key(self) -> str:
-        return self._task_key
-
-    def format_string(self, to_format: str) -> str:
-        try:
-            return self._config.format_string(to_format)
-        except KeyError as e:
-            raise ValueError(f"Couldn't find key in parameters: {e}")
-
-    def __getattr__(self, name: str) -> t.Any:
-        callable_fn = getattr(self._handler, name)
-        config = self._config
-
-        def _bound(*args, **kwargs):
-            return callable_fn(config, *args, **kwargs)
-
-        return _bound
+class Task(t.NamedTuple):
+    handler: TaskHandler
+    config: ConfigBase
+    key: str
 
 
 def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
@@ -152,13 +121,8 @@ def create_task(
     yaml_params: t.Dict[str, t.Any],
     series: str | None = None,
     cfg: str | None = None,
-) -> BoundTaskHandler:
-    """Build a task config and return a BoundTaskHandler.
-
-    The returned object exposes handler callables as bound methods (config
-    pre-applied) and provides .key and .config access, replicating the old
-    ConfigHandler interface without requiring a mutable handler.
-    """
+) -> Task:
+    """Build a task config and return a Task NamedTuple."""
     param_defaults = {
         "logging_level": "INFO",
     }
@@ -189,4 +153,4 @@ def create_task(
     )
 
     task_key = get_task_key(job_type, task_type)
-    return BoundTaskHandler(handler, config, task_key)
+    return Task(handler=handler, config=config, key=task_key)

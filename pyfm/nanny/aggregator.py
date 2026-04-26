@@ -116,13 +116,13 @@ def aggregate_task_data(
     skip_existing: bool = False,
 ) -> None:
 
-    task: AggregatorProtocol = create_task(job_step, yaml_data)
-    agg_params = task.build_aggregator_params(average)
+    task = create_task(job_step, yaml_data)
+    agg_params = task.handler.build_aggregator_params(task.config, average)
     if not agg_params:
         raise ValueError(f"No aggregator parameters provided for task: {job_step}.")
 
     if average:
-        agg_params_raw = task.build_aggregator_params(False)
+        agg_params_raw = task.handler.build_aggregator_params(task.config, False)
     else:
         agg_params_raw = agg_params
 

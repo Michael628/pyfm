@@ -18,19 +18,19 @@ class InputGeneratorProtocol(t.Protocol):
 
 
 def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) -> str:
-    task: InputGeneratorProtocol = create_task(job_step, yaml_data, series, cfg)
+    task = create_task(job_step, yaml_data, series, cfg)
 
     infile_template = yaml_data["job_setup"][job_step]["io"]
     infile_template += "-{series}.{cfg}"
-    infile_stem = task.format_string(infile_template)
+    infile_stem = task.config.format_string(infile_template)
 
     task_key = task.key
     if "smear" in task_key:
         infile = utils.io.write_plain_text(
-            infile_stem, task.build_input_params(), ext="txt"
+            infile_stem, task.handler.build_input_params(task.config), ext="txt"
         )
     elif "grid" in task_key:
-        grid_input = task.build_input_params()
+        grid_input = task.handler.build_input_params(task.config)
 
         xml_dict = gridmods.xml_wrapper(
             run_seed=task.config.runid, series=series, cfg=cfg
@@ -38,7 +38,7 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
         xml_dict["grid"]["parameters"] |= grid_input
         infile = utils.io.write_xml(infile_stem, xml_dict)
     elif "hadrons" in task_key:
-        hadrons_input = task.build_input_params()
+        hadrons_input = task.handler.build_input_params(task.config)
 
         schedule_file = utils.io.write_schedule(infile_stem, hadrons_input.schedule)
         xml_dict = hadmods.xml_wrapper(
@@ -49,7 +49,7 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
         infile = utils.io.write_xml(infile_stem, xml_dict)
     elif "contract" in task_key:
         yaml.add_representer(Outfile, lambda d, x: d.represent_dict(x.__dict__))
-        input_params = yaml.dump(task.build_input_params())
+        input_params = yaml.dump(task.handler.build_input_params(task.config))
         infile = utils.io.write_plain_text(infile_stem, input_params, ext="yaml")
     # TODO: use for raw hadrons task
     # if "xml_file" in input_params:
