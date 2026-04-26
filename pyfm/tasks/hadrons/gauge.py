@@ -21,8 +21,6 @@ class GaugeConfig(SimpleConfig):
     free: bool = False
     action_name: str | None = None
 
-    key: t.ClassVar[str] = "hadrons_gauge"
-
 
 def build_base_gauge(config: GaugeConfig) -> HadronsInput:
     """Create base gauge modules: gauge, gauge_fat, gauge_long.
@@ -102,4 +100,4 @@ def build_action_modules(
 
 
 # Register GaugeConfig (not as a complete handler task, just for infrastructure)
-register_task(GaugeConfig)
+register_task("hadrons_gauge", GaugeConfig)

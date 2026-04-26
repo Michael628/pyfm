@@ -19,7 +19,6 @@ class SmearConfig(SimpleConfig):
     fat_links: Outfile
     unsmeared_file: str
 
-    key: t.ClassVar[str] = "smear"
 
 
 def build_input_params(config: SmearConfig) -> str:
@@ -102,4 +101,4 @@ def create_outfile_catalog(config: SmearConfig) -> pd.DataFrame:
 
 
 # Register SmearConfig as the config for 'smear' task type
-register_task(SmearConfig, create_outfile_catalog, build_input_params)
+register_task("smear", SmearConfig, create_outfile_catalog, build_input_params)

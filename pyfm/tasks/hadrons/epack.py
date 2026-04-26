@@ -31,8 +31,6 @@ class EpackConfig(SimpleConfig):
     save_eigs: bool = False
     save_evals: bool = True
 
-    key: t.ClassVar[str] = "hadrons_epack"
-
     @property
     def masses(self) -> t.List[str]:
         return [] if self.load == True else ["zero"]
@@ -148,6 +146,7 @@ def validate_config(config: EpackConfig) -> None:
 
 # Register EpackConfig with all handlers
 register_task(
+    "hadrons_epack",
     EpackConfig,
     build_input_params,
     create_outfile_catalog,

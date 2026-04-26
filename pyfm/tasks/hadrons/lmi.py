@@ -22,7 +22,6 @@ class LMIConfig(CompositeConfig):
     skip_meson: bool = False
     skip_high_modes: bool = False
 
-    key: t.ClassVar[str] = "hadrons_lmi"
 
 
 def preprocess_params(params: t.Dict) -> t.Dict:
@@ -190,6 +189,7 @@ def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
 
 # Register LMIConfig with all handlers
 register_task(
+    "hadrons_lmi",
     LMIConfig,
     create_outfile_catalog,
     build_input_params,

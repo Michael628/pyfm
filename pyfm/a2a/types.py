@@ -41,8 +41,6 @@ class MesonLoaderConfig(SimpleConfig):
     mass_shift: MassShift
     evalfile: Outfile | None = None
 
-    key: t.ClassVar[str] = "contract_mesonloader"
-
     def __post_init__(self):
         for label in [self.mass_shift.original, self.mass_shift.updated]:
             if label is not None and label not in self.mass:
@@ -84,8 +82,6 @@ class DiagramConfig(CompositeConfig):
     stoch_seed_indices: t.List[str] | None = None
     efield_indices: t.List[str] | None = None
 
-    key: t.ClassVar[str] = "contract_diagram"
-
     def __post_init__(self):
         if self.eig_range is None and self.stoch_range is None:
             raise ValueError("Must provide either eig_range or stoch_range")
@@ -120,8 +116,6 @@ class ContractConfig(CompositeConfig):
     time: int
     overwrite: bool = True
     hardware: str = "cpu"
-
-    key: t.ClassVar[str] = "contract"
 
     @property
     def comm_size(self) -> int:

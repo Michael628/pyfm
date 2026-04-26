@@ -22,6 +22,9 @@ _KWARG_HOOK_MAP: dict[str, str] = {
     "validate": "validate",
 }
 
+# Reverse mapping: config class → task key (without "nanny_" prefix), populated by register_task
+_config_to_task_key: dict[t.Type, str] = {}
+
 
 def _default_preprocess(params: t.Dict) -> t.Dict:
     return params | params.pop("_preprocessor", {})
@@ -36,11 +39,14 @@ def get_task_key(
     if job_type is not None:
         handler_key = "_".join([job_type, task_type] if task_type else [job_type])
     elif config is not None:
-        try:
-            handler_key = config.key
-        except AttributeError:
-            utils.get_logger().debug(f"Config key not provided for: {config}")
-            return None
+        if config in _config_to_task_key:
+            handler_key = _config_to_task_key[config]
+        else:
+            try:
+                handler_key = config.key
+            except AttributeError:
+                utils.get_logger().debug(f"Config key not provided for: {config}")
+                return None
     else:
         raise ValueError("Must provide either `job_type` or `config` parameter.")
 
@@ -78,13 +84,25 @@ def list_registered_types() -> t.List[str]:
     return list(task_registry._handlers.keys())
 
 
-def register_task(config: t.Type, *funcs, **kwfuncs) -> None:
-    handler_key = get_task_key(config=config)
-    if handler_key is None:
-        utils.get_logger().debug(
-            f"register_task called with config lacking a 'key' ClassVar: {config}"
-        )
-        return
+def register_task(key_or_config: str | t.Type, config_or_first_func: t.Type | t.Callable | None = None, *funcs, **kwfuncs) -> None:
+    if isinstance(key_or_config, str):
+        task_key = key_or_config
+        config = config_or_first_func
+        # config_or_first_func is the config class when key is explicit
+    else:
+        # Legacy: first arg is the config class
+        config = key_or_config
+        if config_or_first_func is not None:
+            funcs = (config_or_first_func,) + funcs
+        try:
+            task_key = config.key
+        except AttributeError:
+            utils.get_logger().debug(
+                f"register_task called with config lacking a 'key' ClassVar: {config}"
+            )
+            return
+
+    handler_key = f"nanny_{task_key}"
 
     task_callables: dict[str, t.Callable] = {}
     hook_callables: dict[str, t.Callable] = {}
@@ -113,6 +131,10 @@ def register_task(config: t.Type, *funcs, **kwfuncs) -> None:
             utils.get_logger().debug(
                 f"register_task: ignoring keyword '{kw}' for key '{handler_key}'."
             )
+
+    # Populate reverse mapping for get_task_key(config=...) lookups
+    if config is not None and config not in _config_to_task_key:
+        _config_to_task_key[config] = task_key
 
     # Register the TaskHandler (idempotent: skip if already registered)
     if handler_key not in task_registry._handlers:

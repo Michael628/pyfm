@@ -28,6 +28,7 @@ __all__ = [
 
 # Register HighModeConfig as the config for 'hadrons_high_modes' task type
 register_task(
+    "hadrons_high_modes",
     HighModeConfig,
     build_input_params,
     create_outfile_catalog,

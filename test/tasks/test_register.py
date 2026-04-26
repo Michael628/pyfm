@@ -5,6 +5,7 @@ from pyfm.domain import task_registry, build_hooks
 from pyfm.domain.task_registry import TaskHandler
 from pyfm.domain.protocols import TaskHandlerProtocol
 from pyfm.tasks.register import (
+    _config_to_task_key,
     get_task_handler,
     get_task_key,
     list_registered_types,
@@ -25,6 +26,11 @@ class OtherConfig:
 
 
 class NoKeyConfig:
+    pass
+
+
+class ExplicitKeyConfig:
+    """Config class with no key ClassVar — key passed explicitly to register_task."""
     pass
 
 
@@ -64,9 +70,11 @@ def validate_config(config):
 def reset_registries():
     task_registry.clear()
     build_hooks.clear()
+    _config_to_task_key.clear()
     yield
     task_registry.clear()
     build_hooks.clear()
+    _config_to_task_key.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +200,34 @@ class TestRegisterTask:
         register_task(FakeConfig, format_string)
         handler = task_registry.get("nanny_fake_task")
         assert handler.config_type is FakeConfig
+
+    def test_explicit_key_registers_correctly(self):
+        register_task("explicit_task", ExplicitKeyConfig, build_input_params)
+        handler = task_registry.get("nanny_explicit_task")
+        assert handler.config_type is ExplicitKeyConfig
+        assert handler.build_input_params is build_input_params
+
+    def test_explicit_key_populates_reverse_mapping(self):
+        register_task("explicit_task", ExplicitKeyConfig)
+        assert ExplicitKeyConfig in _config_to_task_key
+        assert _config_to_task_key[ExplicitKeyConfig] == "explicit_task"
+
+    def test_explicit_key_enables_config_lookup_via_get_task_key(self):
+        register_task("explicit_task", ExplicitKeyConfig, build_input_params)
+        key = get_task_key(config=ExplicitKeyConfig)
+        assert key == "nanny_explicit_task"
+
+    def test_explicit_key_with_hooks(self):
+        register_task(
+            "explicit_task",
+            ExplicitKeyConfig,
+            build_input_params,
+            preprocess_params=preprocess_params,
+            validate=validate_config,
+        )
+        hooks = build_hooks.get(ExplicitKeyConfig)
+        assert hooks.preprocess is preprocess_params
+        assert hooks.validate is validate_config
 
 
 # ---------------------------------------------------------------------------

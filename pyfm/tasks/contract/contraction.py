@@ -67,6 +67,7 @@ def create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
 
 # Register ContractConfig as the config for 'contract' task type
 register_task(
+    "contract",
     ContractConfig,
     build_input_params,
     build_aggregator_params,

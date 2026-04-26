@@ -131,6 +131,7 @@ def create_outfile_catalog(config: DiagramConfig) -> pd.DataFrame:
 
 
 register_task(
+    "contract_diagram",
     DiagramConfig,
     build_input_params=build_input_params,
     create_outfile_catalog=create_outfile_catalog,

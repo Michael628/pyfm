@@ -28,8 +28,6 @@ class MesonConfig(SimpleConfig):
     apply_g5: bool = False
     shift_gauge_name: str | None = None
 
-    key: t.ClassVar[str] = "hadrons_meson"
-
     @property
     def op_list(self) -> t.List[OpList.Op]:
         """Get list of gamma operations."""
@@ -167,8 +165,9 @@ def postprocess_config(config: MesonConfig) -> MesonConfig:
     return config
 
 
-# Register GaugeConfig as the config for 'hadrons_gauge' task type
+# Register MesonConfig as the config for 'hadrons_meson' task type
 register_task(
+    "hadrons_meson",
     MesonConfig,
     build_input_params,
     create_outfile_catalog,
