@@ -68,3 +68,6 @@ packages = [
 # Optional: If you need to include additional files
 # [tool.setuptools.package-dir]
 # "" = "src"  # If using src layout
+
+[tool.pytest.ini_options]
+testpaths = ["test"]

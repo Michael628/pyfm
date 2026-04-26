@@ -68,6 +68,11 @@ def validate_config(config):
 
 @pytest.fixture(autouse=True)
 def reset_registries():
+    # Snapshot the real populated registries before wiping for test isolation.
+    # Restored after the test so later test modules see a fully registered state.
+    saved_handlers = dict(task_registry._handlers)
+    saved_hooks = dict(build_hooks._registry)
+    saved_config_to_task_key = dict(_config_to_task_key)
     task_registry.clear()
     build_hooks.clear()
     _config_to_task_key.clear()
@@ -75,6 +80,9 @@ def reset_registries():
     task_registry.clear()
     build_hooks.clear()
     _config_to_task_key.clear()
+    task_registry._handlers.update(saved_handlers)
+    build_hooks._registry.update(saved_hooks)
+    _config_to_task_key.update(saved_config_to_task_key)
 
 
 # ---------------------------------------------------------------------------

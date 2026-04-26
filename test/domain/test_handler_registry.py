@@ -45,9 +45,11 @@ def build_aggregator_params_stub(config):
 
 @pytest.fixture(autouse=True)
 def reset_registry():
+    saved = dict(task_registry._handlers)
     task_registry.clear()
     yield
     task_registry.clear()
+    task_registry._handlers.update(saved)
 
 
 # ---------------------------------------------------------------------------
