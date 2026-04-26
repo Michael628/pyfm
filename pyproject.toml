@@ -18,6 +18,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "click>=8.0",
     "Cython>=0.29",
     "dict2xml>=1.7",
     "gvar>=11.9",
@@ -48,10 +49,14 @@ docs = [
 [project.urls]
 Homepage = "https://github.com/Michael628/pyfm"
 
+[project.scripts]
+pyfm = "pyfm.cli:cli"
+
 [tool.setuptools]
 packages = [
     "pyfm",
     "pyfm.a2a",
+    "pyfm.cli",
     "pyfm.dataio",
     "pyfm.domain",
     "pyfm.nanny",
