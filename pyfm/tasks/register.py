@@ -1,12 +1,30 @@
 import typing as t
-from pyfm.domain import (
-    HandlerRegistry,
-    ConfigHandler,
-    ConfigPreprocessorProtocol,
-    TaskHandlerProtocol,
+
+from pyfm.domain import task_registry, build_hooks
+from pyfm.domain.task_registry import TaskHandler
+from pyfm import utils
+
+# Mapping from positional function name to task_registry callable field name
+_TASK_CALLABLE_NAMES = frozenset(
+    {"build_input_params", "create_outfile_catalog", "build_aggregator_params"}
 )
 
-from pyfm import utils
+# Mapping from positional function name to build_hooks field name
+_HOOK_NAME_MAP: dict[str, str] = {
+    "preprocess_params": "preprocess",
+    "postprocess_config": "postprocess",
+}
+
+# kwarg names that route to build_hooks
+_KWARG_HOOK_MAP: dict[str, str] = {
+    "preprocess_params": "preprocess",
+    "postprocess_config": "postprocess",
+    "validate": "validate",
+}
+
+
+def _default_preprocess(params: t.Dict) -> t.Dict:
+    return params | params.pop("_preprocessor", {})
 
 
 def get_task_key(
@@ -24,11 +42,9 @@ def get_task_key(
             utils.get_logger().debug(f"Config key not provided for: {config}")
             return None
     else:
-        raise ValueError(f"Must provide either `job_type` or `config` parameter.")
+        raise ValueError("Must provide either `job_type` or `config` parameter.")
 
-    handler_key = HandlerRegistry.get_handler_key(scope, handler_key)
-
-    return handler_key
+    return f"{scope}_{handler_key}"
 
 
 def get_task_handler(
@@ -36,46 +52,84 @@ def get_task_handler(
     task_type: str | None = None,
     config: t.Type | None = None,
     strict: bool = True,
-) -> ConfigHandler | None:
+) -> TaskHandler | None:
+    from pyfm.domain.protocols import TaskHandlerProtocol
+
     handler_key = get_task_key(job_type, task_type, config)
+    if handler_key is None:
+        return None
 
     try:
-        handler = HandlerRegistry.get_handler(handler_key)
-        # Enforce that only complete, standalone handlers are returned
-        if strict and not isinstance(handler, TaskHandlerProtocol):
-            raise ValueError(
-                f"Handler '{handler_key}' does not satisfy TaskHandlerProtocol. "
-                f"It is not a complete, standalone handler and cannot be used directly. "
-                f"It may be missing required build_input_params, create_outfile_catalog, "
-                f"or format_string methods."
-            )
-        return handler
-    except ValueError as e:
+        handler = task_registry.get(handler_key)
+    except KeyError as e:
         utils.get_logger().debug(str(e))
         return None
 
+    if strict and not isinstance(handler, TaskHandlerProtocol):
+        utils.get_logger().debug(
+            f"Handler '{handler_key}' does not satisfy TaskHandlerProtocol."
+        )
+        return None
+
+    return handler
+
 
 def list_registered_types() -> t.List[str]:
-    return HandlerRegistry.list_registered_types(scope="nanny")
+    return list(task_registry._handlers.keys())
 
 
-def register_task(config: t.Type, *funcs, **kwfuncs):
-    def default_preprocess_fn(params: t.Dict) -> t.Dict:
-        """Default preprocessing function that unwraps _preprocessor key to overwrite other params."""
-        return params | params.pop("_preprocessor", {})
-
+def register_task(config: t.Type, *funcs, **kwfuncs) -> None:
     handler_key = get_task_key(config=config)
+    if handler_key is None:
+        utils.get_logger().debug(
+            f"register_task called with config lacking a 'key' ClassVar: {config}"
+        )
+        return
 
-    handler = HandlerRegistry.register_config(handler_key, config)
+    task_callables: dict[str, t.Callable] = {}
+    hook_callables: dict[str, t.Callable] = {}
 
-    if len(funcs) > 0:
-        HandlerRegistry.register_functions(handler_key, *funcs)
+    # Route positional functions by their __name__
+    for fn in funcs:
+        name = getattr(fn, "__name__", None)
+        if name in _TASK_CALLABLE_NAMES:
+            task_callables[name] = fn
+        elif name in _HOOK_NAME_MAP:
+            hook_key = _HOOK_NAME_MAP[name]
+            hook_callables[hook_key] = fn
+        else:
+            utils.get_logger().debug(
+                f"register_task: ignoring positional function '{name}' "
+                f"for key '{handler_key}' — not a recognised callable name."
+            )
 
-    for method_name, fn in kwfuncs.items():
-        HandlerRegistry.register_function(handler_key, fn, method_name)
+    # Route keyword functions
+    for kw, fn in kwfuncs.items():
+        if kw in _KWARG_HOOK_MAP:
+            hook_callables[_KWARG_HOOK_MAP[kw]] = fn
+        elif kw in _TASK_CALLABLE_NAMES:
+            task_callables[kw] = fn
+        else:
+            utils.get_logger().debug(
+                f"register_task: ignoring keyword '{kw}' for key '{handler_key}'."
+            )
 
-    # Provide default preprocessing function for tasks if not explicitly defined
-    if not isinstance(handler, ConfigPreprocessorProtocol):
-        HandlerRegistry.register_function(
-            handler_key, default_preprocess_fn, "preprocess_params"
+    # Register the TaskHandler (idempotent: skip if already registered)
+    if handler_key not in task_registry._handlers:
+        task_registry.register(handler_key, config, **task_callables)
+    else:
+        utils.get_logger().debug(
+            f"register_task: handler '{handler_key}' already registered; skipping."
+        )
+
+    # Provide default preprocess hook when none explicitly supplied
+    if "preprocess" not in hook_callables:
+        hook_callables["preprocess"] = _default_preprocess
+
+    # Register build hooks (idempotent: skip if already registered)
+    if config not in build_hooks._registry:
+        build_hooks.register(config, **hook_callables)
+    else:
+        utils.get_logger().debug(
+            f"register_task: hooks for '{config.__name__}' already registered; skipping."
         )
