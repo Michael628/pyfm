@@ -11,7 +11,7 @@ from pyfm.domain import LoadDictConfig
 from pyfm.core.builder import build_config
 from pyfm.dataio import data_to_frame, write_files
 
-from pyfm.a2a import get_a2a_handler, execute
+from pyfm.a2a import execute
 from pyfm import utils
 from time import perf_counter
 
@@ -38,7 +38,7 @@ def main():
     params = utils.io.load_param(args.param_file)
 
     config: ContractConfig = build_config(
-        ContractConfig, params, get_handler=get_a2a_handler
+        ContractConfig, params
     )
 
     logging_level = getattr(config, "logging_level", "INFO")

@@ -5,12 +5,18 @@ import h5py
 import numpy as np
 import pandas as pd
 
+try:
+    import pyarrow.parquet as pq
+except ImportError:
+    pq = None
+
 from pyfm.domain import LoadDictConfig, LoadH5Config
 
 from pyfm.dataio.converter import data_to_frame
 from pyfm.domain import WrappedDataPipe
 from pyfm import utils
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
@@ -34,14 +40,12 @@ def get_csv_loader(filename: str, _: t.Dict[str, str], **kwargs):
 
 
 def get_parquet_loader(filename: str, _: t.Dict[str, str], **kwargs):
-    try:
-        import pyarrow  # noqa: F401
-    except ImportError:
+    if pq is None:
         raise NotImplementedError(
             "Parquet support requires pyarrow. Install with: pip install pyfm[parquet]"
         )
 
-    return pd.read_parquet(filename)
+    return pq.read_table(filename, use_threads=True).to_pandas()
 
 
 def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
@@ -93,7 +97,9 @@ def get_file_loader(file_path: str):
         case ".parquet":
             return get_parquet_loader
         case _:
-            raise ValueError("File must have extension '.p', '.h5', '.csv', or '.parquet'")
+            raise ValueError(
+                "File must have extension '.p', '.h5', '.csv', or '.parquet'"
+            )
 
 
 def load_files(
@@ -117,16 +123,24 @@ def load_files(
             file0 = filestem if isinstance(filestem, str) else filestem[0] + ", ..."
             raise ValueError(f"No files found for file search pattern: {file0}")
 
+        max_workers = min(kwargs.pop("max_workers", 1), len(file_repls))
+
         file_loader = partial(get_file_loader(file_repls[0][0]), **kwargs)
         group_cols = list(file_repls[0][1].keys())
         GroupTuple = utils.create_group_tuple(*group_cols)
 
-        for filename, repl in file_repls:
+        def load_one(filename, repl):
             utils.get_logger().debug(f"Loading file: {filename}")
             df = file_loader(filename, repl)
             if repl:
                 df[list(repl.keys())] = tuple(repl.values())
-            yield GroupTuple(**repl), df
+            return repl, df
+
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(load_one, fn, r) for fn, r in file_repls]
+            for fut in futures:
+                repl, df = fut.result()
+                yield GroupTuple(**repl), df
 
     if aggregate:
         return WrappedDataPipe(file_factory).agg()

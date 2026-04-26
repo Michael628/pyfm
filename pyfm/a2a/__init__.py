@@ -21,10 +21,6 @@ from pyfm.a2a.mesonloader import (
     get_index_range,
 )
 from pyfm.a2a.time_operations import convert_to_numpy, time_average
-from pyfm.a2a.register import register_a2a, get_a2a_handler
-from pyfm.a2a.types import DiagramConfig, ContractConfig, MesonLoaderConfig
-
-# Maintain backward compatibility by exposing all functions at module level
 __all__ = [
     "contract",
     "conn_2pt",
@@ -39,9 +35,4 @@ __all__ = [
     "qed_conn_4pt",
     "sib_conn_3pt",
     "time_average",
-    "get_a2a_handler",
 ]
-
-register_a2a(ContractConfig)
-register_a2a(DiagramConfig)
-register_a2a(MesonLoaderConfig)
