@@ -7,6 +7,7 @@ from pyfm.nanny.validator import (
 from pyfm.nanny.core import JobConfig, NannyConfig, get_job_config, get_nanny_config
 from pyfm.nanny.aggregator import aggregate_task_data, load_data, process_data
 from pyfm.nanny.submitter import nanny_loop, submit_job
+from pyfm.nanny.todo_writer import parse_cfgs, validate_steps, add_entries
 
 __all__ = [
     "JobConfig",
@@ -22,4 +23,7 @@ __all__ = [
     "process_data",
     "aggregate_task_data",
     "get_outfiles",
+    "parse_cfgs",
+    "validate_steps",
+    "add_entries",
 ]
