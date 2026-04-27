@@ -1,9 +1,65 @@
+import multiprocessing
 from unittest.mock import patch, call
 
 import pytest
 
 from pyfm.nanny.todo_writer import parse_cfgs, validate_steps, add_entries
 from pyfm.nanny.todo import read_todo
+
+
+# ---------------------------------------------------------------------------
+# Helpers for concurrency test
+# ---------------------------------------------------------------------------
+
+def _writer_process(todo_file, series, cfgnos, steps, ready_event, start_event):
+    """Signal ready, wait for coordinated start, then call add_entries."""
+    ready_event.set()
+    start_event.wait()
+    add_entries(todo_file, series, cfgnos, steps)
+
+
+class TestAddEntriesConcurrency:
+    def test_concurrent_writers_produce_no_corruption(self, tmp_path):
+        """Two concurrent add_entries calls must not corrupt or lose lines."""
+        todo_file = str(tmp_path / "todo")
+
+        ctx = multiprocessing.get_context("fork")
+        ready_a = ctx.Event()
+        ready_b = ctx.Event()
+        start = ctx.Event()
+
+        cfgnos_a = [str(c) for c in range(100, 110)]
+        cfgnos_b = [str(c) for c in range(200, 210)]
+
+        proc_a = ctx.Process(
+            target=_writer_process,
+            args=(todo_file, "a", cfgnos_a, ["smear"], ready_a, start),
+        )
+        proc_b = ctx.Process(
+            target=_writer_process,
+            args=(todo_file, "b", cfgnos_b, ["smear"], ready_b, start),
+        )
+
+        proc_a.start()
+        proc_b.start()
+
+        ready_a.wait(timeout=5)
+        ready_b.wait(timeout=5)
+        start.set()
+
+        proc_a.join(timeout=10)
+        proc_b.join(timeout=10)
+
+        assert proc_a.exitcode == 0, "writer A failed"
+        assert proc_b.exitcode == 0, "writer B failed"
+
+        lines = (tmp_path / "todo").read_text().splitlines()
+        assert len(lines) == 20, f"expected 20 lines, got {len(lines)}: {lines}"
+        for line in lines:
+            parts = line.split()
+            assert len(parts) == 3, f"corrupted line: {repr(line)}"
+            assert parts[1] == "smear"
+            assert parts[2] == "0"
 
 
 # ---------------------------------------------------------------------------
