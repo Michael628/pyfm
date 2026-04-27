@@ -18,25 +18,28 @@ from pyfm.nanny import (
 
 @click.group()
 def nanny():
+    """Manage automated HPC job submission via todo files."""
     pass
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml")
-@click.option("-j", "--job", type=str, default=None)
-@click.option("--logging-level", type=str, default="INFO")
+@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-j", "--job", type=str, default=None, help="Restrict nanny loop to this job step only.")
+@click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
 def run(param_file, job, logging_level):
+    """Run the nanny loop to submit and monitor HPC jobs."""
     os.system("umask 022")
     utils.set_logging_level(logging_level)
     nanny_loop(param_file, require_step=job)
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml")
-@click.option("-i", "--input", "input_file", type=str, required=True)
-@click.option("-j", "--job", type=str, required=True)
-@click.option("--logging-level", type=str, default="INFO")
+@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-i", "--input", "input_file", type=str, required=True, help="Input file list to submit.")
+@click.option("-j", "--job", type=str, required=True, help="Job step name to submit.")
+@click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
 def submit(param_file, input_file, job, logging_level):
+    """Submit a single job to the HPC scheduler."""
     utils.set_logging_level(logging_level)
     yaml_params = utils.io.load_param(param_file)
     nanny_config = get_nanny_config(yaml_params)
@@ -48,10 +51,16 @@ def submit(param_file, input_file, job, logging_level):
 @nanny.command()
 @click.argument("series")
 @click.argument("steps", nargs=-1, required=True)
-@click.option("--cfg", "cfg_list", multiple=True, type=int)
-@click.option("--cfg-range", "cfg_range", nargs=3, type=int, default=None)
-@click.option("-p", "--param-file", type=str, default="params.yaml")
+@click.option("--cfg", "cfg_list", multiple=True, type=int, help="Individual configuration numbers to add.")
+@click.option("--cfg-range", "cfg_range", nargs=3, type=int, default=None, help="Config range as START STOP STEP (exclusive stop).")
+@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
 def add(series, steps, cfg_list, cfg_range, param_file):
+    """Add todo entries for SERIES and STEPS.
+
+    SERIES is the gauge field series label.
+    STEPS are one or more job step names to add.
+    Exactly one of --cfg or --cfg-range must be provided.
+    """
     if cfg_list and cfg_range:
         click.echo("Error: --cfg and --cfg-range are mutually exclusive.", err=True)
         raise click.Abort()
@@ -79,12 +88,17 @@ def add(series, steps, cfg_list, cfg_range, param_file):
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml")
-@click.option("-j", "--job", type=str, default=None)
-@click.option("-s", "--series", type=str, default=None)
-@click.option("-n", "--config", "config", type=str, default=None)
-@click.option("-v", "--verbose", is_flag=True, default=False)
+@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-j", "--job", type=str, default=None, help="Job step to inspect.")
+@click.option("-s", "--series", type=str, default=None, help="Gauge field series to filter on.")
+@click.option("-n", "--config", "config", type=str, default=None, help="Configuration number to filter on.")
+@click.option("-v", "--verbose", is_flag=True, default=False, help="Print detailed output file status.")
 def check(param_file, job, series, config, verbose):
+    """Check job status or audit output files.
+
+    Without --job/--series/--config, prints a summary of all job statuses.
+    With all three flags, audits output files for the specified job/series/config.
+    """
     yaml_params = utils.io.load_param(param_file)
     if job is not None and series is not None and config is not None:
         audit_outfiles(job, yaml_params, series, config, verbose=verbose)

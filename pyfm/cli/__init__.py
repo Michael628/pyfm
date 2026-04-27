@@ -8,6 +8,7 @@ from pyfm.cli.systems import build, workspace
 
 @click.group()
 def cli():
+    """PyFM - lattice QCD workflow toolkit."""
     pass
 
 

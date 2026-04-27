@@ -20,12 +20,14 @@ def _make_contraction_key(contraction: t.Tuple[str]):
 
 @click.group()
 def contract():
+    """Run A2A all-to-all contraction calculations."""
     pass
 
 
 @contract.command()
-@click.option("-p", "--param-file", type=str, required=True)
+@click.option("-p", "--param-file", type=str, required=True, help="Path to YAML parameter file (required).")
 def run(param_file):
+    """Execute A2A contractions for all diagrams defined in the parameter file."""
     params = utils.io.load_param(param_file)
 
     config: ContractConfig = build_config(ContractConfig, params)
