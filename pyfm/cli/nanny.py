@@ -3,7 +3,7 @@ import os
 import click
 
 from pyfm import utils
-from pyfm.nanny import audit_outfiles, check_jobs, get_job_config, get_nanny_config, nanny_loop, submit_job
+from pyfm.nanny import add_entries, audit_outfiles, check_jobs, get_job_config, get_nanny_config, nanny_loop, parse_cfgs, submit_job, validate_steps
 
 
 @click.group()
@@ -33,6 +33,39 @@ def submit(param_file, input_file, job, logging_level):
     job_config = get_job_config(job, yaml_params)
     os.environ["INPUTLIST"] = input_file
     submit_job(nanny_config, job_config, 1)
+
+
+@nanny.command()
+@click.argument("series")
+@click.argument("steps", nargs=-1, required=True)
+@click.option("--cfg", "cfg_list", multiple=True, type=int)
+@click.option("--cfg-range", "cfg_range", nargs=3, type=int, default=None)
+@click.option("-p", "--param-file", type=str, default="params.yaml")
+def add(series, steps, cfg_list, cfg_range, param_file):
+    if cfg_list and cfg_range:
+        click.echo("Error: --cfg and --cfg-range are mutually exclusive.", err=True)
+        raise click.Abort()
+    if not cfg_list and not cfg_range:
+        click.echo("Error: one of --cfg or --cfg-range is required.", err=True)
+        raise click.Abort()
+
+    yaml_params = utils.io.load_param(param_file)
+    todo_file = yaml_params["nanny"]["todo_file"]
+    job_setup = yaml_params["job_setup"]
+
+    try:
+        validate_steps(steps, job_setup)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        raise click.Abort()
+
+    try:
+        cfgnos = parse_cfgs(cfg=cfg_list if cfg_list else None, cfg_range=cfg_range)
+    except ValueError as e:
+        click.echo(str(e), err=True)
+        raise click.Abort()
+
+    add_entries(todo_file, series, cfgnos, steps)
 
 
 @nanny.command()
