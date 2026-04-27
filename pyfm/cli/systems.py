@@ -1,6 +1,10 @@
 import os
+import re
+import shlex
 import subprocess
 from pathlib import Path
+
+_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 
 import click
 
@@ -33,8 +37,25 @@ def build():
 @click.option("--ext", type=str, default=None)
 @click.option("--threads", type=int, default=4)
 def build_run(
-    gmp, mpfr, lime, hdf5, ssl, qmp, qio, debug, mpi_reduction, force,
-    skip_make, grid, hadrons, hlma, glma, all_components, system, ext, threads,
+    gmp,
+    mpfr,
+    lime,
+    hdf5,
+    ssl,
+    qmp,
+    qio,
+    debug,
+    mpi_reduction,
+    force,
+    skip_make,
+    grid,
+    hadrons,
+    hlma,
+    glma,
+    all_components,
+    system,
+    ext,
+    threads,
 ):
     script = _SYSTEMS_DIR / "build.sh"
     args = [str(script), "--system", system, "--threads", str(threads)]
@@ -113,17 +134,18 @@ def env(system, ext, runtime_env):
         source_cmd += f" --ext {ext}"
     source_cmd += f" --runtime-env {runtime_env}"
     result = subprocess.run(
-        ["bash", "-c", f"{source_cmd} && env"],
-        capture_output=True,
+        ["bash", "-c", f"{{ {source_cmd}; }} 1>&2 && env -0"],
+        stdout=subprocess.PIPE,
         text=True,
         check=True,
     )
-    current_env = os.environ
-    for line in result.stdout.splitlines():
-        if "=" not in line:
+    current = os.environ
+    for item in result.stdout.split("\0"):
+        if "=" not in item:
             continue
-        key, _, value = line.partition("=")
-        if "BASH_FUNC" in key or key.startswith("_"):
+        key, _, value = item.partition("=")
+        if not _IDENTIFIER.match(key):
             continue
-        if current_env.get(key) != value:
-            click.echo(f"export {key}={value}")
+        if current.get(key) == value:
+            continue
+        click.echo(f"export {key}={shlex.quote(value)}")
