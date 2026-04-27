@@ -1,4 +1,5 @@
 import pytest
+from unittest.mock import MagicMock, patch
 
 import pyfm.nanny.todo as todo
 
@@ -54,6 +55,25 @@ class TestKeyTodoEntries:
         entries = ["b.60", "a.100"]
         result = sorted(entries, key=todo.key_todo_entries)
         assert result == ["a.100", "b.60"]
+
+
+class TestReadTodoDuplicates:
+    def test_warns_on_duplicate(self, tmp_path):
+        f = tmp_path / "todo"
+        f.write_text("a.60 smear 0\na.60 hadrons 0\n")
+        mock_logger = MagicMock()
+        with patch("pyfm.utils.get_logger", return_value=mock_logger):
+            todo.read_todo(str(f))
+        mock_logger.warn.assert_called_once()
+        call_args = mock_logger.warn.call_args[0][0]
+        assert "a.60" in call_args
+
+    def test_last_write_wins(self, tmp_path):
+        f = tmp_path / "todo"
+        f.write_text("a.60 smear 0\na.60 hadrons 0\n")
+        result = todo.read_todo(str(f))
+        assert len(result) == 1
+        assert result["a.60"] == ["a.60", "hadrons", "0"]
 
 
 class TestFindNextUnfinishedTask:

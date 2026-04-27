@@ -56,6 +56,10 @@ def read_todo(todo_file):
             if isinstance(a[i], bytes):
                 a[i] = a[i].decode("ASCII")
         key = a[0]
+        if key in todo_list:
+            utils.get_logger().warn(
+                f"Duplicate cfgno '{key}' in {todo_file} — keeping last occurrence"
+            )
         todo_list[key] = a
 
     todo.close()
