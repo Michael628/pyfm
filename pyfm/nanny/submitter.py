@@ -167,15 +167,12 @@ def submit_job(nanny_config: NannyConfig, job_config: JobConfig, ncases: int):
     """Submit the job"""
 
     basenodes = job_config.nodes
-    ppj = reduce((lambda x, y: x * y), job_config.geom)
+    basetasks = reduce((lambda x, y: x * y), job_config.geom)
     ppn = job_config.ppn
 
-    jpn = int(ppn / ppj)
-    basetasks = basenodes * ppn if basenodes > 1 or jpn <= 1 else ppj
-    nodes = (
-        basenodes * ncases if jpn <= 1 else int((basenodes * ncases + jpn - 1) / jpn)
-    )
-    NP = str(nodes * ppn)
+    jpn = int(ppn / basetasks)
+    NP = str(basetasks * ncases)
+    nodes = max(basenodes, int((basetasks * ncases + ppn - 1) / ppn))
     geom = ".".join(map(str, job_config.geom))
     lattice = ".".join(map(str, job_config.lattice))
 
@@ -183,7 +180,7 @@ def submit_job(nanny_config: NannyConfig, job_config: JobConfig, ncases: int):
     os.environ["WORKDIR"] = nanny_config.home
     os.environ["NP"] = NP
     os.environ["PPN"] = str(ppn)
-    os.environ["PPJ"] = str(ppj)
+    os.environ["PPJ"] = str(basetasks)
     os.environ["BASETASKS"] = str(basetasks)
     os.environ["BASENODES"] = str(basenodes)
     os.environ["LAYOUT"] = geom
