@@ -40,3 +40,7 @@ vendor/
 coverage/
 .cache/
 tmp/
+.claude/
+.pi/
+.pi-*
+thoughts
