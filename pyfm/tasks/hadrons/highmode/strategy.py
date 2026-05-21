@@ -98,7 +98,6 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
         cg_solver_labels: t.List = [
             s for s in config.get_solver_labels(skip_cross=True) if "ama" in s
         ]
-        print(cg_solver_labels)
         for resid, sl in zip(map(str, config.residual), cg_solver_labels):
             name = config.solver_name.format(solver=sl, mass=mass_label)
 

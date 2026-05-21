@@ -131,7 +131,12 @@ class TestWorkspaceEnv:
         assert "Missing option '--system'" in result.output
 
     def test_prints_export_statements(self, runner):
-        subshell_output = "PATH=/new/path:/usr/bin\nNEWVAR=hello\n_PRIV=skip\nBASH_FUNC_foo%%=skip"
+        subshell_output = (
+            "PATH=/new/path:/usr/bin\0"
+            "NEWVAR=hello\0"
+            "_PRIV=skip\0"
+            "BASH_FUNC_foo%%=skip\0"
+        )
         with patch("pyfm.cli.systems.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout=subshell_output)
             with patch("pyfm.cli.systems.os.environ", {"PATH": "/usr/bin"}):
@@ -139,11 +144,11 @@ class TestWorkspaceEnv:
         assert result.exit_code == 0
         assert "export NEWVAR=hello" in result.output
         assert "export PATH=/new/path:/usr/bin" in result.output
-        assert "_PRIV" not in result.output
+        assert "export _PRIV=skip" in result.output
         assert "BASH_FUNC" not in result.output
 
     def test_unchanged_vars_skipped(self, runner):
-        subshell_output = "UNCHANGED=same_value\nCHANGED=new_value"
+        subshell_output = "UNCHANGED=same_value\0CHANGED=new_value\0"
         with patch("pyfm.cli.systems.subprocess.run") as mock_run:
             mock_run.return_value = MagicMock(returncode=0, stdout=subshell_output)
             with patch("pyfm.cli.systems.os.environ", {"UNCHANGED": "same_value", "CHANGED": "old_value"}):
