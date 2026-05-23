@@ -5,33 +5,21 @@
 
 dcgmi profile --pause
 
-export lrank=$(($SLURM_LOCALID % 4))
-
 export MPICH_OFI_NIC_POLICY GPU
 APP=$*
 
-case ${lrank} in
- [0])
- #numactl --physcpubind=0-15,64-79 --membind=0 $APP
- CUDA_VISIBLE_DEVICES=3 numactl --physcpubind=0-15 --membind=0 $APP
- #CUDA_VISIBLE_DEVICES=3 $APP
- ;;
- 
- [1])
- #numactl --physcpubind=16-31,80-95 --membind=1 $APP
- CUDA_VISIBLE_DEVICES=2 numactl --physcpubind=16-31 --membind=1 $APP
- #CUDA_VISIBLE_DEVICES=2 $APP
- ;;
- 
- [2])
- #numactl --physcpubind=32-47,96-111 --membind=2 $APP
- CUDA_VISIBLE_DEVICES=1 numactl --physcpubind=32-47 --membind=2 $APP
- #CUDA_VISIBLE_DEVICES=1 $APP
- ;;
- 
- [3])
-# numactl --physcpubind=48-63,112-127 --membind=3 $APP
- CUDA_VISIBLE_DEVICES=0 numactl --physcpubind=48-63 --membind=3 $APP
- #CUDA_VISIBLE_DEVICES=0 $APP
- ;;
-esac
+CPU_AFFINITY=$(taskset -pc $$ 2>&1 | awk '{print $6}')
+
+echo "CPU Affinity: $CPU_AFFINITY"
+
+NUMA_NODE=$(nvidia-smi topo -m | grep "$CPU_AFFINITY" | awk '{print $5}')
+GPU_ID=$(nvidia-smi topo -m | grep "$CPU_AFFINITY" | awk '{print $1}')
+GPU_ID=${GPU_ID:3}
+
+echo "GPU $GPU_ID is on NUMA node $NUMA_NODE"
+echo "Executing $APP"
+
+CUDA_VISIBLE_DEVICES=$GPU_ID numactl --physcpubind=${CPU_AFFINITY%,*} --membind=$NUMA_NODE $APP
+
+taskset -pc $$
+nvidia-smi topo -m
