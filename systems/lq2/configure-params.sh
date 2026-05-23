@@ -9,11 +9,17 @@
 
 function grid_configure() {
   local INSTALLDIR=$1
+  local ext_flags=""
+
+  if [ "${BUILD_DEBUG}" = 'true' ]; then
+    ext_flags='--enable-tracing=nvtx'
+  fi
   
   ${PYFMTOPDIR}/Grid/configure \
    --prefix=${INSTALLDIR} \
 	     --enable-comms=mpi-auto       \
 	     --enable-simd=GPU \
+       ${ext_flags} \
 	     --enable-shm=nvlink \
 	     --enable-gen-simd-width=64 \
 	     --enable-accelerator=cuda \

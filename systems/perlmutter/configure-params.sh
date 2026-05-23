@@ -9,9 +9,14 @@
 
 function grid_configure() {
   local INSTALLDIR=$1
+  local ext_flags=""
   
-  if [ $OLD_RNG = 'true' ]; then
-    ext_flags='--enable-old-rng'
+  if [ "${BUILD_DEBUG}" = 'true' ]; then
+    ext_flags='--enable-tracing=nvtx'
+  fi
+
+  if [ "${OLD_RNG}" = 'true' ]; then
+    ext_flags="$ext_flags --enable-old-rng"
   fi
 
   ${PYFMTOPDIR}/Grid/configure \
