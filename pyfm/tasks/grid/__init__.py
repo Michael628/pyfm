@@ -150,7 +150,12 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
         gauge=gauge,
         epack=epack_params,
         lma=gridmods.lma(),
-        mpcg=gridmods.mpcg(),
+        mpcg=gridmods.mpcg(
+            residual=str(config.high_modes_config.residual[0]),
+            mixed_precision=str(
+                config.high_modes_config.solver == "mpcg"
+            ).lower(),
+        ),
         **{k: v for k, v in optional.items() if v is not None},
     )
 

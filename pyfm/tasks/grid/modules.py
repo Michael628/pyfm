@@ -94,11 +94,13 @@ def mpcg(
     residual: str = "1e-08",
     max_inner_iteration: str = "10000",
     max_outer_iteration: str = "10000",
+    mixed_precision: str = "true",
 ) -> t.Dict:
     return dict(
         maxInnerIteration=max_inner_iteration,
         maxOuterIteration=max_outer_iteration,
         residual=residual,
+        mixedPrecision=mixed_precision,
     )
 
 

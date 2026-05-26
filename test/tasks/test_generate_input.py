@@ -45,6 +45,23 @@ def test_generate_hadrons_input(
     )
 
 
+def test_generate_high_modes_cg_input(tmp_path, monkeypatch, hadrons_params):
+    monkeypatch.chdir(tmp_path)
+    hadrons_params["shared_params"]["solver"] = "cg"
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
+    schedule = (tmp_path / "schedules" / "high-modes-a.20.sched").read_text()
+
+    assert "MSolver::StagCGMILC" in xml
+    assert "MSolver::StagMixedPrecisionCG" not in xml
+    assert "MSolver::RBPrecCGMILC" not in xml
+    assert "<guesser />" in xml or "<guesser></guesser>" in xml
+    assert "gauge_fatf" not in schedule
+    assert "gauge_longf" not in schedule
+
+
 GRID_CASES = [
     ("lma", "grid-full-lma"),
 ]

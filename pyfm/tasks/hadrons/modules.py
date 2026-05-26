@@ -202,6 +202,18 @@ def rb_cg(name: str, action: str, residual: str) -> t.Dict:
     }
 
 
+def cg(name: str, action: str, residual: str, guesser: str = "") -> t.Dict:
+    return {
+        "id": {"name": name, "type": "MSolver::StagCGMILC"},
+        "options": {
+            "action": action,
+            "maxIteration": "10000",
+            "residual": residual,
+            "guesser": guesser,
+        },
+    }
+
+
 def mixed_precision_cg(
     name: str, outer_action: str, inner_action: str, residual: str
 ) -> t.Dict:

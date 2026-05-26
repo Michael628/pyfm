@@ -101,20 +101,29 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
         for resid, sl in zip(map(str, config.residual), cg_solver_labels):
             name = config.solver_name.format(solver=sl, mass=mass_label)
 
-            if config.solver == "rb":
-                modules[name] = hadmods.rb_cg(
-                    name=name,
-                    action=action,
-                    residual=resid,
-                )
-            else:
-                inner_action = f"i{action}"
-                modules[name] = hadmods.mixed_precision_cg(
-                    name=name,
-                    outer_action=action,
-                    inner_action=inner_action,
-                    residual=resid,
-                )
+            match config.solver:
+                case "rb":
+                    modules[name] = hadmods.rb_cg(
+                        name=name,
+                        action=action,
+                        residual=resid,
+                    )
+                case "cg":
+                    modules[name] = hadmods.cg(
+                        name=name,
+                        action=action,
+                        residual=resid,
+                    )
+                case "mpcg":
+                    inner_action = f"i{action}"
+                    modules[name] = hadmods.mixed_precision_cg(
+                        name=name,
+                        outer_action=action,
+                        inner_action=inner_action,
+                        residual=resid,
+                    )
+                case _:
+                    raise ValueError(f"Unknown high-mode CG solver: {config.solver}")
             schedule.append(name)
 
     quark_inputs = build_quark_strategy(config, run_tsources)
@@ -271,6 +280,12 @@ def validate_config(config: HighModeConfig) -> None:
 
     Validates that if non-local operators are used, shift_gauge_name must be set.
     """
+    if config.solver not in {"mpcg", "rb", "cg"}:
+        raise ValueError(
+            "High-mode solver must be one of 'mpcg', 'rb', or 'cg'; "
+            f"got {config.solver!r}."
+        )
+
     has_nonlocal_ops = any([not op.gamma.local for op in config.operations.op_list])
     if has_nonlocal_ops and config.shift_gauge_name is None:
         raise ValueError(
