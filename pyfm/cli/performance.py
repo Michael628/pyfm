@@ -8,7 +8,7 @@ from pyfm.performance import analyze_file, benchmark_lmi_performance
 
 @click.group()
 def performance():
-    """Analyze Hadrons performance output logs."""
+    """Analyze performance output logs."""
     pass
 
 
@@ -31,7 +31,7 @@ def analyze(output_file):
     "log_file",
     type=click.Path(exists=True, dir_okay=False, readable=True),
     required=True,
-    help="Hadrons performance log file.",
+    help="Hadrons/Grid performance log file.",
 )
 @click.option(
     "-p",
@@ -41,7 +41,7 @@ def analyze(output_file):
     help="Path to YAML parameter file.",
 )
 def benchmark(job, log_file, param_file):
-    """Emit component-first JSON benchmark data for a configured Hadrons/LMI LOG."""
+    """Emit component-first JSON benchmark data for a configured Hadrons/Grid LMI LOG."""
     try:
         params = utils.io.load_param(param_file)
         result = benchmark_lmi_performance(job, log_file, params)

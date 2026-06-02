@@ -16,7 +16,11 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 BENCHMARK_SCHEMA_VERSION = 1
-LMI_TASK_KEY = "nanny_hadrons_lmi"
+HADRONS_LMI_TASK_KEY = "nanny_hadrons_lmi"
+GRID_LMI_TASK_KEY = "nanny_grid"
+SUPPORTED_LMI_TASK_KEYS = (HADRONS_LMI_TASK_KEY, GRID_LMI_TASK_KEY)
+# Backward-compatible alias until backend integration switches to task-aware keys.
+LMI_TASK_KEY = HADRONS_LMI_TASK_KEY
 BENCHMARK_COMPONENTS = (
     "epack",
     "ranLL",
@@ -520,6 +524,62 @@ def count_components(module_names: List[str]) -> Dict[str, int]:
     return counts
 
 
+def _as_grid_elem_list(section: Any) -> List[Dict[str, Any]]:
+    """Return Grid planned-input elem entries from a possibly missing section."""
+    if not isinstance(section, dict):
+        return []
+    elem = section.get("elem", [])
+    return elem if isinstance(elem, list) else []
+
+
+def _grid_gammas_are_onelink(gammas: str) -> bool:
+    """Return whether Grid gamma content represents one-link meson fields."""
+    return any(gamma.strip().endswith("_G1") for gamma in gammas.split())
+
+
+def _grid_gammas_are_local(gammas: str) -> bool:
+    """Return whether Grid gamma content represents local meson fields."""
+    return any(
+        gamma.strip() and not gamma.strip().endswith("_G1")
+        for gamma in gammas.split()
+    )
+
+
+def count_grid_planned_components(planned_input: Dict[str, Any]) -> Dict[str, int]:
+    """Count Grid planned-input sections by benchmark component."""
+    counts = {component: 0 for component in BENCHMARK_COMPONENTS}
+
+    if "epack" in planned_input:
+        counts["epack"] = 1
+
+    for contraction in _as_grid_elem_list(planned_input.get("corr")):
+        for solver_key in ("quarkSolver", "antiquarkSolver"):
+            solver = contraction.get(solver_key)
+            if solver == "lma":
+                counts["ranLL"] += 1
+            elif solver == "mpcg":
+                counts["ama"] += 1
+
+    for a2a_entry in _as_grid_elem_list(planned_input.get("a2a")):
+        spin_taste = a2a_entry.get("spinTaste", {})
+        gammas = spin_taste.get("gammas", "") if isinstance(spin_taste, dict) else ""
+        if _grid_gammas_are_local(gammas):
+            counts["meson_field_local"] += 1
+        if _grid_gammas_are_onelink(gammas):
+            counts["meson_field_onelink"] += 1
+
+    return counts
+
+
+def count_planned_components(task_key: str, planned_input: Any) -> Dict[str, int]:
+    """Count planned benchmark components for a supported LMI task."""
+    if task_key == HADRONS_LMI_TASK_KEY:
+        return count_components(planned_input.schedule)
+    if task_key == GRID_LMI_TASK_KEY:
+        return count_grid_planned_components(planned_input)
+    raise ValueError(f"Unsupported LMI benchmark task key: {task_key!r}")
+
+
 def group_observed_components(
     observations: List[ModuleObservation],
 ) -> Dict[str, List[ModuleObservation]]:
@@ -532,6 +592,199 @@ def group_observed_components(
         if component is not None:
             grouped[component].append(observation)
     return grouped
+
+
+GRID_MESSAGE_PATTERN = re.compile(r"Grid\s*:\s*Message\s*:\s*([\d.]+)\s+s\s*:\s*(.*)")
+GRID_READING_EIGENVECTOR_PATTERN = re.compile(r"Reading eigenvector\s+(\d+)")
+GRID_CONVERGED_EIGENVECTORS_PATTERN = re.compile(r"Converged\s+(\d+)\s+eigenvectors")
+GRID_CORRELATOR_PATTERN = re.compile(
+    r"Correlator:.*\((lma|mpcg)\).*\((lma|mpcg)\)"
+)
+GRID_A2A_COMPLETE_PATTERN = re.compile(
+    r"All-to-all meson field construction complete\s*\((\d+)\)"
+)
+
+
+def _grid_message(line: str) -> Optional[Tuple[float, str]]:
+    """Return a Grid message timestamp and payload when the line is a Grid message."""
+    match = GRID_MESSAGE_PATTERN.search(line)
+    if not match:
+        return None
+    return float(match.group(1)), match.group(2).strip()
+
+
+def _elapsed_seconds(
+    start_time: Optional[float], end_time: Optional[float]
+) -> Optional[float]:
+    """Return non-negative elapsed seconds for selected Grid markers."""
+    if start_time is None or end_time is None or end_time < start_time:
+        return None
+    return end_time - start_time
+
+
+def _grid_solver_module_name(solver: str) -> Optional[str]:
+    """Return a pseudo Hadrons-style module name for a Grid correlator solver."""
+    if solver == "lma":
+        return "quark_lma_grid_corr"
+    if solver == "mpcg":
+        return "quark_ama_grid_corr"
+    return None
+
+
+def _grid_a2a_module_names(gammas: List[str]) -> List[str]:
+    """Return pseudo Hadrons-style module names for a Grid A2A gamma block."""
+    module_names = []
+    if any(gamma and not gamma.endswith("_G1") for gamma in gammas):
+        module_names.append("mf_grid_local")
+    if any(gamma.endswith("_G1") for gamma in gammas):
+        module_names.append("mf_grid_onelink")
+    return module_names
+
+
+def extract_grid_benchmark_observations(
+    file_path: str,
+) -> Tuple[List[ModuleObservation], bool, Dict[str, Any]]:
+    """Extract Grid benchmark observations and epack progress metadata."""
+    observations: List[ModuleObservation] = []
+    epack_stats: Dict[str, Any] = {}
+
+    epack_solve_start = None
+    epack_load_start = None
+    epack_load_observed = False
+    last_eigenvector_read = None
+
+    corr_start = None
+    corr_module_name = None
+
+    a2a_start = None
+    a2a_gammas: List[str] = []
+    collecting_a2a_gammas = False
+
+    with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
+        lines = f.readlines()
+
+    for line in lines:
+        message = _grid_message(line)
+        if message is None:
+            continue
+        timestamp, payload = message
+
+        if "MODULE: MSolver::StagFermionIRL" in payload and epack_solve_start is None:
+            epack_solve_start = timestamp
+        elif "Running IRL eigensolver" in payload:
+            epack_solve_start = timestamp
+        elif "Loading eigenpack" in payload and epack_load_start is None:
+            epack_load_start = timestamp
+            epack_load_observed = True
+
+        read_match = GRID_READING_EIGENVECTOR_PATTERN.search(payload)
+        if read_match:
+            last_eigenvector_read = max(
+                last_eigenvector_read or -1, int(read_match.group(1))
+            )
+
+        converged_match = GRID_CONVERGED_EIGENVECTORS_PATTERN.search(payload)
+        if converged_match:
+            epack_stats["nconv"] = int(converged_match.group(1))
+            if epack_solve_start is not None:
+                observations.append(
+                    ModuleObservation(
+                        module_name="epack",
+                        start_time=epack_solve_start,
+                        end_time=timestamp,
+                        elapsed_seconds=_elapsed_seconds(epack_solve_start, timestamp),
+                    )
+                )
+                epack_solve_start = None
+
+        if "Low mode projector setup complete" in payload and epack_load_start is not None:
+            observations.append(
+                ModuleObservation(
+                    module_name="epack",
+                    start_time=epack_load_start,
+                    end_time=timestamp,
+                    elapsed_seconds=_elapsed_seconds(epack_load_start, timestamp),
+                )
+            )
+            epack_load_start = None
+
+        if "Setting up meson contraction" in payload:
+            corr_start = timestamp
+            corr_module_name = None
+            continue
+
+        corr_match = GRID_CORRELATOR_PATTERN.search(payload)
+        if corr_match and corr_start is not None:
+            quark_solver, antiquark_solver = corr_match.groups()
+            corr_module_name = _grid_solver_module_name(quark_solver)
+            if quark_solver != antiquark_solver:
+                corr_module_name = None
+            continue
+
+        if (
+            payload.startswith("Saving correlator")
+            and corr_start is not None
+            and corr_module_name is not None
+        ):
+            observations.append(
+                ModuleObservation(
+                    module_name=corr_module_name,
+                    start_time=corr_start,
+                    end_time=timestamp,
+                    elapsed_seconds=_elapsed_seconds(corr_start, timestamp),
+                )
+            )
+            corr_start = None
+            corr_module_name = None
+            continue
+
+        if "Computing all-to-all meson fields" in payload:
+            a2a_start = timestamp
+            a2a_gammas = []
+            collecting_a2a_gammas = False
+            continue
+
+        if payload == "Spin bilinears:":
+            collecting_a2a_gammas = True
+            continue
+
+        if collecting_a2a_gammas:
+            if payload.startswith("Meson field size:"):
+                collecting_a2a_gammas = False
+            elif re.fullmatch(r"[A-Z0-9]+_[A-Z0-9]+", payload):
+                a2a_gammas.append(payload)
+            continue
+
+        a2a_complete_match = GRID_A2A_COMPLETE_PATTERN.search(payload)
+        if a2a_complete_match and a2a_start is not None:
+            for module_name in _grid_a2a_module_names(a2a_gammas):
+                observations.append(
+                    ModuleObservation(
+                        module_name=module_name,
+                        start_time=a2a_start,
+                        end_time=timestamp,
+                        elapsed_seconds=_elapsed_seconds(a2a_start, timestamp),
+                    )
+                )
+            a2a_start = None
+            a2a_gammas = []
+
+    if last_eigenvector_read is not None:
+        epack_stats["eigenvectors_read"] = last_eigenvector_read + 1
+    if epack_load_observed:
+        epack_stats["epack_load_observed"] = True
+    if epack_load_start is not None:
+        observations.append(
+            ModuleObservation(
+                module_name="epack",
+                start_time=epack_load_start,
+                end_time=None,
+                elapsed_seconds=None,
+            )
+        )
+
+    is_incomplete = not any("Grid Finalize" in line for line in lines[-100:])
+    return observations, is_incomplete, epack_stats
 
 
 def sum_elapsed_seconds(observations: List[ModuleObservation]) -> Optional[float]:
@@ -570,12 +823,21 @@ def build_component_metadata(
     planned_lanczos_steps = get_planned_lanczos_steps(config)
     if planned_lanczos_steps is not None:
         metadata["planned_lanczos_steps"] = planned_lanczos_steps
+    planned_eigenvectors = getattr(getattr(config, "epack_config", None), "eigs", None)
+    if planned_eigenvectors is not None:
+        metadata["planned_eigenvectors"] = planned_eigenvectors
     if "lanczos_steps" in analysis.epack_stats:
         metadata["lanczos_steps"] = analysis.epack_stats["lanczos_steps"]
     if "restart_iterations" in analysis.epack_stats:
         metadata["restart_iterations"] = analysis.epack_stats["restart_iterations"]
     if "nconv" in analysis.epack_stats:
         metadata["nconv"] = analysis.epack_stats["nconv"]
+    if "eigenvectors_read" in analysis.epack_stats:
+        metadata["eigenvectors_read"] = analysis.epack_stats["eigenvectors_read"]
+    if "epack_load_observed" in analysis.epack_stats:
+        metadata["epack_load_observed"] = analysis.epack_stats[
+            "epack_load_observed"
+        ]
     return metadata
 
 
@@ -590,9 +852,22 @@ def epack_progress_override(
 
     planned_lanczos_steps = get_planned_lanczos_steps(config)
     observed_lanczos_steps = analysis.epack_stats.get("lanczos_steps")
-    if not planned_lanczos_steps or observed_lanczos_steps is None:
-        return None
-    return min(observed_lanczos_steps / planned_lanczos_steps, 1.0)
+    if planned_lanczos_steps and observed_lanczos_steps is not None:
+        return min(observed_lanczos_steps / planned_lanczos_steps, 1.0)
+
+    epack_config = getattr(config, "epack_config", None)
+    planned_eigenvectors = (
+        getattr(epack_config, "eigs", None) if epack_config is not None else None
+    )
+    observed_eigenvectors = analysis.epack_stats.get("eigenvectors_read")
+    if (
+        getattr(epack_config, "load", False)
+        and planned_eigenvectors
+        and observed_eigenvectors is not None
+    ):
+        return min(observed_eigenvectors / planned_eigenvectors, 1.0)
+
+    return None
 
 
 def build_component_score(
@@ -1171,6 +1446,55 @@ def analyze_performance(file_path: str) -> PerformanceAnalysis:
     )
 
 
+def analyze_grid_benchmark_performance(file_path: str) -> PerformanceAnalysis:
+    """Analyze Grid output for benchmark JSON generation."""
+    lattice_grid = extract_lattice_grid(file_path)
+    communicator_sizes = extract_communicator_sizes(file_path)
+    module_observations, is_incomplete, grid_epack_stats = (
+        extract_grid_benchmark_observations(file_path)
+    )
+    epack_stats = extract_epack_statistics(file_path) | grid_epack_stats
+    timings = {
+        f"{observation.module_name}_{index}": observation.elapsed_seconds
+        for index, observation in enumerate(module_observations)
+        if observation.elapsed_seconds is not None
+    }
+    total_time = sum(timings.values())
+
+    return PerformanceAnalysis(
+        file_path=file_path,
+        lattice_grid=lattice_grid,
+        communicator_sizes=communicator_sizes,
+        timings=timings,
+        module_observations=module_observations,
+        is_incomplete=is_incomplete,
+        mf_custom_timers={},
+        epack_stats=epack_stats,
+        cg_iterations={},
+        total_time=total_time,
+        categories={},
+    )
+
+
+def analyze_benchmark_performance(task_key: str, log_file: str) -> PerformanceAnalysis:
+    """Analyze a benchmark log using the parser for the configured task."""
+    if task_key == HADRONS_LMI_TASK_KEY:
+        return analyze_performance(log_file)
+    if task_key == GRID_LMI_TASK_KEY:
+        return analyze_grid_benchmark_performance(log_file)
+    raise ValueError(f"Unsupported LMI benchmark task key: {task_key!r}")
+
+
+def validate_benchmark_task_key(task_key: str) -> None:
+    """Raise when the task key is not supported by benchmark JSON generation."""
+    if task_key not in SUPPORTED_LMI_TASK_KEYS:
+        supported = ", ".join(SUPPORTED_LMI_TASK_KEYS)
+        raise ValueError(
+            "Performance benchmark only supports Hadrons LMI and Grid LMI jobs in v1 "
+            f"({supported}); got {task_key!r}."
+        )
+
+
 def benchmark_lmi_performance(
     job: str,
     log_file: str,
@@ -1180,17 +1504,13 @@ def benchmark_lmi_performance(
     from pyfm.nanny.core import create_task
 
     task = create_task(job, yaml_params, series="a", cfg="1")
-    if task.key != LMI_TASK_KEY:
-        raise ValueError(
-            "Performance benchmark only supports hadrons_lmi jobs in v1; "
-            f"got {task.key!r}."
-        )
+    validate_benchmark_task_key(task.key)
 
-    analysis = analyze_performance(log_file)
+    analysis = analyze_benchmark_performance(task.key, log_file)
     planned_input = task.handler.build_input_params(task.config)
     node_count = derive_node_count(analysis.communicator_sizes)
 
-    planned_by_component = count_components(planned_input.schedule)
+    planned_by_component = count_planned_components(task.key, planned_input)
     observed_by_component = group_observed_components(analysis.module_observations)
 
     components = {

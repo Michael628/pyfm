@@ -84,7 +84,9 @@ def test_performance_benchmark_reports_backend_error(tmp_path, runner):
         patch("pyfm.cli.performance.utils.io.load_param", return_value={"job_setup": {}}),
         patch(
             "pyfm.cli.performance.benchmark_lmi_performance",
-            side_effect=ValueError("Performance benchmark only supports hadrons_lmi jobs"),
+            side_effect=ValueError(
+                "Performance benchmark only supports Hadrons LMI and Grid LMI jobs"
+            ),
         ),
     ):
         result = runner.invoke(
@@ -102,7 +104,7 @@ def test_performance_benchmark_reports_backend_error(tmp_path, runner):
         )
 
     assert result.exit_code != 0
-    assert "Performance benchmark only supports hadrons_lmi jobs" in result.output
+    assert "Performance benchmark only supports Hadrons LMI and Grid LMI jobs" in result.output
 
 
 def test_performance_benchmark_requires_existing_log(runner):
