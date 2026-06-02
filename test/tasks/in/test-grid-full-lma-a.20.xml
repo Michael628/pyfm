@@ -50,7 +50,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
@@ -69,7 +70,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
@@ -88,7 +90,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
@@ -107,7 +110,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
@@ -126,7 +130,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -145,7 +150,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -164,7 +170,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -183,7 +190,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -202,7 +210,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_local/ranLL/corr_axial_vec_local_ranLL_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_local/ranLL/corr_axial_vec_local_ranLL_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -221,7 +230,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_local/ranLL/corr_axial_vec_local_ranLL_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_local/ranLL/corr_axial_vec_local_ranLL_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -240,7 +250,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_local/ama/corr_axial_vec_local_ama_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_local/ama/corr_axial_vec_local_ama_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -259,7 +270,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_local/ama/corr_axial_vec_local_ama_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_local/ama/corr_axial_vec_local_ama_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
@@ -278,7 +290,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_onelink/ranLL/corr_axial_vec_onelink_ranLL_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_onelink/ranLL/corr_axial_vec_onelink_ranLL_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
@@ -297,7 +310,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>lma</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_onelink/ranLL/corr_axial_vec_onelink_ranLL_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_onelink/ranLL/corr_axial_vec_onelink_ranLL_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
@@ -316,7 +330,8 @@
         </antiquark>
         <antiquarkAction>l</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_onelink/ama/corr_axial_vec_onelink_ama_m002426</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_onelink/ama/corr_axial_vec_onelink_ama_m002426</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
@@ -335,7 +350,8 @@
         </antiquark>
         <antiquarkAction>u</antiquarkAction>
         <antiquarkSolver>mpcg</antiquarkSolver>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_onelink/ama/corr_axial_vec_onelink_ama_m001524</output>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_onelink/ama/corr_axial_vec_onelink_ama_m001524</output>
         <quark>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
@@ -418,6 +434,7 @@
       <maxInnerIteration>10000</maxInnerIteration>
       <maxOuterIteration>10000</maxOuterIteration>
       <residual>1e-08</residual>
+      <mixedPrecision>true</mixedPrecision>
     </mpcg>
     <runSeed>LMI-RW-series-a-100-eigs-1-noise</runSeed>
     <series>a</series>
