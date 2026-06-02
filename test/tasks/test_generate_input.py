@@ -1,7 +1,13 @@
+import copy
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
 import pytest
 import yaml
 
+from pyfm.nanny.core import create_task
 from pyfm.nanny import write_input_file
+from pyfm.tasks.hadrons import highmode, meson
 
 HADRONS_CASES = [
     ("lma", "full-lma"),
@@ -85,6 +91,55 @@ def test_generate_grid_input(
         tmp_path / "in" / f"{io_prefix}-a.20.xml",
         tasks_data_dir / "in" / f"test-{io_prefix}-a.20.xml",
     )
+
+
+def _write_file(path, size):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(b"0" * int(size))
+
+
+def test_generate_grid_input_skips_complete_high_mode_sources(
+    tmp_path, monkeypatch, grid_params
+):
+    monkeypatch.chdir(tmp_path)
+    params = copy.deepcopy(grid_params)
+    params["shared_params"]["home"] = str(tmp_path)
+    params["shared_params"]["overwrite"] = False
+
+    task = create_task("lma", params, "a", "20")
+    catalog = highmode.create_outfile_catalog(task.config.high_modes_config)
+    for filepath in catalog[catalog["tsource"] == "0"]["filepath"]:
+        _write_file(filepath, 1)
+
+    write_input_file("lma", params, "a", "20")
+
+    root = ET.parse(tmp_path / "in" / "grid-full-lma-a.20.xml").getroot()
+    source_times = [elem.text for elem in root.findall(".//sources/elem/t0")]
+
+    assert "0" not in source_times
+    assert source_times == ["1", "2", "3"]
+    assert root.find(".//corr") is not None
+
+
+def test_generate_grid_input_omits_complete_meson_a2a(
+    tmp_path, monkeypatch, grid_params
+):
+    monkeypatch.chdir(tmp_path)
+    params = copy.deepcopy(grid_params)
+    params["shared_params"]["home"] = str(tmp_path)
+    params["shared_params"]["overwrite"] = False
+
+    task = create_task("lma", params, "a", "20")
+    catalog = meson.create_outfile_catalog(task.config.meson_config)
+    for _, row in catalog.iterrows():
+        _write_file(row["filepath"], row["good_size"])
+
+    write_input_file("lma", params, "a", "20")
+
+    root = ET.parse(tmp_path / "in" / "grid-full-lma-a.20.xml").getroot()
+
+    assert root.find(".//a2a") is None
 
 
 def test_generate_contract_input(

@@ -1,5 +1,4 @@
 import typing as t
-import pandas as pd
 
 from pydantic.dataclasses import dataclass
 
@@ -35,6 +34,61 @@ class GridLMIConfig(CompositeConfig):
 
 def hadrons_to_grid_filestem(filestem: str, series: str) -> str:
     return filestem.removesuffix(f"_{series}").removesuffix("_t{tsource}")
+
+
+def get_high_mode_run_tsources(config: HighModeConfig) -> t.List[str]:
+    """Return high-mode source times that need Grid work generated.
+
+    This mirrors the Hadrons high-mode overwrite criterion: when overwrite is
+    disabled, rerun an entire source time if any expected output for that time
+    source is missing. Existing-but-undersized files are intentionally not
+    treated as missing here to match ``highmode.build_input_params``.
+    """
+
+    if config.overwrite:
+        return list(map(str, config.tsource_range))
+
+    df = highmode.create_outfile_catalog(config)
+    missing_files = df[df["exists"] == False]
+    return [
+        str(tsource)
+        for tsource in config.tsource_range
+        if any(missing_files["tsource"] == str(tsource))
+    ]
+
+
+def build_a2a_params(config: meson.MesonConfig) -> t.List[t.Dict]:
+    """Build Grid meson-field parameters, respecting meson overwrite logic."""
+
+    bad_files = None
+    if not config.overwrite:
+        bad_files = utils.io.get_bad_files(meson.create_outfile_catalog(config))
+
+    a2a = []
+    for op, gammas in config.operations.group_by_mass_and_shift():
+        assert len(op.mass) == 1, "Grouped operations should each have only 1 mass"
+        mass_label = op.mass[0]
+
+        if not config.overwrite:
+            gammas = meson.get_incomplete_gammas(
+                config, gammas, mass_label, bad_files
+            )
+            if not gammas:
+                continue
+
+        a2a.append(
+            gridmods.meson_field(
+                block=str(config.blocksize),
+                mass=str(config.mass[mass_label]),
+                output=config.meson.filestem.format(
+                    mass=config.mass.to_string(mass_label, True)
+                ),
+                gammas=" ".join(g.gamma_string for g in gammas),
+                apply_g5=str(config.apply_g5).lower(),
+            )
+        )
+
+    return a2a
 
 
 def build_input_params(config: GridLMIConfig) -> t.Dict:
@@ -74,71 +128,59 @@ def build_input_params(config: GridLMIConfig) -> t.Dict:
     highModeActions = []
     sources = []
     if not config.skip_high_modes:
-        highModeActions = [
-            gridmods.action(m, str(config.high_modes_config.mass[m]))
-            for m in config.high_modes_config.masses
-        ]
+        run_tsources = get_high_mode_run_tsources(config.high_modes_config)
 
         sources = [
             gridmods.random_wall_source(
                 t_step=str(config.high_modes_config.time),
-                t0=str(t),
+                t0=tsource,
                 n_src=str(config.high_modes_config.noise),
-                seed=f"noise_t{t}",
+                seed=f"noise_t{tsource}",
             )
-            for t in range(
-                config.high_modes_config.tstart,
-                config.high_modes_config.tstop + 1,
-                config.high_modes_config.dt,
-            )
+            for tsource in run_tsources
         ]
 
-        for op, con in contraction_gen(config.high_modes_config):
-            solver_label = con.solver_label
-            mass_label = con.mass_label(config.high_modes_config.mass)
+        if run_tsources:
+            highModeActions = [
+                gridmods.action(m, str(config.high_modes_config.mass[m]))
+                for m in config.high_modes_config.masses
+            ]
 
-            corr.append(
-                gridmods.contraction(
-                    quark_solver=config.solver_map[con.quark.solver],
-                    quark_action=con.quark.mass,
-                    antiquark_solver=config.solver_map[con.antiquark.solver],
-                    antiquark_action=con.antiquark.mass,
-                    quark=gridmods.spin_taste(
-                        gammas=con.quark.gamma.gamma_string,
-                        apply_g5=str(con.quark.apply_g5).lower(),
-                    ),
-                    antiquark=gridmods.spin_taste(
-                        gammas=con.antiquark.gamma.gamma_string,
-                        apply_g5=str(con.antiquark.apply_g5).lower(),
-                    ),
-                    sink=gridmods.spin_taste(
-                        gammas=con.sink.gamma.gamma_string,
-                        apply_g5=str(con.sink.apply_g5).lower(),
-                    ),
-                    output=hadrons_to_grid_filestem(
-                        config.high_modes_config.high_modes.filestem, config.series
-                    ).format(
-                        mass=mass_label,
-                        dset=solver_label,
-                        gamma_label=op.gamma.name.lower(),
+            for op, con in contraction_gen(config.high_modes_config):
+                solver_label = con.solver_label
+                mass_label = con.mass_label(config.high_modes_config.mass)
+
+                corr.append(
+                    gridmods.contraction(
+                        quark_solver=config.solver_map[con.quark.solver],
+                        quark_action=con.quark.mass,
+                        antiquark_solver=config.solver_map[con.antiquark.solver],
+                        antiquark_action=con.antiquark.mass,
+                        quark=gridmods.spin_taste(
+                            gammas=con.quark.gamma.gamma_string,
+                            apply_g5=str(con.quark.apply_g5).lower(),
+                        ),
+                        antiquark=gridmods.spin_taste(
+                            gammas=con.antiquark.gamma.gamma_string,
+                            apply_g5=str(con.antiquark.apply_g5).lower(),
+                        ),
+                        sink=gridmods.spin_taste(
+                            gammas=con.sink.gamma.gamma_string,
+                            apply_g5=str(con.sink.apply_g5).lower(),
+                        ),
+                        output=hadrons_to_grid_filestem(
+                            config.high_modes_config.high_modes.filestem, config.series
+                        ).format(
+                            mass=mass_label,
+                            dset=solver_label,
+                            gamma_label=op.gamma.name.lower(),
+                        ),
                     ),
                 )
-            )
     if config.skip_meson:
         a2a = []
     else:
-        a2a = [
-            gridmods.meson_field(
-                block=str(config.meson_config.blocksize),
-                mass=str(config.meson_config.mass[op.mass[0]]),
-                output=config.meson_config.meson.filestem.format(
-                    mass=config.high_modes_config.mass.to_string(op.mass[0], True)
-                ),
-                gammas=" ".join(g.gamma_string for g in gammas),
-                apply_g5=str(config.meson_config.apply_g5).lower(),
-            )
-            for op, gammas in config.meson_config.operations.group_by_mass_and_shift()
-        ]
+        a2a = build_a2a_params(config.meson_config)
 
     optional = dict(
         sources=dict(elem=sources) if sources else None,
