@@ -1,19 +1,17 @@
-#! /bin/bash
+#!/bin/bash -l
 
 ####### -N (submit script)
 ####### -n (submit script)
 ####### -t (submit script)
 ####### -J (submit script)
-#SBATCH -A (ALLOCATION)
-#SBATCH -q (QUEUE)
-#SBATCH -C gpu
-#SBATCH --gpu-bind=none
-#SBATCH --ntasks-per-gpu 1
+#SBATCH -A <account-id>
+##SBATCH -q debug
+#SBATCH -S 16
 #SBATCH --exclusive
-#SBATCH -V
 
 # Set run environment
 eval $(pyfm workspace env --system PYFM_SYSTEM_NAME)
+# source $PYFMTOPDIR/pyfm/scripts/source-system-env.sh --system PYFM_SYSTEM_NAME
 if [ $? -ne 0 ]; then
   echo "Error: failed to source system env for 'PYFM_SYSTEM_NAME'" >&2
   exit 1
@@ -21,20 +19,19 @@ fi
 
 module list
 
-PPN=$((${BASETASKS}/${BASENODES}))
-
-
 echo $PATH
 # Replace PYFM_EXECUTABLE with one of 
 # executable=grid_lma
+# executable="pyfm contract run"
 # executable=HadronsMILC
 # executable=make_links_hisq
+executable=PYFM_EXECUTABLE
 
-# Change device-mem to reflect ~80% of total gpu memory
-export OPT="${OPT} --device-mem 18000"
-# export OPT="${OPT} --log Performance"
-export OPT="${OPT} --comms-overlap"
-runargs=" --grid $LATTICE --mpi ${LAYOUT} --accelerator-threads 16 --shm 2048 --shm-mpi 1 $OPT"
+echo "WORKDIR = $WORKDIR"
+cd $WORKDIR
+
+export OPT="--comms-overlap --shm-mpi 0"
+runargs=" --grid ${LATTICE} --mpi ${LAYOUT} --accelerator-threads 8 --shm 4096 $OPT"
 
 for input in ${INPUTLIST}
 do
@@ -46,18 +43,19 @@ do
   echo "RUNARGS = ${runargs}" >> ${output}
 
   date >> ${output}
-  echo "Executable: $(which ${executable})" >> ${output}
+  echo "Executable: $(which $executable)" >> ${output}
   argstr="${input} ${runargs}"
   export APP="${executable} ${argstr}"
   echo ${APP} >> ${output}
-  MPIPARM="-N ${BASENODES} -G ${BASETASKS} -n ${BASETASKS} --cpus-per-task 32 --ntasks-per-gpu 1 --gpu-bind=none"
-  cmd="srun ${MPIPARM} $PYFM_BIND_SCRIPT ${APP}"
+  cmd="srun -N ${BASENODES} -n ${BASETASKS} --ntasks-per-node=${BASETASKS} --gpus-per-task=1 --cpus-per-task=${OMP_NUM_THREADS} --gpu-bind=closest ${APP}"
 
   echo ${cmd} >> ${output}
   ${cmd} >> ${output} &
-  # ${cmd}
-  echo ${cmd}
 done
 
 wait
+
+popd
 exit 0
+
+

@@ -115,8 +115,18 @@ def setup(workspace_dir, storage, scheduler, lattice, system):
     script = _SYSTEMS_DIR / "setup-workspace.sh"
     args = [str(script)]
     if workspace_dir is not None:
+        p = Path(workspace_dir)
+        if not p.is_absolute():
+            if not p.exists():
+                raise click.BadParameter(f"Directory does not exist: {workspace_dir}", param_hint="'--workspace'")
+            workspace_dir = str(p.resolve())
         args.extend(["--workspace", workspace_dir])
     if storage is not None:
+        p = Path(storage)
+        if not p.is_absolute():
+            if not p.exists():
+                raise click.BadParameter(f"Directory does not exist: {storage}", param_hint="'--storage'")
+            storage = str(p.resolve())
         args.extend(["--storage", storage])
     if scheduler is not None:
         args.extend(["--scheduler", scheduler])
@@ -124,7 +134,9 @@ def setup(workspace_dir, storage, scheduler, lattice, system):
         args.extend(["--lattice", lattice])
     if system is not None:
         args.extend(["--system", system])
-    subprocess.run(args, check=True)
+    result = subprocess.run(args)
+    if result.returncode != 0:
+        raise click.exceptions.Exit(result.returncode)
 
 
 @workspace.command()

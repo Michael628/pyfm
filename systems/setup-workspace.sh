@@ -120,7 +120,7 @@ STORAGE_SUBDIR="${PYFM_STORAGE_TOPDIR}/l${PYFM_ENS}"
 
 mkdir -p "${WORKSPACE_SUBDIR}" "${STORAGE_SUBDIR}"
 
-NEW_PARAMS_FILE="${WORKSPACE_SUBDIR}/$(basename "${PARAMS_FILE}")"
+NEW_PARAMS_FILE="${WORKSPACE_SUBDIR}/params.yaml"
 cp "${PARAMS_FILE}" "${NEW_PARAMS_FILE}"
 
 sed -i \
@@ -137,13 +137,13 @@ ln -sfn "${STORAGE_SUBDIR}/lat" "${WORKSPACE_SUBDIR}/lat"
 
 TODO_FILE="${WORKSPACE_SUBDIR}/todo"
 if [ ! -f "${TODO_FILE}" ]; then
-  echo "SERIES.CFG JOB_STEP1 0 JOB_STEP2 0 JOB_STEP3 0" > "${TODO_FILE}"
+  echo "# SERIES.CFG JOB_STEP1 0 JOB_STEP2 0 JOB_STEP3 0" > "${TODO_FILE}"
   echo "Created todo file at ${TODO_FILE}"
 else
   echo "Note: todo file already exists at ${TODO_FILE} — leaving it untouched"
 fi
 
-BATCH_SRC="${PYFMTOPDIR}/pyfm/example/batch_scripts/example.${PYFM_WORKSPACE_SCHEDULER}"
+BATCH_SRC="${PYFMTOPDIR}/systems/${PYFM_SYSTEM_NAME}/example.${PYFM_WORKSPACE_SCHEDULER}"
 BATCH_COPIED=""
 if [ -f "${BATCH_SRC}" ]; then
   BATCH_DST="${WORKSPACE_SUBDIR}/$(basename "${BATCH_SRC}")"
