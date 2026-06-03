@@ -1,5 +1,6 @@
 echo spack
-. /autofs/nccs-svm1_home1/paboyle/Crusher/Grid/spack/share/spack/setup-env.sh
+# . /autofs/nccs-svm1_home1/paboyle/Crusher/Grid/spack/share/spack/setup-env.sh
+. /autofs/nccs-svm1_home1/paboyle/spack/share/spack/setup-env.sh
 
 module load rocm/6.3.1
 module load cray-fftw
@@ -19,7 +20,7 @@ if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
   export QUDA_MILC_HISQ_RECONSTRUCT=13
   export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9
 
-  export MPICH_ENV_DISPLAY=1
+  # export MPICH_ENV_DISPLAY=1
   export MPICH_GPU_SUPPORT_ENABLED=1
 
   export OMP_NUM_THREADS=6
