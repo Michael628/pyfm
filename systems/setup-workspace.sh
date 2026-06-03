@@ -6,7 +6,7 @@ Usage: ./setup_workspace.sh [OPTIONS]
 
 Options:
   --workspace <dir>    Workspace top directory (env: PYFM_WORKSPACE_TOPDIR)
-  --storage   <dir>    Storage top directory   (env: PYFM_STORAGE_TOPDIR)
+  --storage   <dir>    Storage top directory   (env: PYFM_STORAGE_TOPDIR, default: same as --workspace)
   --scheduler <name>   Batch scheduler name, e.g. slurm, pbs (env: PYFM_WORKSPACE_SCHEDULER)
   --lattice   <name>   Lattice tag matching example/params_files/params_l<name>.yaml
                        (env: PYFM_WORKSPACE_LATTICE)
@@ -70,7 +70,7 @@ done
 
 PYFM_WORKSPACE_TOPDIR="${PYFM_WORKSPACE_TOPDIR:-${_arg_workspace}}"
 PYFM_WORKSPACE_SCHEDULER="${PYFM_WORKSPACE_SCHEDULER:-${_arg_scheduler}}"
-PYFM_STORAGE_TOPDIR="${PYFM_STORAGE_TOPDIR:-${_arg_storage}}"
+PYFM_STORAGE_TOPDIR="${PYFM_STORAGE_TOPDIR:-${_arg_storage:-${PYFM_WORKSPACE_TOPDIR}}}"
 PYFM_WORKSPACE_LATTICE="${PYFM_WORKSPACE_LATTICE:-${_arg_lattice}}"
 PYFM_SYSTEM_NAME="${PYFM_SYSTEM_NAME:-${_arg_system}}"
 
@@ -80,8 +80,8 @@ if [ -z "${PYFMTOPDIR}" ] || [ ! -d "${PYFMTOPDIR}" ]; then
 fi
 
 if [ -z "${PYFM_WORKSPACE_TOPDIR}" ] || [ -z "${PYFM_WORKSPACE_SCHEDULER}" ] || \
-   [ -z "${PYFM_STORAGE_TOPDIR}" ] || [ -z "${PYFM_WORKSPACE_LATTICE}" ]; then
-  echo "Error: --workspace, --scheduler, --storage, and --lattice are all required" >&2
+   [ -z "${PYFM_WORKSPACE_LATTICE}" ]; then
+  echo "Error: --workspace, --scheduler, and --lattice are all required" >&2
   echo "" >&2
   print_help >&2
   exit 1
@@ -132,8 +132,10 @@ mkdir -p "${WORKSPACE_SUBDIR}/in" "${WORKSPACE_SUBDIR}/out" "${WORKSPACE_SUBDIR}
 
 mkdir -p "${STORAGE_SUBDIR}/eigen" "${STORAGE_SUBDIR}/lat/scidac" "${STORAGE_SUBDIR}/lat/v5"
 
-ln -sfn "${STORAGE_SUBDIR}/eigen" "${WORKSPACE_SUBDIR}/eigen"
-ln -sfn "${STORAGE_SUBDIR}/lat" "${WORKSPACE_SUBDIR}/lat"
+if [ "${WORKSPACE_SUBDIR}" != "${STORAGE_SUBDIR}" ]; then
+  ln -sfn "${STORAGE_SUBDIR}/eigen" "${WORKSPACE_SUBDIR}/eigen"
+  ln -sfn "${STORAGE_SUBDIR}/lat" "${WORKSPACE_SUBDIR}/lat"
+fi
 
 TODO_FILE="${WORKSPACE_SUBDIR}/todo"
 if [ ! -f "${TODO_FILE}" ]; then
@@ -143,32 +145,38 @@ else
   echo "Note: todo file already exists at ${TODO_FILE} — leaving it untouched"
 fi
 
-BATCH_SRC="${PYFMTOPDIR}/systems/${PYFM_SYSTEM_NAME}/example.${PYFM_WORKSPACE_SCHEDULER}"
-BATCH_COPIED=""
-if [ -f "${BATCH_SRC}" ]; then
-  BATCH_DST="${WORKSPACE_SUBDIR}/$(basename "${BATCH_SRC}")"
-  cp "${BATCH_SRC}" "${BATCH_DST}"
-  BATCH_COPIED="${BATCH_DST}"
-  echo "Copied batch script to ${BATCH_DST}"
+BATCH_SRC_DIR="${PYFMTOPDIR}/pyfm/systems/${PYFM_SYSTEM_NAME}"
+BATCH_COPIED=()
+if [ -d "${BATCH_SRC_DIR}" ]; then
+  for BATCH_SRC in "${BATCH_SRC_DIR}/"*".${PYFM_WORKSPACE_SCHEDULER}"; do
+    [ -f "${BATCH_SRC}" ] || continue
+    BATCH_DST="${WORKSPACE_SUBDIR}/$(basename "${BATCH_SRC}")"
+    cp "${BATCH_SRC}" "${BATCH_DST}"
+    BATCH_COPIED+=("${BATCH_DST}")
+    echo "Copied batch script to ${BATCH_DST}"
+  done
+  if [ ${#BATCH_COPIED[@]} -eq 0 ]; then
+    echo "Note: no batch scripts found for scheduler '${PYFM_WORKSPACE_SCHEDULER}' in ${BATCH_SRC_DIR}"
+  fi
 else
-  echo "Note: no batch script found for scheduler '${PYFM_WORKSPACE_SCHEDULER}' at ${BATCH_SRC}"
+  echo "Note: no system directory found at ${BATCH_SRC_DIR}"
 fi
 
-if [ -n "${BATCH_COPIED}" ]; then
+for BATCH_FILE in "${BATCH_COPIED[@]}"; do
   if [ -n "${PYFM_SYSTEM_NAME}" ]; then
-    sed -i "s|PYFM_SYSTEM_NAME|${PYFM_SYSTEM_NAME}|g" "${BATCH_COPIED}"
-    echo "Substituted PYFM_SYSTEM_NAME=${PYFM_SYSTEM_NAME} in ${BATCH_COPIED}"
+    sed -i "s|PYFM_SYSTEM_NAME|${PYFM_SYSTEM_NAME}|g" "${BATCH_FILE}"
+    echo "Substituted PYFM_SYSTEM_NAME=${PYFM_SYSTEM_NAME} in ${BATCH_FILE}"
   elif [ -t 0 ]; then
     read -p "PYFM_SYSTEM_NAME is not set. Enter a system name to substitute (leave blank to skip): " _sysname
     if [ -n "${_sysname}" ]; then
-      sed -i "s|PYFM_SYSTEM_NAME|${_sysname}|g" "${BATCH_COPIED}"
-      echo "Substituted PYFM_SYSTEM_NAME=${_sysname} in ${BATCH_COPIED}"
+      sed -i "s|PYFM_SYSTEM_NAME|${_sysname}|g" "${BATCH_FILE}"
+      echo "Substituted PYFM_SYSTEM_NAME=${_sysname} in ${BATCH_FILE}"
     else
-      echo "Warning: PYFM_SYSTEM_NAME was not substituted in ${BATCH_COPIED}. This must be replaced before submitting jobs." >&2
+      echo "Warning: PYFM_SYSTEM_NAME was not substituted in ${BATCH_FILE}. This must be replaced before submitting jobs." >&2
     fi
   else
-    echo "Warning: PYFM_SYSTEM_NAME is not set. This must be replaced in ${BATCH_COPIED} before submitting jobs." >&2
+    echo "Warning: PYFM_SYSTEM_NAME is not set. This must be replaced in ${BATCH_FILE} before submitting jobs." >&2
   fi
-fi
+done
 
 echo "Workspace setup complete: ${WORKSPACE_SUBDIR}"

@@ -10,28 +10,25 @@
 #SBATCH --exclusive
 
 # Set run environment
-eval $(pyfm workspace env --system PYFM_SYSTEM_NAME)
-# source $PYFMTOPDIR/pyfm/scripts/source-system-env.sh --system PYFM_SYSTEM_NAME
+eval $(pyfm workspace env --system frontier)
+# source $PYFMTOPDIR/pyfm/scripts/source-system-env.sh --system frontier
 if [ $? -ne 0 ]; then
-  echo "Error: failed to source system env for 'PYFM_SYSTEM_NAME'" >&2
+  echo "Error: failed to source system env for 'frontier'" >&2
   exit 1
 fi
 
 module list
 
 echo $PATH
-# Replace PYFM_EXECUTABLE with one of 
+executable=HadronsMILC
+# Replace with line below if running grid executable instead
 # executable=grid_lma
-# executable="pyfm contract run"
-# executable=HadronsMILC
-# executable=make_links_hisq
-executable=PYFM_EXECUTABLE
 
 echo "WORKDIR = $WORKDIR"
 cd $WORKDIR
 
-export OPT="--comms-overlap --shm-mpi 0"
-runargs=" --grid ${LATTICE} --mpi ${LAYOUT} --accelerator-threads 8 --shm 4096 $OPT"
+OPT="--accelerator-threads 8 --shm 2048 --comms-overlap --shm-mpi 0"
+runargs=" --grid ${LATTICE} --mpi ${LAYOUT} $OPT"
 
 for input in ${INPUTLIST}
 do

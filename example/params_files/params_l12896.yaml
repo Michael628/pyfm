@@ -26,7 +26,7 @@ shared_params:
   residual: 1e-8
   blocksize: 500
   overwrite: false
-  run_id: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
+  runid: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
 
 contract_params:
   hardware: 'cpu'
@@ -144,15 +144,15 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear: 
-    run: example.pbs
+    run: milc.PYFM_WORKSPACE_SCHEDULER
     job_type: smear
     tasks:
-      unsmeared_file: '/lus/flare/projects/HadronsicGMinus2/mlynch/lat/l{ens}{series}.{cfg}'
+      unsmeared_file: "lat/v5/l{ens}{series}.{cfg}" # Location of unsmeared file
       node_geometry: "2 2 4 4"
     io: links
     wall_time: "3:00:00"
   contract:
-    run: example.pbs
+    run: contract.PYFM_WORKSPACE_SCHEDULER
     job_type: contract
     tasks:
       diagrams:
@@ -164,7 +164,7 @@ job_setup:
     io: contract
     wall_time: "8:00:00"
   grid: 
-    run: example.slurm
+    run: grid.PYFM_WORKSPACE_SCHEDULER
     io: 'grid-eig-lma-meson-e{eigs}-n{noise}'
     wall_time: "24:00:00"
     tasks:
@@ -212,10 +212,7 @@ files:
   high_modes:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
     good_size: 13100
-  meson_contract_ll:
-    filestem: e{eigs}n{noise}dt{dt}.2024/mesons/m{meson_mass}/mf_{series}
-    good_size: 36864000000
-  meson_ll:
+  meson:
     filestem: e{eigs}n{noise}dt{dt}.2024/mesons/m{mass}/mf_{series}
     good_size: 36864000000
   contract:

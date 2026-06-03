@@ -191,7 +191,7 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear:
-    run: example.slurm
+    run: milc.PYFM_WORKSPACE_SCHEDULER
     job_type: smear
     tasks:
       unsmeared_file: "lat/v5/l{ens}{series}.{cfg}" # Location of unsmeared file
@@ -199,19 +199,17 @@ job_setup:
     io: "smear"
     wall_time: "00:10:00"
   contract:
-    run: example.slurm
+    run: contract.PYFM_WORKSPACE_SCHEDULER
     job_type: contract
     tasks:
       diagrams:
         - pion_local
-        - axial_vec_local
-        - axial_vec_onelink
         - vec_local
         - vec_onelink
     io: "contract-e{eigs}-n{noise}"
     wall_time: "0:10:00"
   hadrons:
-    run: example.slurm
+    run: grid.PYFM_WORKSPACE_SCHEDULER
     io: "lma-e{eigs}-n{noise}"
     wall_time: "01:00:00"
     job_type: hadrons
@@ -225,8 +223,6 @@ job_setup:
         gamma:
           - vec_local
           - vec_onelink
-          - axial_vec_local
-          - axial_vec_onelink
         mass:
           - "l"
       high_modes: # CG solves and eigenvector deflation (if eigenvectors are used in job) to perform
@@ -234,12 +230,6 @@ job_setup:
           mass:
             - "l"
         vec_local:
-          mass:
-            - "l"
-        axial_vec_onelink:
-          mass:
-            - "l"
-        axial_vec_local:
           mass:
             - "l"
         pion_local:

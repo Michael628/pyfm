@@ -14,6 +14,7 @@ shared_params:
   tstop: 191 # tstop = time - 1
   dt: 2 # spacing between source time slices
   noise: 1 # leave this as 1
+  lattice: [96, 96, 96, 192]
 
 contract_params:
   hardware: "cpu"
@@ -31,7 +32,7 @@ contract_params:
       eig_range:
         min: 0
         max: 4000
-      outfile: contract_legacy
+      outfile: contract
     vec_local:
       gamma_label: vec_local
       symmetric: True
@@ -46,7 +47,7 @@ contract_params:
       eig_range:
         min: 0
         max: 4000
-      outfile: contract_legacy
+      outfile: contract
     vec_onelink:
       gamma_label: vec_onelink
       symmetric: True
@@ -61,7 +62,7 @@ contract_params:
       eig_range:
         min: 0
         max: 4000
-      outfile: contract_legacy
+      outfile: contract
 
 smear_params:
   space: 96
@@ -126,7 +127,7 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear: 
-    run: example.slurm
+    run: milc.PYFM_WORKSPACE_SCHEDULER
     job_type: smear
     tasks:
       unsmeared_file: '/pscratch/sd/m/mlynch/l96192f211b672m0008m022m260/lat/v5/l{ens}{series}.{cfg}'
@@ -134,7 +135,7 @@ job_setup:
     io: links
     wall_time: "2:00:00"
   contract:
-    run: example.slurm
+    run: contract.PYFM_WORKSPACE_SCHEDULER
     job_type: contract
     tasks:
       diagrams:
@@ -144,7 +145,7 @@ job_setup:
     io: "contract-e{eigs}-n{noise}"
     wall_time: "8:00:00"
   hadrons:
-    run: example.slurm
+    run: grid.PYFM_WORKSPACE_SCHEDULER
     io: "lmi-e{eigs}-n{noise}"
     wall_time: "04:00:00"
     job_type: hadrons

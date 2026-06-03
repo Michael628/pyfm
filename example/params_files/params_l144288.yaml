@@ -47,7 +47,7 @@ contract_params:
       eig_range:
         min: 0
         max: 8000
-      outfile: contract_legacy
+      outfile: contract
     vec_local:
       gamma_label: vec_local
       symmetric: true
@@ -62,7 +62,7 @@ contract_params:
       eig_range:
         min: 0
         max: 8000
-      outfile: contract_legacy
+      outfile: contract
     vec_onelink:
       gamma_label: vec_onelink
       symmetric: true
@@ -77,7 +77,7 @@ contract_params:
       eig_range:
         min: 0
         max: 8000
-      outfile: contract_legacy
+      outfile: contract
 nanny:
   todo_file: todo
   # todo_file: todo_checkGhms
@@ -97,39 +97,7 @@ submit:
     smear:
       nodes: 16
       geom: [4, 4, 2, 4]
-    noacc:
-      nodes: 192
-      geom: [8, 6, 6, 8]
-    irl:
-      nodes: 243
-      geom: [9, 6, 6, 9]
-      # nodes: 192
-      # geom: [8, 6, 6, 8]
-      # nodes: 216
-      # geom: [8, 6, 6, 9]
-    benchmark:
-      # nodes: 144
-      # geom: [6, 6, 6, 8]
-      # nodes: 162
-      # geom: [6, 6, 6, 9]
-      nodes: 192
-      geom: [8, 6, 6, 8]
-      # nodes: 216
-      # geom: [8, 6, 6, 9]
-      # nodes: 256
-      # geom: [6, 8, 8, 8]
-    test:
-      nodes: 162
-      geom: [6, 6, 6, 9]
-    grid:
-      # nodes: 144
-      # geom: [6, 6, 6, 8]
-      # nodes: 162
-      # geom: [6, 6, 6, 9]
-      # nodes: 192
-      # geom: [8, 6, 6, 8]
-      # nodes: 216
-      # geom: [8, 6, 6, 9]
+    hadrons:
       nodes: 256
       geom: [6, 8, 8, 8]
     contract:
@@ -140,7 +108,7 @@ submit:
 # Template and I/O file name keys
 job_setup:
   smear:
-    run: example.pbs
+    run: milc.PYFM_WORKSPACE_SCHEDULER
     job_type: smear
     tasks:
       unsmeared_file: 'lat/v5/l{ens}{series}.{cfg}'
@@ -148,7 +116,7 @@ job_setup:
     io: links
     wall_time: "2:00:00"
   contract:
-    run: example.pbs
+    run: contract.PYFM_WORKSPACE_SCHEDULER
     job_type: contract
     tasks:
       diagrams:
@@ -157,75 +125,12 @@ job_setup:
         - vec_onelink
     io: "contract-e{eigs}-n{noise}"
     wall_time: "3:00:00"
-  noacc:
-    run: example.pbs
-    io: "grid-noacc-irl-{nodes}nodes"
-    # wall_time: "12:00:00"
-    wall_time: "03:00:00"
-    job_type: grid
-    node_minimum: 256
-    params:
-      nodes: 192
-    tasks:
-      epack:
-        load: false
-        save_evals: true
-        save_eigs: false
-        multifile: false
-  irl:
-    run: example.pbs
-    io: "grid-irl-{nodes}nodes"
-    # wall_time: "12:00:00"
-    wall_time: "03:00:00"
-    job_type: grid
-    node_minimum: 256
-    params:
-      nodes: 243
-    tasks:
-      epack:
-        load: false
-        save_evals: true
-        save_eigs: false
-        multifile: false
-  benchmark:
-    run: example.pbs
-    io: "benchmark"
-    wall_time: "00:20:00"
-    job_type: grid
-    tasks:
-      nothing: 'done'
-  test:
-    run: example.pbs
-    io: "test-e{eigs}-n{noise}"
+  hadrons:
+    run: grid.PYFM_WORKSPACE_SCHEDULER
+    io: "lma-e{eigs}-n{noise}"
     wall_time: "12:00:00"
-    # wall_time: "00:20:00"
-    job_type: grid
-    tasks:
-      epack:
-        load: true
-        save_evals: false
-        save_eigs: false
-        multifile: false
-      high_modes:
-        gamma:
-          - pion_local
-          - vec_local
-          - vec_onelink
-        mass:
-          - "l"
-      meson:
-        gamma:
-          - pion_local
-          - vec_local
-          - vec_onelink
-        mass:
-          - "l"
-  grid:
-    run: example.pbs
-    io: "grid-lma-e{eigs}-n{noise}"
-    wall_time: "12:00:00"
-    # wall_time: "00:20:00"
-    job_type: grid
+    job_type: hadrons
+    task_type: lmi
     tasks:
       epack:
         load: false
