@@ -49,7 +49,8 @@ def read_todo(todo_file):
         sys.exit(1)
 
     for line in todo_lines:
-        if len(line) == 1:
+        line = line.split("#", 1)[0].strip()
+        if not line:
             continue
         a = line.split()
         for i in range(len(a)):

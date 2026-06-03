@@ -25,6 +25,25 @@ class TestReadTodo:
         result = todo.read_todo(str(f))
         assert len(result) == 2
 
+    def test_skips_whitespace_only_lines(self, tmp_path):
+        f = tmp_path / "todo"
+        f.write_text("a.60 smear 0\n   \n\tb.60 smear 0\n")
+        result = todo.read_todo(str(f))
+        assert len(result) == 2
+
+    def test_skips_comment_lines(self, tmp_path):
+        f = tmp_path / "todo"
+        f.write_text("# comment\na.60 smear 0\n   # another comment\nb.60 smear 0\n")
+        result = todo.read_todo(str(f))
+        assert set(result.keys()) == {"a.60", "b.60"}
+
+    def test_strips_inline_comments(self, tmp_path):
+        f = tmp_path / "todo"
+        f.write_text("a.60 smear 0 # submit smear first\nb.60 hadrons 0 # submit hadrons\n")
+        result = todo.read_todo(str(f))
+        assert result["a.60"] == ["a.60", "smear", "0"]
+        assert result["b.60"] == ["b.60", "hadrons", "0"]
+
 
 class TestWriteTodo:
     def test_round_trip(self, tmp_path):
