@@ -25,9 +25,13 @@ def contract():
 
 
 @contract.command()
-@click.option("-p", "--param-file", type=str, required=True, help="Path to YAML parameter file (required).")
-def run(param_file):
+@click.argument("param-file", type=str, required=False, default=None)
+@click.option("-p", "--param-file-opt", type=str, default=None, help="Path to YAML parameter file.")
+def run(param_file, param_file_opt):
     """Execute A2A contractions for all diagrams defined in the parameter file."""
+    param_file = param_file or param_file_opt
+    if param_file is None:
+        raise click.UsageError("A parameter file is required (pass as argument or with -p).")
     params = utils.io.load_param(param_file)
 
     config: ContractConfig = build_config(ContractConfig, params)
