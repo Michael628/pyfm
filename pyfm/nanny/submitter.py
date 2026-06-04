@@ -6,7 +6,13 @@ import typing as t
 from pyfm import utils
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
-from pyfm.nanny.core import get_job_config, get_nanny_config, NannyConfig, JobConfig
+from pyfm.nanny.core import (
+    get_job_config,
+    get_nanny_config,
+    NannyConfig,
+    JobConfig,
+    Scheduler,
+)
 import pyfm.nanny.todo as todo
 
 from functools import reduce
@@ -18,30 +24,27 @@ def count_jobs_in_queue(scheduler, myjob_name_pfx):
 
     user = os.environ["USER"]
 
-    if scheduler == "LSF":
-        cmd = " ".join(
-            ["bjobs -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "PBS":
-        cmd = " ".join(
-            ["qstat -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "SLURM":
-        cmd = " ".join(
-            ["squeue -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "INTERACTIVE":
-        cmd = " ".join(
-            ["squeue -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "Cobalt":
-        cmd = " ".join(
-            ["qstat -fu", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    else:
-        print("Don't recognize scheduler", scheduler)
-        print("Quitting")
-        sys.exit(1)
+    match scheduler:
+        case Scheduler.LSF:
+            cmd = " ".join(
+                ["bjobs -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case Scheduler.PBS:
+            cmd = " ".join(
+                ["qstat -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case Scheduler.SLURM | Scheduler.INTERACTIVE:
+            cmd = " ".join(
+                ["squeue -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case Scheduler.COBALT:
+            cmd = " ".join(
+                ["qstat -fu", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case _:
+            print("Don't recognize scheduler", scheduler)
+            print("Quitting")
+            sys.exit(1)
 
     nqueued = int(subprocess.check_output(cmd, shell=True))
 
@@ -120,42 +123,44 @@ def get_submit_command(
 
     # Job submission command depends on locale
     scheduler = nanny_config.scheduler
-    if scheduler == "LSF":
-        cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
-    elif scheduler == "PBS":
-        cmd = f"qsub -l nodes={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
-    elif scheduler == "SLURM":
-        # NEEDS UPDATING
-        cmd = f"sbatch -N {str(nodes)} -n {str(np)} -J {job_name} -t {wall_time} {job_script}"
-    elif scheduler == "INTERACTIVE":
-        cmd = f"./{job_script}"
-    else:
-        print("Don't recognize scheduler", scheduler)
-        print("Quitting")
-        sys.exit(1)
+    match scheduler:
+        case Scheduler.LSF:
+            cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
+        case Scheduler.PBS:
+            cmd = f"qsub -l nodes={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
+        case Scheduler.SLURM:
+            # NEEDS UPDATING
+            cmd = f"sbatch -N {str(nodes)} -n {str(np)} -J {job_name} -t {wall_time} {job_script}"
+        case Scheduler.INTERACTIVE:
+            cmd = f"./{job_script}"
+        case _:
+            print("Don't recognize scheduler", scheduler)
+            print("Quitting")
+            sys.exit(1)
 
     return cmd
 
 
-def get_jobid(scheduler: str, reply: str):
+def get_jobid(scheduler: Scheduler, reply: str):
     # Get job ID
-    if scheduler == "LSF":
-        # a.2100 Q Job <99173> is submitted to default queue <batch>
-        jobid = reply[0].split()[1].split("<")[1].split(">")[0]
-        if isinstance(jobid, bytes):
-            jobid = jobid.decode("ASCII")
-    elif scheduler == "PBS":
-        # 3314170.kaon2.fnal.gov submitted
-        jobid = reply[0].split(".")[0]
-    elif scheduler == "SLURM":
-        # Submitted batch job 10059729
-        jobid = reply[len(reply) - 1].split()[3]
-    elif scheduler == "INTERACTIVE":
-        jobid = "0000"
-    elif scheduler == "Cobalt":
-        # ** Project 'semileptonic'; job rerouted to queue 'prod-short'
-        # ['1607897']
-        jobid = reply[-1]
+    match scheduler:
+        case Scheduler.LSF:
+            # a.2100 Q Job <99173> is submitted to default queue <batch>
+            jobid = reply[0].split()[1].split("<")[1].split(">")[0]
+            if isinstance(jobid, bytes):
+                jobid = jobid.decode("ASCII")
+        case Scheduler.PBS:
+            # 3314170.kaon2.fnal.gov submitted
+            jobid = reply[0].split(".")[0]
+        case Scheduler.SLURM:
+            # Submitted batch job 10059729
+            jobid = reply[len(reply) - 1].split()[3]
+        case Scheduler.INTERACTIVE:
+            jobid = "0000"
+        case Scheduler.COBALT:
+            # ** Project 'semileptonic'; job rerouted to queue 'prod-short'
+            # ['1607897']
+            jobid = reply[-1]
     if isinstance(jobid, bytes):
         jobid = jobid.decode("ASCII")
 

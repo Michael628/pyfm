@@ -1,6 +1,6 @@
 import pytest
 
-from pyfm.nanny.core import NannyConfig, JobConfig
+from pyfm.nanny.core import NannyConfig, JobConfig, Scheduler
 from pyfm.nanny.submitter import (
     get_submit_command,
     get_jobid,
@@ -22,7 +22,7 @@ class TestGetSubmitCommand:
             wait=60,
             check_interval=5,
             job_name_pfx="test",
-            scheduler="SLURM",
+            scheduler=Scheduler.SLURM,
             formatting={},
             logging_level="INFO",
             runid="test-run",
@@ -57,28 +57,29 @@ class TestGetSubmitCommand:
     def test_pbs(self, nanny_config, job_config, tmp_path):
         from dataclasses import replace
 
-        nc = replace(nanny_config, scheduler="PBS")
+        nc = replace(nanny_config, scheduler=Scheduler.PBS)
         cmd = get_submit_command(nc, job_config, "test-h1", 2, 8)
         assert cmd == f"qsub -l nodes=2 -l walltime=01:00:00 -N test-h1 {job_config.run}"
 
     def test_lsf(self, nanny_config, job_config):
         from dataclasses import replace
 
-        nc = replace(nanny_config, scheduler="LSF")
+        nc = replace(nanny_config, scheduler=Scheduler.LSF)
         cmd = get_submit_command(nc, job_config, "test-h1", 2, 8)
         assert cmd == f"bsub -nnodes 2 -J test-h1 {job_config.run}"
 
     def test_interactive(self, nanny_config, job_config):
         from dataclasses import replace
 
-        nc = replace(nanny_config, scheduler="INTERACTIVE")
+        nc = replace(nanny_config, scheduler=Scheduler.INTERACTIVE)
         cmd = get_submit_command(nc, job_config, "test-h1", 2, 8)
         assert cmd == f"./{job_config.run}"
 
-    def test_unknown_scheduler(self, nanny_config, job_config):
+    def test_unhandled_scheduler(self, nanny_config, job_config):
         from dataclasses import replace
 
-        nc = replace(nanny_config, scheduler="UNKNOWN")
+        # COBALT is a valid scheduler but not handled by get_submit_command
+        nc = replace(nanny_config, scheduler=Scheduler.COBALT)
         with pytest.raises(SystemExit):
             get_submit_command(nc, job_config, "test-h1", 2, 8)
 
@@ -86,23 +87,23 @@ class TestGetSubmitCommand:
 class TestGetJobid:
     def test_slurm(self):
         reply = ["Submitted batch job 10059729"]
-        assert get_jobid("SLURM", reply) == "10059729"
+        assert get_jobid(Scheduler.SLURM, reply) == "10059729"
 
     def test_pbs(self):
         reply = ["3314170.kaon2.fnal.gov submitted"]
-        assert get_jobid("PBS", reply) == "3314170"
+        assert get_jobid(Scheduler.PBS, reply) == "3314170"
 
     def test_lsf(self):
         reply = ["Job <99173> is submitted to default queue <batch>"]
-        assert get_jobid("LSF", reply) == "99173"
+        assert get_jobid(Scheduler.LSF, reply) == "99173"
 
     def test_interactive(self):
         reply = ["done"]
-        assert get_jobid("INTERACTIVE", reply) == "0000"
+        assert get_jobid(Scheduler.INTERACTIVE, reply) == "0000"
 
     def test_cobalt(self):
         reply = ["** Project 'semileptonic'; job rerouted to queue 'prod-short'", "1607897"]
-        assert get_jobid("Cobalt", reply) == "1607897"
+        assert get_jobid(Scheduler.COBALT, reply) == "1607897"
 
 
 class TestNextCfgnoSteps:

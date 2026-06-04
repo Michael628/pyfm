@@ -1,10 +1,19 @@
 import typing as t
+from enum import auto
 from pydantic.dataclasses import dataclass
 
-from pyfm.domain import ConfigBase, SimpleConfig
+from pyfm.domain import ConfigBase, SimpleConfig, SerializableEnum
 from pyfm.domain.task_registry import TaskHandler
 from pyfm.core.builder import build_config
 from pyfm.tasks import get_task_handler, get_task_key, list_registered_types
+
+
+class Scheduler(SerializableEnum):
+    LSF = auto()
+    PBS = auto()
+    SLURM = auto()
+    INTERACTIVE = auto()
+    COBALT = auto()
 
 
 @dataclass(frozen=True)
@@ -16,7 +25,7 @@ class NannyConfig(SimpleConfig):
     wait: int
     check_interval: int
     job_name_pfx: str
-    scheduler: str
+    scheduler: Scheduler
 
 
 @dataclass(frozen=True)
