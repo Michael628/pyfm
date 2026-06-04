@@ -135,6 +135,7 @@ class TestNannyCheck:
         with (
             patch("pyfm.cli.nanny.utils") as mock_utils,
             patch("pyfm.cli.nanny.check_jobs") as mock_cj,
+            patch("pyfm.cli.nanny.create_task", return_value="fake-task") as mock_ct,
             patch("pyfm.cli.nanny.audit_outfiles") as mock_ao,
         ):
             mock_utils.io.load_param.return_value = fake_params
@@ -142,19 +143,22 @@ class TestNannyCheck:
                 cli, ["nanny", "check", "-j", "step1", "-s", "A", "-n", "42"]
             )
             assert result.exit_code == 0
-            mock_ao.assert_called_once_with("step1", fake_params, "A", "42", verbose=False)
+            mock_ct.assert_called_once_with("step1", fake_params, "A", "42")
+            mock_ao.assert_called_once_with("fake-task", verbose=False)
             mock_cj.assert_not_called()
 
     def test_check_verbose_flag_passed_to_audit(self, runner):
         fake_params = self._fake_params()
         with (
             patch("pyfm.cli.nanny.utils") as mock_utils,
+            patch("pyfm.cli.nanny.create_task", return_value="fake-task") as mock_ct,
             patch("pyfm.cli.nanny.audit_outfiles") as mock_ao,
             patch("pyfm.cli.nanny.check_jobs"),
         ):
             mock_utils.io.load_param.return_value = fake_params
             runner.invoke(cli, ["nanny", "check", "-j", "step1", "-s", "A", "-n", "42", "-v"])
-            mock_ao.assert_called_once_with("step1", fake_params, "A", "42", verbose=True)
+            mock_ct.assert_called_once_with("step1", fake_params, "A", "42")
+            mock_ao.assert_called_once_with("fake-task", verbose=True)
 
     def test_check_series_and_config_no_job_calls_check_jobs(self, runner):
         """Series+config without job -> check_jobs (all three must be non-None)."""

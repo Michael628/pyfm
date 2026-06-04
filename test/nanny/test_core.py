@@ -187,7 +187,8 @@ class TestGetOutfiles:
 
     def test_returns_dataframe_when_catalog_present(self):
         _register_stub_with_catalog()
-        result = get_outfiles("stub_step", _BASE_YAML_PARAMS, series="a", cfg="1000")
+        task = create_task("stub_step", _BASE_YAML_PARAMS, series="a", cfg="1000")
+        result = get_outfiles(task)
         assert result is not None
         assert isinstance(result, pd.DataFrame)
         assert not result.empty

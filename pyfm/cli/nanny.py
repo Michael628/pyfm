@@ -7,6 +7,7 @@ from pyfm.nanny import (
     add_entries,
     audit_outfiles,
     check_jobs,
+    create_task,
     get_job_config,
     get_nanny_config,
     nanny_loop,
@@ -101,6 +102,7 @@ def check(param_file, job, series, config, verbose):
     """
     yaml_params = utils.io.load_param(param_file)
     if job is not None and series is not None and config is not None:
-        audit_outfiles(job, yaml_params, series, config, verbose=verbose)
+        task = create_task(job, yaml_params, series, config)
+        audit_outfiles(task, verbose=verbose)
     else:
         check_jobs(yaml_params)

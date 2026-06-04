@@ -6,7 +6,7 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 
-from pyfm.nanny.core import create_task
+from pyfm.nanny.core import create_task, get_nanny_config, NannyConfig, Scheduler, Task
 import pyfm.nanny.todo as todo
 
 
@@ -19,11 +19,8 @@ class TaskOutputProtocol(t.Protocol):
         ...
 
 
-def get_outfiles(
-    job_step: str, yaml_data: t.Dict, series: str, cfg: str
-) -> pd.DataFrame | None:
+def get_outfiles(task: Task) -> pd.DataFrame | None:
 
-    task = create_task(job_step, yaml_data, series, cfg)
     if isinstance(task.handler, TaskOutputProtocol):
         return task.handler.create_outfile_catalog(task.config)
     else:
@@ -33,12 +30,10 @@ def get_outfiles(
         return None
 
 
-def audit_outfiles(
-    job_step: str, yaml_data: t.Dict, series: str, cfg: str, verbose: bool = False
-) -> pd.DataFrame | None:
+def audit_outfiles(task: Task, verbose: bool = False) -> pd.DataFrame | None:
     logger = utils.get_logger()
 
-    df = get_outfiles(job_step, yaml_data, series, cfg)
+    df = get_outfiles(task)
     MAX_FILES = 5
     output_count = 0
 
@@ -59,34 +54,33 @@ def audit_outfiles(
                 logger.info("...")
                 break
     else:
-        logger.warn(f"No output files given for step: {job_step}.")
+        logger.warn(f"No output files given for task: {task.key}.")
 
     return df
 
 
 ### Residual old code from Carleton
 ######################################################################
-def job_still_queued(param, job_id):
+def job_still_queued(nanny_config: NannyConfig, job_id):
     """Get the status of the queued job"""
     # This code is locale dependent
 
-    scheduler = param["submit"]["scheduler"]
+    scheduler = nanny_config.scheduler
 
     user = os.environ["USER"]
-    if scheduler == "LSF":
-        cmd = " ".join(["bjobs", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == "PBS":
-        cmd = " ".join(["qstat", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == "SLURM":
-        cmd = " ".join(["squeue", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == "INTERACTIVE":
-        cmd = " ".join(["squeue", "-u", user, "|", "grep -w", job_id])
-    elif scheduler == "Cobalt":
-        cmd = " ".join(["qstat", "-fu", user, "|", "grep -w", job_id])
-    else:
-        print("Don't recognize scheduler", scheduler)
-        print("Quitting")
-        sys.exit(1)
+    match scheduler:
+        case Scheduler.LSF:
+            cmd = " ".join(["bjobs", "-u", user, "|", "grep -w", job_id])
+        case Scheduler.PBS:
+            cmd = " ".join(["qstat", "-u", user, "|", "grep -w", job_id])
+        case Scheduler.SLURM | Scheduler.INTERACTIVE:
+            cmd = " ".join(["squeue", "-u", user, "|", "grep -w", job_id])
+        case Scheduler.COBALT:
+            cmd = " ".join(["qstat", "-fu", user, "|", "grep -w", job_id])
+        case _:
+            print("Don't recognize scheduler", scheduler)
+            print("Quitting")
+            sys.exit(1)
 
     # print(cmd)
     reply = ""
@@ -102,34 +96,31 @@ def job_still_queued(param, job_id):
 
     if len(reply) > 0:
         a = reply.decode().split()
-        if scheduler == "LSF":
-            # The start time
-            if a[2] == "PEND":
-                time = "TBA"
-            else:
-                time = a[5] + " " + a[6] + " " + a[7]
-            field = "start"
-            jobstat = a[2]
-        elif scheduler == "PBS":
-            time = a[8]
-            field = "queue"
-            jobstat = a[9]
-        elif scheduler == "SLURM":
-            time = a[5]
-            field = "run"
-            jobstat = a[4]
-        elif scheduler == "INTERACTIVE":
-            time = a[5]
-            field = "run"
-            jobstat = a[4]
-        elif scheduler == "Cobalt":
-            time = a[5]
-            field = "run"
-            jobstat = a[8]
-        else:
-            print("Don't recognize scheduler", scheduler)
-            print("Quitting")
-            sys.exit(1)
+        match scheduler:
+            case Scheduler.LSF:
+                # The start time
+                if a[2] == "PEND":
+                    time = "TBA"
+                else:
+                    time = a[5] + " " + a[6] + " " + a[7]
+                field = "start"
+                jobstat = a[2]
+            case Scheduler.PBS:
+                time = a[8]
+                field = "queue"
+                jobstat = a[9]
+            case Scheduler.SLURM | Scheduler.INTERACTIVE:
+                time = a[5]
+                field = "run"
+                jobstat = a[4]
+            case Scheduler.COBALT:
+                time = a[5]
+                field = "run"
+                jobstat = a[8]
+            case _:
+                print("Don't recognize scheduler", scheduler)
+                print("Quitting")
+                sys.exit(1)
 
         print("Job status", jobstat, field, "time", time)
         # If job is being canceled, jobstat = C (PBS).  Treat as finished.
@@ -144,7 +135,9 @@ def job_still_queued(param, job_id):
 ######################################################################
 
 
-def next_finished(param, todo_list, entry_list) -> t.Tuple[int, str, str] | None:
+def next_finished(
+    nanny_config: NannyConfig, todo_list, entry_list
+) -> t.Tuple[int, str, str] | None:
     """Find the next well-formed entry marked "Q" whose job is no longer
     in the queue
     """
@@ -168,7 +161,7 @@ def next_finished(param, todo_list, entry_list) -> t.Tuple[int, str, str] | None
 
         # Is job still queued?
         job_id = a[index + 1]
-        if job_still_queued(param, job_id):
+        if job_still_queued(nanny_config, job_id):
             index = 0  # To signal no checking
             continue
 
@@ -178,10 +171,8 @@ def next_finished(param, todo_list, entry_list) -> t.Tuple[int, str, str] | None
 
 
 ######################################################################
-def has_good_output(step: str, cfgno: str, param: t.Dict) -> bool:
-    series, cfg = cfgno.split(".")
-
-    df = audit_outfiles(step, param, series, cfg)
+def has_good_output(task: Task) -> bool:
+    df = audit_outfiles(task)
     bad_file_mask = (df["exists"] == False) | (df["file_size"] < df["good_size"])
     has_good_files = df is not None and df[bad_file_mask].empty
     if has_good_files:
@@ -195,8 +186,10 @@ def check_jobs(yaml_params: t.Dict):
 
     logger = utils.get_logger()
 
+    nanny_config = get_nanny_config(yaml_params)
+
     # Read the to-do file
-    todo_file = yaml_params["nanny"]["todo_file"]
+    todo_file = nanny_config.todo_file
     lock_file = todo.lock_file_name(todo_file)
 
     # First, just get a list of entries
@@ -212,7 +205,7 @@ def check_jobs(yaml_params: t.Dict):
         todo.wait_set_todo_lock(lock_file)
         todo_list = todo.read_todo(todo_file)
 
-        n = next_finished(yaml_params, todo_list, entry_list)
+        n = next_finished(nanny_config, todo_list, entry_list)
         if n is None:
             todo.remove_todo_lock(lock_file)
             continue
@@ -230,7 +223,9 @@ def check_jobs(yaml_params: t.Dict):
             sys.exit(1)
 
         # Check that the job completed successfully
-        status = has_good_output(step, cfgno, yaml_params)
+        series, cfg = cfgno.split(".")
+        task = create_task(step, yaml_params, series, cfg)
+        status = has_good_output(task)
         sys.stdout.flush()
 
         # Update the entry in the to-do file

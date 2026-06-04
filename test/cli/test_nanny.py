@@ -82,6 +82,7 @@ def test_nanny_check_audit_mode(runner, fake_yaml_params):
     with (
         patch("pyfm.cli.nanny.utils") as mock_utils,
         patch("pyfm.cli.nanny.check_jobs") as mock_cj,
+        patch("pyfm.cli.nanny.create_task", return_value="fake-task") as mock_ct,
         patch("pyfm.cli.nanny.audit_outfiles") as mock_ao,
     ):
         mock_utils.io.load_param.return_value = fake_yaml_params
@@ -89,13 +90,15 @@ def test_nanny_check_audit_mode(runner, fake_yaml_params):
             cli, ["nanny", "check", "-j", "hadrons_lmi", "-s", "48I", "-n", "1000"]
         )
         assert result.exit_code == 0
-        mock_ao.assert_called_once_with("hadrons_lmi", fake_yaml_params, "48I", "1000", verbose=False)
+        mock_ct.assert_called_once_with("hadrons_lmi", fake_yaml_params, "48I", "1000")
+        mock_ao.assert_called_once_with("fake-task", verbose=False)
         mock_cj.assert_not_called()
 
 
 def test_nanny_check_audit_mode_verbose(runner, fake_yaml_params):
     with (
         patch("pyfm.cli.nanny.utils") as mock_utils,
+        patch("pyfm.cli.nanny.create_task", return_value="fake-task") as mock_ct,
         patch("pyfm.cli.nanny.audit_outfiles") as mock_ao,
         patch("pyfm.cli.nanny.check_jobs"),
     ):
@@ -104,7 +107,8 @@ def test_nanny_check_audit_mode_verbose(runner, fake_yaml_params):
             cli, ["nanny", "check", "-j", "hadrons_lmi", "-s", "48I", "-n", "1000", "-v"]
         )
         assert result.exit_code == 0
-        mock_ao.assert_called_once_with("hadrons_lmi", fake_yaml_params, "48I", "1000", verbose=True)
+        mock_ct.assert_called_once_with("hadrons_lmi", fake_yaml_params, "48I", "1000")
+        mock_ao.assert_called_once_with("fake-task", verbose=True)
 
 
 def test_nanny_check_partial_args_falls_back_to_check_jobs(runner, fake_yaml_params):
