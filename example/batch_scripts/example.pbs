@@ -33,10 +33,12 @@ if [ $? -ne 0 ]; then
 fi
 
 echo $PATH
-# Uncomment one of these lines according to type of run
-# executable=grid_lma          # pure-grid application (no Hadrons)
-# executable=HadronsMILC       # Hadrons application
-# executable=make_links_hisq   # MILC smearing application
+# PYFM_EXECUTABLE selects the application according to type of run; one of:
+#   grid_lma          # pure-grid application (no Hadrons)
+#   HadronsMILC       # Hadrons application
+#   make_links_hisq   # MILC smearing application
+# Defaults to HadronsMILC if not set in the environment.
+executable=${PYFM_EXECUTABLE:-HadronsMILC}
 
 
 export OPT="--comms-overlap"

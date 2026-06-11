@@ -25,13 +25,13 @@ PPN=$((${BASETASKS}/${BASENODES}))
 
 
 echo $PATH
-# Replace PYFM_EXECUTABLE with one of 
-# executable=grid_lma
-# executable=HadronsMILC
-# executable=make_links_hisq
+# PYFM_EXECUTABLE selects the application; one of:
+#   grid_lma | HadronsMILC | make_links_hisq
+# Defaults to HadronsMILC if not set in the environment.
+executable=${PYFM_EXECUTABLE:-HadronsMILC}
 
 # Change device-mem to reflect ~80% of total gpu memory
-export OPT="${OPT} --device-mem 18000"
+export OPT="--device-mem 18000"
 # export OPT="${OPT} --log Performance"
 export OPT="${OPT} --comms-overlap"
 runargs=" --grid $LATTICE --mpi ${LAYOUT} --accelerator-threads 16 --shm 2048 --shm-mpi 1 $OPT"
