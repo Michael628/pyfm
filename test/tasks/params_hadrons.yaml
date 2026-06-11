@@ -103,6 +103,7 @@ job_setup:
         gamma:
           - pion_local
           - vec_local
+          - vec_onelink
           - axial_vec_local
           - axial_vec_onelink
         mass:
