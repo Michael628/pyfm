@@ -45,17 +45,25 @@ class Gamma(Enum):
     GX_GX = auto()
     GY_GY = auto()
     GZ_GZ = auto()
+    GT_GT = auto()
     GX_G1 = auto()
     GY_G1 = auto()
     GZ_G1 = auto()
+    GT_G1 = auto()
     G5X_G5X = auto()
     G5Y_G5Y = auto()
     G5Z_G5Z = auto()
+    G5T_G5T = auto()
     G5X_G5 = auto()
     G5Y_G5 = auto()
     G5Z_G5 = auto()
+    G5T_G5 = auto()
     AXIAL_VEC_ONELINK = auto()
     AXIAL_VEC_LOCAL = auto()
+    AXIAL_FOURVEC_ONELINK = auto()
+    AXIAL_FOURVEC_LOCAL = auto()
+    FOURVEC_ONELINK = auto()
+    FOURVEC_LOCAL = auto()
     VEC_ONELINK = auto()
     VEC_LOCAL = auto()
     PION_LOCAL = auto()
@@ -73,12 +81,20 @@ class Gamma(Enum):
         match self:
             case Gamma.VEC_ONELINK:
                 return ["GX_G1", "GY_G1", "GZ_G1"]
+            case Gamma.FOURVEC_ONELINK:
+                return ["GX_G1", "GY_G1", "GZ_G1", "GT_G1"]
             case Gamma.AXIAL_VEC_LOCAL:
                 return ["G5X_G5X", "G5Y_G5Y", "G5Z_G5Z"]
+            case Gamma.AXIAL_FOURVEC_LOCAL:
+                return ["G5X_G5X", "G5Y_G5Y", "G5Z_G5Z", "G5T_G5T"]
             case Gamma.AXIAL_VEC_ONELINK:
                 return ["G5X_G5", "G5Y_G5", "G5Z_G5"]
+            case Gamma.AXIAL_FOURVEC_ONELINK:
+                return ["G5X_G5", "G5Y_G5", "G5Z_G5", "G5T_G5"]
             case Gamma.VEC_LOCAL:
                 return ["GX_GX", "GY_GY", "GZ_GZ"]
+            case Gamma.FOURVEC_LOCAL:
+                return ["GX_GX", "GY_GY", "GZ_GZ", "GT_GT"]
             case Gamma.IDENTITY:
                 return ["G1_G1"]
             case Gamma.PION_LOCAL:
@@ -117,9 +133,13 @@ class Gamma(Enum):
             Gamma.GX_GX,
             Gamma.GY_GY,
             Gamma.GZ_GZ,
+            Gamma.GT_GT,
             Gamma.G5X_G5X,
             Gamma.G5Y_G5Y,
             Gamma.G5Z_G5Z,
+            Gamma.G5T_G5T,
+            Gamma.FOURVEC_LOCAL,
+            Gamma.AXIAL_FOURVEC_LOCAL,
         ]
 
     @staticmethod
@@ -131,9 +151,13 @@ class Gamma(Enum):
             Gamma.GX_G1,
             Gamma.GY_G1,
             Gamma.GZ_G1,
+            Gamma.GT_G1,
             Gamma.G5X_G5,
             Gamma.G5Y_G5,
             Gamma.G5Z_G5,
+            Gamma.G5T_G5,
+            Gamma.FOURVEC_ONELINK,
+            Gamma.AXIAL_FOURVEC_ONELINK,
         ]
 
     @staticmethod

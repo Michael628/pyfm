@@ -93,19 +93,19 @@ job_setup:
       meson:
         gamma:
           - pion_local
-          - vec_local
-          - vec_onelink
-          - axial_vec_onelink
-          - axial_vec_local
+          - fourvec_local
+          - fourvec_onelink
+          - axial_fourvec_onelink
+          - axial_fourvec_local
         mass:
           - "l" 
       high_modes:
         gamma:
           - pion_local
-          - vec_local
-          - vec_onelink
-          - axial_vec_local
-          - axial_vec_onelink
+          - fourvec_local
+          - fourvec_onelink
+          - axial_fourvec_local
+          - axial_fourvec_onelink
         mass:
           - "l"
           - "u"

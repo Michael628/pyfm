@@ -37,7 +37,7 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
 
     Note:
     - PION_LOCAL requires only the identity gamm operation (equivalent to G5_G5 with apply_g5=True)
-    - (AXIAL_)VEC operation requires a vec gamma solve paired with a (identity)G5_G5 solve
+    - (AXIAL_)VEC and (AXIAL_)FOURVEC operations require a vector/four-vector gamma solve paired with a (identity)G5_G5 solve
     """
     solver_labels = config.get_solver_labels(skip_cross=True)
     guess_solver_labels = solver_labels[:-1].copy()
@@ -55,9 +55,19 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
             match op.gamma:
                 case Gamma.PION_LOCAL:
                     yield TwoPointOp.Op(gamma=op.gamma, **common)
-                case Gamma.AXIAL_VEC_ONELINK | Gamma.AXIAL_VEC_LOCAL:
+                case (
+                    Gamma.AXIAL_VEC_ONELINK
+                    | Gamma.AXIAL_VEC_LOCAL
+                    | Gamma.AXIAL_FOURVEC_ONELINK
+                    | Gamma.AXIAL_FOURVEC_LOCAL
+                ):
                     yield TwoPointOp.Op(gamma=Gamma.IDENTITY, **common)
-                case Gamma.VEC_ONELINK | Gamma.VEC_LOCAL:
+                case (
+                    Gamma.VEC_ONELINK
+                    | Gamma.VEC_LOCAL
+                    | Gamma.FOURVEC_ONELINK
+                    | Gamma.FOURVEC_LOCAL
+                ):
                     yield TwoPointOp.Op(gamma=Gamma.PION_LOCAL, **common)
                 case _:
                     raise ValueError(f"Unexpected Gamma value: {op.gamma}")
@@ -65,8 +75,12 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
             match op.gamma:
                 case Gamma.VEC_LOCAL | Gamma.AXIAL_VEC_LOCAL:
                     yield TwoPointOp.Op(gamma=Gamma.VEC_LOCAL, **common)
+                case Gamma.FOURVEC_LOCAL | Gamma.AXIAL_FOURVEC_LOCAL:
+                    yield TwoPointOp.Op(gamma=Gamma.FOURVEC_LOCAL, **common)
                 case Gamma.AXIAL_VEC_ONELINK | Gamma.VEC_ONELINK:
                     yield TwoPointOp.Op(gamma=Gamma.VEC_ONELINK, **common)
+                case Gamma.AXIAL_FOURVEC_ONELINK | Gamma.FOURVEC_ONELINK:
+                    yield TwoPointOp.Op(gamma=Gamma.FOURVEC_ONELINK, **common)
                 case _:
                     pass
 
@@ -112,9 +126,20 @@ def contraction_gen(
             )
             # Set antiquark
             match op.gamma:
-                case Gamma.PION_LOCAL | Gamma.VEC_ONELINK | Gamma.VEC_LOCAL:
+                case (
+                    Gamma.PION_LOCAL
+                    | Gamma.VEC_ONELINK
+                    | Gamma.VEC_LOCAL
+                    | Gamma.FOURVEC_ONELINK
+                    | Gamma.FOURVEC_LOCAL
+                ):
                     antiquark = TwoPointOp.Op(gamma=Gamma.PION_LOCAL, **common1)
-                case Gamma.AXIAL_VEC_ONELINK | Gamma.AXIAL_VEC_LOCAL:
+                case (
+                    Gamma.AXIAL_VEC_ONELINK
+                    | Gamma.AXIAL_VEC_LOCAL
+                    | Gamma.AXIAL_FOURVEC_ONELINK
+                    | Gamma.AXIAL_FOURVEC_LOCAL
+                ):
                     antiquark = TwoPointOp.Op(gamma=Gamma.IDENTITY, **common1)
                 case _:
                     raise ValueError(f"Unexpected Gamma value: {op.gamma}")
@@ -124,8 +149,12 @@ def contraction_gen(
                     quark = antiquark
                 case Gamma.VEC_LOCAL | Gamma.AXIAL_VEC_LOCAL:
                     quark = TwoPointOp.Op(gamma=Gamma.VEC_LOCAL, **common2)
+                case Gamma.FOURVEC_LOCAL | Gamma.AXIAL_FOURVEC_LOCAL:
+                    quark = TwoPointOp.Op(gamma=Gamma.FOURVEC_LOCAL, **common2)
                 case Gamma.AXIAL_VEC_ONELINK | Gamma.VEC_ONELINK:
                     quark = TwoPointOp.Op(gamma=Gamma.VEC_ONELINK, **common2)
+                case Gamma.AXIAL_FOURVEC_ONELINK | Gamma.FOURVEC_ONELINK:
+                    quark = TwoPointOp.Op(gamma=Gamma.FOURVEC_ONELINK, **common2)
                 case _:
                     pass
             # Set sink
