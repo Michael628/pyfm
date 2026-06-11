@@ -29,6 +29,16 @@
     </module>
     <module>
       <id>
+        <name>gauge_apbc</name>
+        <type>MGauge::APBCGauge</type>
+      </id>
+      <options>
+        <boundary>1 1 1 -1</boundary>
+        <gauge>gauge</gauge>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>stag_mass_zero</name>
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
@@ -149,7 +159,7 @@
         <spinTaste>
           <applyG5>false</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (G5X G5) (G5Y G5) (G5Z G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>

@@ -23,7 +23,6 @@ class LMIConfig(CompositeConfig):
     skip_high_modes: bool = False
 
 
-
 def preprocess_params(params: t.Dict) -> t.Dict:
     """Perform any necessary modifications to task input parameters before they
     are passed to the subtask constructor.
@@ -32,7 +31,7 @@ def preprocess_params(params: t.Dict) -> t.Dict:
     ACTION_NAME = "stag_mass_{mass}"
     SOLVER_NAME = "stag_{solver}_mass_{mass}"
     LOW_MODES_NAME = "evecs_mass_{mass}"
-    SHIFT_GAUGE_NAME = "gauge"
+    SHIFT_GAUGE_NAME = "gauge_apbc"
 
     # Extract task configs (may not exist for all callers)
     preprocessor_params = params.pop("_preprocessor", {})

@@ -29,6 +29,16 @@
     </module>
     <module>
       <id>
+        <name>gauge_apbc</name>
+        <type>MGauge::APBCGauge</type>
+      </id>
+      <options>
+        <boundary>1 1 1 -1</boundary>
+        <gauge>gauge</gauge>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>epack</name>
         <type>MIO::StagLoadFermionEigenPack</type>
       </id>

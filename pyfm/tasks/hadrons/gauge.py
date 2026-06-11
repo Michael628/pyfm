@@ -23,7 +23,7 @@ class GaugeConfig(SimpleConfig):
 
 
 def build_base_gauge(config: GaugeConfig) -> HadronsInput:
-    """Create base gauge modules: gauge, gauge_fat, gauge_long.
+    """Create base gauge modules, including the APBC shift gauge.
 
     These are always generated as they are the foundation for all computations.
     """
@@ -37,6 +37,10 @@ def build_base_gauge(config: GaugeConfig) -> HadronsInput:
             modules[name] = hadmods.load_gauge(
                 name, getattr(config, ofile_label).filestem
             )
+
+    modules["gauge_apbc"] = hadmods.apbc_gauge("gauge_apbc", "gauge")
+    schedule.append("gauge_apbc")
+
     return HadronsInput(modules=modules, schedule=schedule)
 
 

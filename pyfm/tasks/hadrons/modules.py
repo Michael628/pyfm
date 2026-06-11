@@ -48,6 +48,13 @@ def cast_gauge(name: str, field: str) -> t.Dict:
     }
 
 
+def apbc_gauge(name: str, gauge: str) -> t.Dict:
+    return {
+        "id": {"name": name, "type": "MGauge::APBCGauge"},
+        "options": {"gauge": gauge, "boundary": "1 1 1 -1"},
+    }
+
+
 def action(name: str, mass: str, gauge_fat: str, gauge_long: str) -> t.Dict:
     return {
         "id": {"name": name, "type": "MAction::ImprovedStaggeredMILC"},

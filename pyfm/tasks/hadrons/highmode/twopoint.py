@@ -188,7 +188,7 @@ def build_quarks(config: HighModeConfig, run_tsources: t.List[str]) -> HadronsIn
                 guess=guess,
                 gammas=op.gamma.gamma_string,
                 apply_g5=str(op.apply_g5).lower(),
-                gauge="" if op.gamma.local else "gauge",
+                gauge="" if op.gamma.local else config.shift_gauge_name,
             )
 
     return HadronsInput(modules=modules, schedule=list(modules.keys()))

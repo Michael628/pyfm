@@ -29,6 +29,16 @@
     </module>
     <module>
       <id>
+        <name>gauge_apbc</name>
+        <type>MGauge::APBCGauge</type>
+      </id>
+      <options>
+        <boundary>1 1 1 -1</boundary>
+        <gauge>gauge</gauge>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>stag_mass_zero</name>
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
@@ -171,7 +181,7 @@
         <spinTaste>
           <applyG5>false</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1) (G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -371,7 +381,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -403,7 +413,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -483,7 +493,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -499,7 +509,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -627,7 +637,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -659,7 +669,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -739,7 +749,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -755,7 +765,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -883,7 +893,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -915,7 +925,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -995,7 +1005,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -1011,7 +1021,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -1139,7 +1149,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -1171,7 +1181,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -1251,7 +1261,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -1267,7 +1277,7 @@
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </spinTaste>
       </options>
     </module>
@@ -1433,7 +1443,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1452,7 +1462,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1566,7 +1576,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1604,7 +1614,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1623,7 +1633,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1661,7 +1671,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1680,7 +1690,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1699,7 +1709,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t0</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1813,7 +1823,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1832,7 +1842,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1946,7 +1956,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -1984,7 +1994,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2003,7 +2013,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2041,7 +2051,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2060,7 +2070,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2079,7 +2089,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t1</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2193,7 +2203,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2212,7 +2222,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2326,7 +2336,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2364,7 +2374,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2383,7 +2393,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2421,7 +2431,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2440,7 +2450,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2459,7 +2469,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t2</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2573,7 +2583,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2592,7 +2602,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2706,7 +2716,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_l_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2744,7 +2754,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2763,7 +2773,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2801,7 +2811,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_u_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2820,7 +2830,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5) (G5Y G5) (G5Z G5) (G5T G5)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ranLL_fourvec_onelink_mass_u_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
@@ -2839,7 +2849,7 @@
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge</gauge>
+          <gauge>gauge_apbc</gauge>
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>

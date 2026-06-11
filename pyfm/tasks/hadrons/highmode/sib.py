@@ -28,7 +28,7 @@ def build_quarks(
             guess=guess,
             gammas=op.gamma.gamma_string,
             apply_g5="true",
-            gauge="" if op.gamma.local else "gauge",
+            gauge="" if op.gamma.local else config.shift_gauge_name,
         )
 
         # sib = Gamma.G1_G1
@@ -88,7 +88,7 @@ def build_contractions(
             source_gammas="",
             sink_gammas=op.gamma.gamma_string,
             apply_g5="true",
-            gauge="" if op.gamma.local else "gauge",
+            gauge="" if op.gamma.local else config.shift_gauge_name,
             output=output,
         )
 
