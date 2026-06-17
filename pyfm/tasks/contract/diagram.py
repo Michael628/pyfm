@@ -32,16 +32,16 @@ def build_input_params(config: DiagramConfig) -> t.Dict[str, t.Any]:
     return yaml_params
 
 
-def preprocess_params(params: t.Dict) -> t.Dict:
-    """Preprocessing for DiagramConfig."""
-    preprocessor_params = params.pop("_preprocessor", {})
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize DiagramConfig input: canonicalize the meson list.
 
-    # Flatten params and task_data
-    combined_params = params | preprocessor_params
+    Coerces ``mesons`` to a list and renames mass fields from broad
+    ``mass``/``new_mass`` to the ``mass_original``/``mass_updated`` names
+    MesonLoaderConfig expects.
+    """
+    combined_params = params | params.pop("_preprocessor", {})
 
-    # Always rename mass fields in mesons
     mesons = combined_params.pop("mesons", [])
-
     if not isinstance(mesons, list):
         mesons = [mesons]
     new_mesons = [
@@ -55,7 +55,19 @@ def preprocess_params(params: t.Dict) -> t.Dict:
         for m in mesons
     ]
 
-    return combined_params | dict(_preprocessor=dict(mesons=new_mesons))
+    return combined_params | dict(mesons=new_mesons)
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route the canonical meson list to MesonLoaderConfig subconfigs.
+
+    ``mesons`` is a LIST subconfig, which the builder constructs from
+    ``_preprocessor["mesons"]`` — so the list must be moved there.
+    """
+    combined_params = params | params.pop("_preprocessor", {})
+
+    mesons = combined_params.pop("mesons", [])
+    return combined_params | dict(_preprocessor=dict(mesons=mesons))
 
 
 def build_aggregator_params(config: DiagramConfig, average: bool) -> t.Dict:
@@ -141,6 +153,7 @@ register_task(
     build_input_params=build_input_params,
     create_outfile_catalog=create_outfile_catalog,
     build_aggregator_params=build_aggregator_params,
-    preprocess_params=preprocess_params,
+    normalize_params=normalize_params,
+    route_params=route_params,
     validate=validate_config,
 )

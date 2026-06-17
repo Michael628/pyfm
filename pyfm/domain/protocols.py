@@ -17,10 +17,20 @@ class FormattableProtocol(t.Protocol):
 
 
 @t.runtime_checkable
-class ConfigPreprocessorProtocol(t.Protocol):
-    def preprocess_params(self, params: t.Dict) -> t.Dict:
-        """Perform any necessary modifications to config input parameters before they
-        are passed to the config constructor.
+class ConfigNormalizerProtocol(t.Protocol):
+    def normalize_params(self, params: t.Dict) -> t.Dict:
+        """Transform broad input parameters into canonical form before routing.
+
+        Skipped when the input is already canonical (``normalized=True``).
+        """
+        ...
+
+
+@t.runtime_checkable
+class ConfigRouterProtocol(t.Protocol):
+    def route_params(self, params: t.Dict) -> t.Dict:
+        """Absorb the incoming ``_preprocessor`` slice and emit the outgoing one
+        for child subconfigs. Always runs.
         """
         ...
 

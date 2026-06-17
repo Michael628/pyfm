@@ -5,7 +5,7 @@ Coverage:
 - Composite config building (no hooks, with hooks)
 - Recursive hook application per config type
 - Missing hooks are a no-op
-- Hooks called in correct order: preprocess -> construct -> postprocess -> validate
+- Hooks called in correct order: normalize -> route -> construct -> postprocess -> validate
 """
 import pytest
 from dataclasses import field
@@ -121,7 +121,7 @@ class TestSimpleConfigWithHooks:
         def preprocess(p):
             return p | {"color": "overridden"}
 
-        build_hooks.register(PartConfig, preprocess=preprocess)
+        build_hooks.register(PartConfig, route=preprocess)
         params = make_params(color="original")
         config = build_config(PartConfig, params)
         assert config.color == "overridden"
@@ -179,7 +179,7 @@ class TestSimpleConfigWithHooks:
 
         build_hooks.register(
             PartConfig,
-            preprocess=preprocess,
+            route=preprocess,
             postprocess=postprocess,
             validate=validate,
         )
@@ -212,10 +212,58 @@ class TestSimpleConfigWithHooks:
             called.append("pre")
             return p | {"color": "pre-only"}
 
-        build_hooks.register(PartConfig, preprocess=preprocess)
+        build_hooks.register(PartConfig, route=preprocess)
         config = build_config(PartConfig, make_params(color="original"))
         assert called == ["pre"]
         assert config.color == "pre-only"
+
+
+# ---------------------------------------------------------------------------
+# normalize / route split and the normalized flag
+# ---------------------------------------------------------------------------
+
+class TestNormalizeRouteSplit:
+    def test_normalize_and_route_both_run_by_default(self):
+        order = []
+
+        build_hooks.register(
+            PartConfig,
+            normalize=lambda p: (order.append("normalize"), p)[1],
+            route=lambda p: (order.append("route"), p)[1],
+        )
+        build_config(PartConfig, make_params())
+        assert order == ["normalize", "route"]
+
+    def test_normalized_flag_skips_normalize_but_runs_route(self):
+        order = []
+
+        build_hooks.register(
+            PartConfig,
+            normalize=lambda p: (order.append("normalize"), p)[1],
+            route=lambda p: (order.append("route"), p)[1],
+        )
+        build_config(PartConfig, make_params(), normalized=True)
+        assert order == ["route"]
+
+    def test_normalized_propagates_into_subconfigs(self):
+        calls = []
+
+        def part_normalize(p):
+            calls.append("part_normalize")
+            return p
+
+        build_hooks.register(PartConfig, normalize=part_normalize)
+        # BoxConfig has no normalize hook; its child PartConfig does.
+        build_config(BoxConfig, make_params(color="x"), normalized=True)
+        assert calls == []  # normalize skipped all the way down
+
+    def test_route_only_config_unaffected_by_normalized_flag(self):
+        def part_route(p):
+            return p | {"color": "routed"}
+
+        build_hooks.register(PartConfig, route=part_route)
+        config = build_config(PartConfig, make_params(color="x"), normalized=True)
+        assert config.color == "routed"
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +301,7 @@ class TestCompositeConfigWithHooks:
         def box_preprocess(p):
             return p | {"label": "from-hook"}
 
-        build_hooks.register(BoxConfig, preprocess=box_preprocess)
+        build_hooks.register(BoxConfig, route=box_preprocess)
         params = make_params(color="orange", label="original")
         config = build_config(BoxConfig, params)
         assert config.label == "from-hook"
@@ -263,7 +311,7 @@ class TestCompositeConfigWithHooks:
         def part_preprocess(p):
             return p | {"color": "sub-hook-color"}
 
-        build_hooks.register(PartConfig, preprocess=part_preprocess)
+        build_hooks.register(PartConfig, route=part_preprocess)
         params = make_params(color="ignored", label="box")
         config = build_config(BoxConfig, params)
         assert config.part_config.color == "sub-hook-color"
@@ -281,8 +329,8 @@ class TestCompositeConfigWithHooks:
             part_calls.append("part_pre")
             return p
 
-        build_hooks.register(BoxConfig, preprocess=box_pre)
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(BoxConfig, route=box_pre)
+        build_hooks.register(PartConfig, route=part_pre)
 
         build_config(BoxConfig, make_params(color="red"))
         assert box_calls == ["box_pre"]
@@ -332,13 +380,13 @@ class TestCompositeConfigWithHooks:
 
         build_hooks.register(
             BoxConfig,
-            preprocess=lambda p: (order.append("box_pre"), p)[1],
+            route=lambda p: (order.append("box_pre"), p)[1],
             postprocess=lambda c: (order.append("box_post"), c)[1],
             validate=lambda c: order.append("box_validate"),
         )
         build_hooks.register(
             PartConfig,
-            preprocess=lambda p: (order.append("part_pre"), p)[1],
+            route=lambda p: (order.append("part_pre"), p)[1],
             postprocess=lambda c: (order.append("part_post"), c)[1],
             validate=lambda c: order.append("part_validate"),
         )
@@ -373,7 +421,7 @@ class TestListContainerComposite:
         def part_list_pre(p):
             return p | p.get("_preprocessor", {})
 
-        build_hooks.register(PartListConfig, preprocess=part_list_pre)
+        build_hooks.register(PartListConfig, route=part_list_pre)
         params = make_params(
             name="multi",
             _preprocessor={
@@ -404,7 +452,7 @@ class TestListContainerComposite:
             part_pre_calls.append(p.get("_preprocessor", {}).get("tag", ""))
             return p | p.get("_preprocessor", {})
 
-        build_hooks.register(PartListConfig, preprocess=part_pre)
+        build_hooks.register(PartListConfig, route=part_pre)
         params = make_params(
             _preprocessor={"part_list_config": [{"tag": "x"}, {"tag": "y"}]},
         )
@@ -426,7 +474,7 @@ class TestPreprocessorRoutingSimple:
             received["preprocessor"] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         params = make_params(
             _preprocessor={"part_config": {"color": "routed"}},
         )
@@ -441,7 +489,7 @@ class TestPreprocessorRoutingSimple:
             received["preprocessor"] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         params = make_params(_preprocessor={})
         build_config(BoxConfig, params)
         assert received["preprocessor"] == {}
@@ -454,7 +502,7 @@ class TestPreprocessorRoutingSimple:
             received["preprocessor"] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         build_config(BoxConfig, make_params())
         assert received["preprocessor"] == {}
 
@@ -469,8 +517,8 @@ class TestPreprocessorRoutingSimple:
             received["preprocessor"] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(BoxConfig, preprocess=box_pre)
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(BoxConfig, route=box_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         build_config(BoxConfig, make_params())
         assert received["preprocessor"] == {"color": "injected"}
 
@@ -479,7 +527,7 @@ class TestPreprocessorRoutingSimple:
         def part_pre(p):
             return p | p.get("_preprocessor", {})
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         params = make_params(
             color="original",
             _preprocessor={"part_config": {"color": "overridden"}},
@@ -495,7 +543,7 @@ class TestPreprocessorRoutingSimple:
             received["part_preprocessor"] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         params = make_params(
             _preprocessor={
                 "part_config": {"color": "for-part"},
@@ -519,7 +567,7 @@ class TestPreprocessorRoutingList:
             received.append(p.get("_preprocessor"))
             return p
 
-        build_hooks.register(PartListConfig, preprocess=part_list_pre)
+        build_hooks.register(PartListConfig, route=part_list_pre)
         params = make_params(
             _preprocessor={
                 "part_list_config": [
@@ -541,7 +589,7 @@ class TestPreprocessorRoutingList:
             received.append(p.get("_preprocessor"))
             return p | p.get("_preprocessor", {})
 
-        build_hooks.register(PartListConfig, preprocess=part_list_pre)
+        build_hooks.register(PartListConfig, route=part_list_pre)
         params = make_params(
             _preprocessor={"part_list_config": [{"tag": "x"}, {"tag": "y"}]},
         )
@@ -578,7 +626,7 @@ class TestDictContainerComposite:
             received[p.get("color", "")] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         params = make_params(
             title="x",
             parts_config={"left": {"color": "L"}, "right": {"color": "R"}},
@@ -600,7 +648,7 @@ class TestDictContainerComposite:
             received[p["color"]] = p.get("_preprocessor")
             return p
 
-        build_hooks.register(PartConfig, preprocess=part_pre)
+        build_hooks.register(PartConfig, route=part_pre)
         params = make_params(
             title="y",
             parts_config={"only": {"color": "c"}},

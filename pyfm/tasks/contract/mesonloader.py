@@ -6,14 +6,15 @@ from pyfm.a2a.types import MesonLoaderConfig
 from pyfm.tasks.register import register_task
 
 
-def preprocess_params(params: t.Dict) -> t.Dict:
-    """Preprocessing for MesonLoaderConfig."""
-    preprocessor_params = params.pop("_preprocessor", {})
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize MesonLoaderConfig input: assemble the ``mass_shift`` field.
 
-    # Flatten params and task_data
-    combined_params = params | preprocessor_params
+    Collapses the loose ``mass_original``/``mass_updated``/``milc_mass`` keys into
+    the single ``mass_shift`` mapping the config expects. (Routing is the default
+    ``_preprocessor`` absorb — no custom ``route`` hook needed for this leaf.)
+    """
+    combined_params = params | params.pop("_preprocessor", {})
 
-    # Build mass_shift from combined data
     mass_shift = {
         key.removeprefix("mass_"): combined_params[key]
         for key in ["mass_original", "mass_updated", "milc_mass"]
@@ -40,5 +41,5 @@ register_task(
     "contract_mesonloader",
     MesonLoaderConfig,
     build_input_params=build_input_params,
-    preprocess_params=preprocess_params,
+    normalize_params=normalize_params,
 )

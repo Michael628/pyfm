@@ -12,16 +12,25 @@ def build_config(
     config_type,
     params: t.Dict[str, t.Any],
     file_params: t.Dict[str, t.Any] | None = None,
+    *,
+    normalized: bool = False,
 ) -> ConfigBase:
     """Build a configuration object from input parameters.
 
     Hooks for *config_type* are looked up from the global ``build_hooks``
     registry and applied in the following order:
 
-    1. Preprocessing: ``hooks.preprocess(params)`` — transform raw params
+    1. Preprocessing — two ordered sub-steps:
+       a. ``hooks.normalize(params)`` — *broad → canonical* transforms. Skipped
+          when ``normalized=True`` (the input is already canonical, e.g. a
+          generated task-input file).
+       b. ``hooks.route(params)`` — ``_preprocessor`` routing. Always runs.
     2. Construction: Build config recursively (subconfigs built first)
     3. Postprocessing: ``hooks.postprocess(config)`` — transform built config
     4. Validation: ``hooks.validate(config)`` — assert invariants
+
+    ``normalized`` propagates unchanged into every recursively-built subconfig,
+    so the whole tree is treated as either raw or already-canonical.
     """
 
     if file_params is None:
@@ -30,8 +39,12 @@ def build_config(
     hooks = build_hooks.get(config_type)
 
     def preprocess(raw_params: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        if hooks is not None and hooks.preprocess is not None:
-            return hooks.preprocess(raw_params)
+        if hooks is None:
+            return raw_params
+        if not normalized and hooks.normalize is not None:
+            raw_params = hooks.normalize(raw_params)
+        if hooks.route is not None:
+            raw_params = hooks.route(raw_params)
         return raw_params
 
     def postproc_and_validate(config: ConfigBase) -> ConfigBase:
@@ -59,7 +72,7 @@ def build_config(
     def build_composite_config() -> CompositeConfig:
         """Build a ``CompositeConfig`` by recursively constructing each subconfig field.
 
-        After the composite type's ``preprocess`` hook, ``_preprocessor`` is a nested
+        After the composite type's ``route`` hook, ``_preprocessor`` is a nested
         routing table keyed by **exact** subconfig field names (the same keys as
         ``get_subconfigs()``).
 
@@ -68,7 +81,7 @@ def build_config(
 
         **LIST:** ``_preprocessor[subconfig_label]`` must be a list (default ``[]`` if
         the key is missing). Each element is passed as the child's ``_preprocessor`` --
-        the child's own preprocess hook decides how to apply it. A non-list value
+        the child's own route hook decides how to apply it. A non-list value
         raises ``TypeError``.
 
         **DICT:** ``processed_params[subconfig_label]`` maps child keys to per-key param
@@ -92,7 +105,7 @@ def build_config(
                         )
                     sub_params = processed_params | {"_preprocessor": slice_}
                     subconfigs[subconfig_label] = build_config(
-                        field.type, sub_params, file_params
+                        field.type, sub_params, file_params, normalized=normalized
                     )
                 case field.container.LIST:
                     raw_list = prep.get(subconfig_label, [])
@@ -110,7 +123,9 @@ def build_config(
                             )
                         routed = processed_params | {"_preprocessor": sub_par}
                         subconfigs[subconfig_label].append(
-                            build_config(field.type, routed, file_params)
+                            build_config(
+                                field.type, routed, file_params, normalized=normalized
+                            )
                         )
 
                 case field.container.DICT:
@@ -144,6 +159,7 @@ def build_config(
                             field.type,
                             processed_params | sub_par | {"_preprocessor": slice_},
                             file_params,
+                            normalized=normalized,
                         )
 
         config = (

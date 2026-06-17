@@ -123,11 +123,12 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
     return HadronsInput(modules=modules, schedule=schedule)
 
 
-def preprocess_params(params: t.Dict) -> t.Dict:
-    """Preprocessing for MesonConfig.
+def route_params(params: t.Dict) -> t.Dict:
+    """Route task data to the 'operations' field of MesonConfig.
 
-    Handles routing of task data to 'operations' field to avoid collision
-    between MassDict (from params['mass']) and OpList mass labels (from params['_preprocessor']['mass']).
+    Avoids a collision between MassDict (from params['mass']) and OpList mass
+    labels (from params['_preprocessor']['mass']). This is pure ``_preprocessor``
+    routing — there is nothing to normalize.
     """
     # Extract task configs (contains gamma, mass lists for OpList)
     preprocessor_params = params.pop("_preprocessor", {})
@@ -171,6 +172,6 @@ register_task(
     MesonConfig,
     build_input_params,
     create_outfile_catalog,
-    preprocess_params,
+    route_params,
     postprocess_config,
 )

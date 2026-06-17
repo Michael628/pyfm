@@ -209,7 +209,8 @@ register_task(
     lmi.create_outfile_catalog,
     build_input_params,
     lmi.build_aggregator_params,
-    lmi.preprocess_params,
+    lmi.normalize_params,
+    lmi.route_params,
     validate=lmi.validate_config,
 )
 

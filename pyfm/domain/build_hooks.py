@@ -4,9 +4,19 @@ from typing import Callable, Dict, Optional, Type
 
 @dataclass(frozen=True)
 class BuildHooks:
-    """Frozen dataclass holding optional build lifecycle hooks for a config type."""
+    """Frozen dataclass holding optional build lifecycle hooks for a config type.
 
-    preprocess: Optional[Callable] = None
+    Preprocessing is split into two ordered hooks:
+
+    - ``normalize`` — source-specific *broad → canonical* transforms (filtering,
+      renaming, default/skip-flag derivation). Skipped when the caller declares
+      the input is already canonical (``build_config(..., normalized=True)``).
+    - ``route`` — ``_preprocessor`` plumbing: absorb the incoming routing slice
+      and emit the outgoing one (plus any field placeholders). Always runs.
+    """
+
+    normalize: Optional[Callable] = None
+    route: Optional[Callable] = None
     postprocess: Optional[Callable] = None
     validate: Optional[Callable] = None
 
@@ -17,7 +27,7 @@ class BuildHooks:
 
 _registry: Dict[Type, BuildHooks] = {}
 
-_VALID_HOOKS = {"preprocess", "postprocess", "validate"}
+_VALID_HOOKS = {"normalize", "route", "postprocess", "validate"}
 
 
 def register(config_type: Type, **hooks: Callable) -> None:
@@ -28,7 +38,7 @@ def register(config_type: Type, **hooks: Callable) -> None:
     config_type:
         The config class to attach hooks to.
     **hooks:
-        Keyword arguments accepted: ``preprocess``, ``postprocess``,
+        Keyword arguments accepted: ``normalize``, ``route``, ``postprocess``,
         ``validate``.  Any other key raises a ``TypeError``.
 
     Raises

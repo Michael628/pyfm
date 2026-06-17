@@ -9,12 +9,14 @@ import pandas as pd
 from pyfm.tasks.contract import diagram as dmod
 
 
-def preprocess_params(params: t.Dict) -> t.Dict:
-    """Preprocessing for ContractConfig."""
-    preprocessor_params = params.pop("_preprocessor", {})
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize ContractConfig input: select the requested diagrams.
 
-    # Flatten params and task_data
-    combined_params = params | preprocessor_params
+    Broad input supplies the full ``diagram_params`` catalog plus a ``diagrams``
+    list naming the subset to run. Canonical output replaces both with a single
+    ``diagrams`` map of the selected diagrams.
+    """
+    combined_params = params | params.pop("_preprocessor", {})
 
     diagrams = combined_params.pop("diagrams", [])
     diagram_params = combined_params.pop("diagram_params", {})
@@ -28,9 +30,17 @@ def preprocess_params(params: t.Dict) -> t.Dict:
             raise ValueError(f"Diagram {d} not found in diagram_params")
 
     filtered_diagrams = {k: v for k, v in diagram_params.items() if k in diagrams}
+    return combined_params | dict(diagrams=filtered_diagrams)
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route the canonical ``diagrams`` map to per-diagram subconfigs."""
+    combined_params = params | params.pop("_preprocessor", {})
+
+    diagrams = combined_params.pop("diagrams", {})
     return combined_params | dict(
-        diagrams={k: {} for k in filtered_diagrams},
-        _preprocessor=dict(diagrams=filtered_diagrams),
+        diagrams={k: {} for k in diagrams},
+        _preprocessor=dict(diagrams=diagrams),
     )
 
 
@@ -77,6 +87,7 @@ register_task(
     build_input_params,
     build_aggregator_params,
     create_outfile_catalog,
-    preprocess_params,
+    normalize_params,
+    route_params,
     validate=validate_config,
 )

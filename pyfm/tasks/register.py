@@ -11,13 +11,15 @@ _TASK_CALLABLE_NAMES = frozenset(
 
 # Mapping from positional function name to build_hooks field name
 _HOOK_NAME_MAP: dict[str, str] = {
-    "preprocess_params": "preprocess",
+    "normalize_params": "normalize",
+    "route_params": "route",
     "postprocess_config": "postprocess",
 }
 
 # kwarg names that route to build_hooks
 _KWARG_HOOK_MAP: dict[str, str] = {
-    "preprocess_params": "preprocess",
+    "normalize_params": "normalize",
+    "route_params": "route",
     "postprocess_config": "postprocess",
     "validate": "validate",
 }
@@ -26,7 +28,8 @@ _KWARG_HOOK_MAP: dict[str, str] = {
 _config_to_task_key: dict[t.Type, str] = {}
 
 
-def _default_preprocess(params: t.Dict) -> t.Dict:
+def _default_route(params: t.Dict) -> t.Dict:
+    """Default ``route`` hook: absorb the incoming ``_preprocessor`` slice."""
     return params | params.pop("_preprocessor", {})
 
 
@@ -144,9 +147,11 @@ def register_task(key_or_config: str | t.Type, config_or_first_func: t.Type | t.
             f"register_task: handler '{handler_key}' already registered; skipping."
         )
 
-    # Provide default preprocess hook when none explicitly supplied
-    if "preprocess" not in hook_callables:
-        hook_callables["preprocess"] = _default_preprocess
+    # Provide default route hook when none explicitly supplied. ``normalize`` is
+    # genuinely optional (no default) — a config with nothing to normalize simply
+    # omits it.
+    if "route" not in hook_callables:
+        hook_callables["route"] = _default_route
 
     # Register build hooks (idempotent: skip if already registered)
     if config not in build_hooks._registry:

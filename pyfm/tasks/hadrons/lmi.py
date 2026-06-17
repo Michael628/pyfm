@@ -23,24 +23,33 @@ class LMIConfig(CompositeConfig):
     skip_high_modes: bool = False
 
 
-def preprocess_params(params: t.Dict) -> t.Dict:
-    """Perform any necessary modifications to task input parameters before they
-    are passed to the subtask constructor.
+_OPTIONAL_CONFIGS = ["meson", "high_modes", "epack"]
+
+
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize LMIConfig input: derive ``skip_*`` flags.
+
+    A subtask is skipped when the caller supplies no input for it. The incoming
+    ``_preprocessor`` slice is *inspected* (not consumed) here — ``route_params``
+    owns its consumption.
     """
+    incoming = params.get("_preprocessor", {})
+    skip_flags = {
+        f"skip_{k}": True for k in _OPTIONAL_CONFIGS if k not in incoming
+    }
+    return params | skip_flags
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route per-subtask input to the child configs, layering in name defaults."""
 
     ACTION_NAME = "stag_mass_{mass}"
     SOLVER_NAME = "stag_{solver}_mass_{mass}"
     LOW_MODES_NAME = "evecs_mass_{mass}"
     SHIFT_GAUGE_NAME = "gauge_apbc"
 
-    # Extract task configs (may not exist for all callers)
+    # Incoming slice holds per-subtask input keyed by subtask name.
     preprocessor_params = params.pop("_preprocessor", {})
-
-    # Skip configs where user provides no input
-    optional_configs = ["meson", "high_modes", "epack"]
-    skip_flags = {
-        f"skip_{k}": True for k in optional_configs if k not in preprocessor_params
-    }
 
     # Set defaults for child configs
     child_preprocessor = dict(
@@ -67,7 +76,7 @@ def preprocess_params(params: t.Dict) -> t.Dict:
     for k, v in preprocessor_params.items():
         child_preprocessor[f"{k}_config"] |= v
 
-    return params | skip_flags | dict(_preprocessor=child_preprocessor)
+    return params | dict(_preprocessor=child_preprocessor)
 
 
 def validate_config(config: LMIConfig) -> None:
@@ -194,6 +203,7 @@ register_task(
     create_outfile_catalog,
     build_input_params,
     build_aggregator_params,
-    preprocess_params,
+    normalize_params,
+    route_params,
     validate=validate_config,
 )

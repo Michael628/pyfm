@@ -50,7 +50,11 @@ def build_aggregator_params(config):
     return {"agg": True}
 
 
-def preprocess_params(params):
+def normalize_params(params):
+    return params
+
+
+def route_params(params):
     return params
 
 
@@ -136,11 +140,12 @@ class TestRegisterTask:
         assert handler.create_outfile_catalog is create_outfile_catalog
         assert handler.build_aggregator_params is build_aggregator_params
 
-    def test_register_with_preprocess_positional(self):
-        register_task(FakeConfig, build_input_params, preprocess_params)
+    def test_register_with_normalize_and_route_positional(self):
+        register_task(FakeConfig, build_input_params, normalize_params, route_params)
         hooks = build_hooks.get(FakeConfig)
         assert hooks is not None
-        assert hooks.preprocess is preprocess_params
+        assert hooks.normalize is normalize_params
+        assert hooks.route is route_params
 
     def test_register_with_postprocess_positional(self):
         register_task(FakeConfig, build_input_params, postprocess_config)
@@ -152,36 +157,40 @@ class TestRegisterTask:
         hooks = build_hooks.get(FakeConfig)
         assert hooks.validate is validate_config
 
-    def test_register_with_preprocess_keyword(self):
-        register_task(FakeConfig, preprocess_params=preprocess_params)
+    def test_register_with_route_keyword(self):
+        register_task(FakeConfig, route_params=route_params)
         hooks = build_hooks.get(FakeConfig)
-        assert hooks.preprocess is preprocess_params
+        assert hooks.route is route_params
 
     def test_register_with_all_keyword_hooks(self):
         register_task(
             FakeConfig,
             build_input_params,
             create_outfile_catalog,
-            preprocess_params=preprocess_params,
+            normalize_params=normalize_params,
+            route_params=route_params,
             validate=validate_config,
         )
         hooks = build_hooks.get(FakeConfig)
-        assert hooks.preprocess is preprocess_params
+        assert hooks.normalize is normalize_params
+        assert hooks.route is route_params
         assert hooks.validate is validate_config
 
-    def test_default_preprocess_added_when_none_supplied(self):
+    def test_default_route_added_when_none_supplied(self):
         register_task(FakeConfig, build_input_params)
         hooks = build_hooks.get(FakeConfig)
         assert hooks is not None
-        assert hooks.preprocess is not None
+        # normalize is genuinely optional; route gets a default
+        assert hooks.normalize is None
+        assert hooks.route is not None
         # The default merges _preprocessor into params
-        result = hooks.preprocess({"a": 1, "_preprocessor": {"b": 2}})
+        result = hooks.route({"a": 1, "_preprocessor": {"b": 2}})
         assert result == {"a": 1, "b": 2}
 
-    def test_explicit_preprocess_overrides_default(self):
-        register_task(FakeConfig, preprocess_params)
+    def test_explicit_route_overrides_default(self):
+        register_task(FakeConfig, route_params)
         hooks = build_hooks.get(FakeConfig)
-        assert hooks.preprocess is preprocess_params
+        assert hooks.route is route_params
 
     def test_register_config_without_key_is_silent_no_op(self):
         # Should not raise; silently skips
@@ -230,11 +239,11 @@ class TestRegisterTask:
             "explicit_task",
             ExplicitKeyConfig,
             build_input_params,
-            preprocess_params=preprocess_params,
+            route_params=route_params,
             validate=validate_config,
         )
         hooks = build_hooks.get(ExplicitKeyConfig)
-        assert hooks.preprocess is preprocess_params
+        assert hooks.route is route_params
         assert hooks.validate is validate_config
 
 

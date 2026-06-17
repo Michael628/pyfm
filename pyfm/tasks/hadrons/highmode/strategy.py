@@ -13,11 +13,12 @@ from pyfm.tasks.hadrons.highmode import sib, twopoint
 from pyfm import utils
 
 
-def preprocess_params(params: t.Dict) -> t.Dict:
-    """Preprocessing for HighModeConfig.
+def route_params(params: t.Dict) -> t.Dict:
+    """Route task data to the 'operations' field of HighModeConfig.
 
-    Handles routing of task data to 'operations' field to avoid collision
-    between MassDict (from params['mass']) and OpList mass labels (from params['_preprocessor']['mass']).
+    Avoids a collision between MassDict (from params['mass']) and OpList mass
+    labels (from params['_preprocessor']['mass']). This is pure ``_preprocessor``
+    routing — there is nothing to normalize.
     """
     # Extract task configs (contains gamma, mass lists for OpList)
     preprocessor_params = params.pop("_preprocessor", {})

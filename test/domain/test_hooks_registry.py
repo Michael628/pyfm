@@ -20,7 +20,11 @@ class FakeConfigC:
     pass
 
 
-def preprocess_stub(params):
+def normalize_stub(params):
+    return params
+
+
+def route_stub(params):
     return params
 
 
@@ -53,28 +57,32 @@ def reset_registry():
 class TestBuildHooks:
     def test_all_fields_default_to_none(self):
         hooks = BuildHooks()
-        assert hooks.preprocess is None
+        assert hooks.normalize is None
+        assert hooks.route is None
         assert hooks.postprocess is None
         assert hooks.validate is None
 
     def test_fields_can_be_set(self):
         hooks = BuildHooks(
-            preprocess=preprocess_stub,
+            normalize=normalize_stub,
+            route=route_stub,
             postprocess=postprocess_stub,
             validate=validate_stub,
         )
-        assert hooks.preprocess is preprocess_stub
+        assert hooks.normalize is normalize_stub
+        assert hooks.route is route_stub
         assert hooks.postprocess is postprocess_stub
         assert hooks.validate is validate_stub
 
     def test_is_frozen(self):
-        hooks = BuildHooks(preprocess=preprocess_stub)
+        hooks = BuildHooks(route=route_stub)
         with pytest.raises((AttributeError, TypeError)):
-            hooks.preprocess = None  # type: ignore[misc]
+            hooks.route = None  # type: ignore[misc]
 
     def test_partial_fields(self):
         hooks = BuildHooks(validate=validate_stub)
-        assert hooks.preprocess is None
+        assert hooks.normalize is None
+        assert hooks.route is None
         assert hooks.postprocess is None
         assert hooks.validate is validate_stub
 
@@ -85,20 +93,22 @@ class TestBuildHooks:
 
 class TestRegister:
     def test_register_stores_hooks(self):
-        build_hooks.register(FakeConfigA, preprocess=preprocess_stub)
+        build_hooks.register(FakeConfigA, route=route_stub)
         result = build_hooks.get(FakeConfigA)
         assert result is not None
-        assert result.preprocess is preprocess_stub
+        assert result.route is route_stub
 
     def test_register_all_hooks(self):
         build_hooks.register(
             FakeConfigA,
-            preprocess=preprocess_stub,
+            normalize=normalize_stub,
+            route=route_stub,
             postprocess=postprocess_stub,
             validate=validate_stub,
         )
         hooks = build_hooks.get(FakeConfigA)
-        assert hooks.preprocess is preprocess_stub
+        assert hooks.normalize is normalize_stub
+        assert hooks.route is route_stub
         assert hooks.postprocess is postprocess_stub
         assert hooks.validate is validate_stub
 
@@ -109,7 +119,7 @@ class TestRegister:
         assert hooks == BuildHooks()
 
     def test_register_duplicate_raises_value_error(self):
-        build_hooks.register(FakeConfigA, preprocess=preprocess_stub)
+        build_hooks.register(FakeConfigA, route=route_stub)
         with pytest.raises(ValueError, match="Hooks already registered"):
             build_hooks.register(FakeConfigA, validate=validate_stub)
 
@@ -118,16 +128,16 @@ class TestRegister:
             build_hooks.register(FakeConfigA, unknown_hook=lambda x: x)
 
     def test_register_different_types_independent(self):
-        build_hooks.register(FakeConfigA, preprocess=preprocess_stub)
+        build_hooks.register(FakeConfigA, route=route_stub)
         build_hooks.register(FakeConfigB, validate=validate_stub)
 
         hooks_a = build_hooks.get(FakeConfigA)
         hooks_b = build_hooks.get(FakeConfigB)
 
-        assert hooks_a.preprocess is preprocess_stub
+        assert hooks_a.route is route_stub
         assert hooks_a.validate is None
         assert hooks_b.validate is validate_stub
-        assert hooks_b.preprocess is None
+        assert hooks_b.route is None
 
 
 # ---------------------------------------------------------------------------
@@ -155,14 +165,14 @@ class TestGet:
 
 class TestClear:
     def test_clear_removes_all_entries(self):
-        build_hooks.register(FakeConfigA, preprocess=preprocess_stub)
+        build_hooks.register(FakeConfigA, route=route_stub)
         build_hooks.register(FakeConfigB, validate=validate_stub)
         build_hooks.clear()
         assert build_hooks.get(FakeConfigA) is None
         assert build_hooks.get(FakeConfigB) is None
 
     def test_clear_allows_re_registration(self):
-        build_hooks.register(FakeConfigA, preprocess=preprocess_stub)
+        build_hooks.register(FakeConfigA, route=route_stub)
         build_hooks.clear()
         # Should not raise now that the registry is empty.
         build_hooks.register(FakeConfigA, validate=validate_stub)
@@ -184,14 +194,14 @@ class TestOneToOneEnforcement:
             build_hooks.register(FakeConfigA)
 
     def test_multiple_types_each_raise_on_second_register(self):
-        build_hooks.register(FakeConfigA, preprocess=preprocess_stub)
+        build_hooks.register(FakeConfigA, route=route_stub)
         build_hooks.register(FakeConfigB, postprocess=postprocess_stub)
 
         with pytest.raises(ValueError):
             build_hooks.register(FakeConfigA, validate=validate_stub)
 
         with pytest.raises(ValueError):
-            build_hooks.register(FakeConfigB, preprocess=preprocess_stub)
+            build_hooks.register(FakeConfigB, route=route_stub)
 
     def test_clear_then_register_three_types(self):
         for cfg in (FakeConfigA, FakeConfigB, FakeConfigC):
@@ -200,5 +210,5 @@ class TestOneToOneEnforcement:
         build_hooks.clear()
 
         for cfg in (FakeConfigA, FakeConfigB, FakeConfigC):
-            build_hooks.register(cfg, preprocess=preprocess_stub)
-            assert build_hooks.get(cfg).preprocess is preprocess_stub
+            build_hooks.register(cfg, route=route_stub)
+            assert build_hooks.get(cfg).route is route_stub

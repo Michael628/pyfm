@@ -26,15 +26,25 @@ def contract():
 
 @contract.command()
 @click.argument("param-file", type=str, required=False, default=None)
-@click.option("-p", "--param-file-opt", type=str, default=None, help="Path to YAML parameter file.")
+@click.option(
+    "-p",
+    "--param-file-opt",
+    type=str,
+    default=None,
+    help="Path to YAML parameter file.",
+)
 def run(param_file, param_file_opt):
     """Execute A2A contractions for all diagrams defined in the parameter file."""
     param_file = param_file or param_file_opt
     if param_file is None:
-        raise click.UsageError("A parameter file is required (pass as argument or with -p).")
+        raise click.UsageError(
+            "A parameter file is required (pass as argument or with -p)."
+        )
     params = utils.io.load_param(param_file)
 
-    config: ContractConfig = build_config(ContractConfig, params)
+    # The generated input file is already in canonical form (it was produced by
+    # build_input_params), so skip normalization and only run routing.
+    config: ContractConfig = build_config(ContractConfig, params, normalized=True)
 
     logging_level = getattr(config, "logging_level", "INFO")
     logger = utils.set_logging_level(logging_level)
@@ -46,6 +56,7 @@ def run(param_file, param_file_opt):
 
     if config.hardware == "cpu":
         import numpy as xp
+
         globals()["xp"] = xp
 
     overwrite = config.overwrite
