@@ -10,7 +10,7 @@ from pyfm.a2a.types import ContractConfig
 from pyfm.domain import LoadDictConfig
 from pyfm.core.builder import build_config
 from pyfm.dataio import data_to_frame, write_files
-from pyfm.a2a import execute
+from pyfm.a2a import execute, time_average
 from pyfm import utils
 
 
@@ -33,7 +33,14 @@ def contract():
     default=None,
     help="Path to YAML parameter file.",
 )
-def run(param_file, param_file_opt):
+@click.option(
+    "--time-average",
+    "do_time_average",
+    is_flag=True,
+    default=False,
+    help="Apply time averaging to all contractions before writing.",
+)
+def run(param_file, param_file_opt, do_time_average):
     """Execute A2A contractions for all diagrams defined in the parameter file."""
     param_file = param_file or param_file_opt
     if param_file is None:
@@ -42,8 +49,6 @@ def run(param_file, param_file_opt):
         )
     params = utils.io.load_param(param_file)
 
-    # The generated input file is already in canonical form (it was produced by
-    # build_input_params), so skip normalization and only run routing.
     config: ContractConfig = build_config(ContractConfig, params, normalized=True)
 
     logging_level = getattr(config, "logging_level", "INFO")
@@ -146,7 +151,14 @@ def run(param_file, param_file_opt):
             if config.rank < 1:
                 os.makedirs(os.path.dirname(outfile), exist_ok=True)
 
-                array_order = [f"t{i+1}" for i in range(diagram_config.npoint)]
+                if do_time_average:
+                    corr = {
+                        k: {g: time_average(v) for g, v in gamma_dict.items()}
+                        for k, gamma_dict in corr.items()
+                    }
+                    array_order = [f"t{i+1}" for i in range(1, nmesons - 1)] + ["dt"]
+                else:
+                    array_order = [f"t{i+1}" for i in range(nmesons)]
                 data_config = LoadDictConfig.create(
                     dict_labels=["perm", "gamma"],
                     array_order=array_order,
