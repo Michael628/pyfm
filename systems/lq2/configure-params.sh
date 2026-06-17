@@ -15,6 +15,10 @@ function grid_configure() {
     ext_flags='--enable-tracing=nvtx'
   fi
   
+  if [ $OLD_RNG = 'true' ]; then
+    ext_flags='--enable-old-rng'
+  fi
+
   ${PYFMTOPDIR}/Grid/configure \
    --prefix=${INSTALLDIR} \
 	     --enable-comms=mpi-auto       \
@@ -29,6 +33,6 @@ function grid_configure() {
        --with-lime=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT} \
        CXX="nvcc" MPICXX="mpicxx" \
 	     LDFLAGS="-cudart shared" \
-       CXXFLAGS="-ccbin mpicxx -gencode arch=compute_80,code=sm_80 -std=c++17 -cudart shared" 
+       CXXFLAGS='-ccbin mpicxx -gencode arch=compute_80,code=sm_80 -std=c++17 -cudart shared -DEIGEN_DONT_VECTORIZE'
 }
 

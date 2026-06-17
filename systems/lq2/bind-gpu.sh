@@ -18,7 +18,7 @@ fi
 
 echo "Binding to GPU $GPU_ID"
 
-NUMA_NODE=$(nvidia-smi topo -m | grep "^GPU$GPU_ID" | awk '{print $NF}')
+NUMA_NODE=$(nvidia-smi topo -m | grep "^GPU$GPU_ID" | awk '{print $(NF-1)}')
 
 echo "GPU $GPU_ID is on NUMA node $NUMA_NODE"
 echo "Executing $APP"
