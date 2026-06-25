@@ -1,36 +1,49 @@
-module reset
-module load PrgEnv-amd amd/5.3.0 rocm/5.3.0
+module load PrgEnv-amd amd/7.1.1 rocm/7.1.1
 module load craype-accel-amd-gfx90a
-module load cray-mpich/8.1.28
 module load cmake
-module load perftools
 module load ninja
 module list
 
-# Build-time environment variables (needed for both build and runtime)
-export PK_BUILD_TYPE="Release"
-export MPICH_ROOT=${CRAY_MPICH_ROOTDIR}
-export GTL_ROOT=${MPICH_ROOT}/gtl/lib
-export MPICH_DIR=${MPICH_ROOT}/ofi/rocm-compiler/5.0
-export PATH=${ROCM_PATH}/bin:${ROCM_PATH}/llvm/bin:${PATH}
-export LD_LIBRARY_PATH=${ROCM_PATH}/llvm/lib64:${LD_LIBRARY_PATH}
-export LD_LIBRARY_PATH=${ROCM_PATH}/llvm/lib:${MPICH_DIR}/lib:${GTL_ROOT}:${LD_LIBRARY_PATH}
+QUDA_INSTALL=${PYFMTOPDIR}/build/usqcd
 
-# Can't seem to find mpi.h otherwise:
-export C_INCLUDE_PATH=${C_INCLUDE_PATH:+${C_INCLUDE_PATH}:}${MPICH_DIR}/include
+MY_LDFLAGS="--verbose -g -Wl,-rpath=${MPICH_DIR}/lib -L${MPICH_DIR}/lib -lmpi"
+MY_CFLAGS="-I${MPICH_DIR}/include -g -pg -ggdb -O3 -Ofast --offload-arch=gfx90a"
+
+LIBQUDA="-Wl,-rpath ${QUDA_INSTALL}/lib -L${QUDA_INSTALL}/lib -lquda -D__gfx90a --amdgpu-target=gfx90a -Wl,-rpath=${ROCM_PATH}/hiprand/lib -L${ROCM_PATH}/hiprand/lib -Wl,-rpath=${ROCM_PATH}/rocfft/lib -L${ROCM_PATH}/rocfft/lib -lhiprand -lrocfft -Wl,-rpath=${ROCM_PATH}/hipblas/lib -L${ROCM_PATH}/hipblas/lib -lhipblas -Wl,-rpath=${ROCM_PATH}/rocblas/lib -L${ROCM_PATH}/rocblas/lib -lrocblas -Wl,-rpath=${ROCM_PATH}/hip/lib -g -pg"
+
 
 if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
-  export LD_LIBRARY_PATH=${CRAY_LD_LIBRARY_PATH}:$LD_LIBRARY_PATH
+# Path to QUDA libraries: Change as needed
+export LD_LIBRARY_PATH=`pwd`/build/usqcd/lib:$LD_LIBRARY_PATH
 
-  export QUDA_ENABLE_GDR=1
-  export QUDA_MILC_HISQ_RECONSTRUCT=13
-  export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9
+# QUDA Tuning Directory: Change location as needed
+export QUDA_RESOURCE_PATH=tunecache
+mkdir -p tunecache
 
-  export MPICH_ENV_DISPLAY=1
-  export MPICH_GPU_SUPPORT_ENABLED=1
+# WARNING: QUDA P2P is currently broken on Frontier due to IPC bug(s) in ROCm:
+#   - rocm/6.x with QUDA P2P --> silent incorrectness in Dslash halo exchanges
+#   - rocm/7.x with QUDA P2P --> hard crash with qudaStreamWaitEvent_ error
+# Until those bugs are fixed, QUDA should be run with P2P disabled
+export QUDA_ENABLE_P2P=0
 
-  export OMP_NUM_THREADS=6
+export QUDA_ENABLE_GDR=1
+export QUDA_MILC_HISQ_RECONSTRUCT=13
+export QUDA_MILC_HISQ_RECONSTRUCT_SLOPPY=9
+export GPUDIRECT=" -gpudirect "
 
-  export SLURM_CPU_BIND="cores"
-  export OMP_PROC_BIND="spread, spread, spread"
+export MPICH_ENV_DISPLAY=1
+export MPICH_GPU_SUPPORT_ENABLED=1
+
+export OMP_NUM_THREADS=6
+export OMP_PROC_BIND=spread
+MASK_0="0x00fe000000000000"
+MASK_1="0xfe00000000000000"
+MASK_2="0x0000000000fe0000"
+MASK_3="0x00000000fe000000"
+MASK_4="0x00000000000000fe"
+MASK_5="0x000000000000fe00"
+MASK_6="0x000000fe00000000"
+MASK_7="0x0000fe0000000000"
+MEMBIND="--mem-bind=map_mem:3,3,1,1,0,0,2,2"
+CPU_MASK="--cpu-bind=mask_cpu:${MASK_0},${MASK_1},${MASK_2},${MASK_3},${MASK_4},${MASK_5},${MASK_6},${MASK_7}"
 fi
