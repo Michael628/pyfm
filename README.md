@@ -1,10 +1,8 @@
 # PyFM
 
-Nanny, postprocessing, and A2A contraction scripts for lattice QCD calculations.
+Lattice QCD workflow toolkit: job nanny, input generation, data aggregation, and A2A contraction.
 
 ## Installation
-
-### Python package
 
 Requires Python >= 3.12.
 
@@ -12,60 +10,83 @@ Requires Python >= 3.12.
 pip install -e .
 ```
 
-### Building Grid, Hadrons, and HadronsMILC
+This installs the `pyfm` CLI entry point.
 
-PyFM drives the [HadronsMILC](https://github.com/Michael628/HadronsMILC) application, which depends on [Grid](https://github.com/milc-qcd/Grid) and [Hadrons](https://github.com/milc-qcd/Hadrons). The `systems/build.sh` script in this repo handles cloning, configuring, and building all three. Run it from the parent workspace directory that will contain all repos side-by-side:
+## Workspace setup
+
+```bash
+# Initialize a new workspace directory
+pyfm workspace setup --workspace /path/to/workspace --scheduler slurm --system perlmutter
+
+# Load the system environment into your shell
+eval "$(pyfm workspace env --system perlmutter)"
+```
+
+## Building Grid, Hadrons, and HadronsMILC
+
+PyFM drives the [HadronsMILC](https://github.com/Michael628/HadronsMILC) application, which depends on [Grid](https://github.com/milc-qcd/Grid) and [Hadrons](https://github.com/milc-qcd/Hadrons). Run from the parent workspace directory:
 
 ```bash
 # Build all components for a generic scalar (CPU) system
-pyfm/systems/build.sh --system scalar --all
+pyfm build run --system scalar --all
 
 # Build for a specific HPC system (e.g. Perlmutter GPU)
-pyfm/systems/build.sh --system perlmutter --all --threads 8
+pyfm build run --system perlmutter --all --threads 8
 
 # Build dependencies first, then the stack
-pyfm/systems/build.sh --gmp --mpfr --lime --system scalar --grid --hadrons --app
+pyfm build run --gmp --mpfr --lime --system scalar --grid --hadrons
 ```
 
-Available systems: `scalar` (CPU, default), `perlmutter`, `deltaai`, `lq`, `lq2`. See [`systems/README.md`](systems/README.md) for full details on customizing builds and adding new systems.
+Available systems: `scalar` (CPU, default), `perlmutter`, `deltaai`, `lq`, `lq2`. See [`systems/README.md`](systems/README.md) for details on customizing builds and adding new systems.
 
-## Scripts
+## CLI reference
 
-The `scripts/` directory contains standalone utilities for managing lattice QCD workflows:
+All commands read a YAML parameter file (default `params.yaml`). See [`docs/pyfm-params-yaml-reference.md`](docs/pyfm-params-yaml-reference.md) for a full parameter reference.
 
-### Input Generation & Task Management
+### Job nanny
 
-- **`generate_input.py`** - Generate input files for specific job steps and configurations
-  - Usage: `python scripts/generate_input.py -j <job> -s <series> -n <config> [-p params.yaml]`
-  - Creates properly formatted input files based on parameter specifications
+```bash
+# Add todo entries for series 'a', configs 1000–2000 (step 10), steps hadrons and contract
+pyfm nanny add a hadrons contract --cfg-range 1000 2010 10
 
-- **`check_task_completion.py`** - Audit task completion status for a given configuration
-  - Usage: `python scripts/check_task_completion.py -j <job> -s <series> -n <config> [-p params.yaml] [-v]`
-  - Reports missing/complete files; use `-v` flag to show all files
+# Run the nanny loop (submit and monitor jobs)
+pyfm nanny run [-j hadrons]
 
-### Data Processing & Aggregation
+# Submit a single job manually
+pyfm nanny submit -i input_list.txt -j hadrons
 
-- **`aggregate_task_data.py`** - Aggregate all output data for a job step
-  - Usage: `python scripts/aggregate_task_data.py -j <job> [-p params.yaml] [-f csv]`
-  - Collects and consolidates outputs matching the job specification
+# Check job status / audit output files
+pyfm nanny check
+pyfm nanny check -j hadrons -s a -n 1000 -v
+```
 
-- **`process_lmi_df.py`** - Process low-mode interpolator dataframes
-  - Usage: `python scripts/process_lmi_df.py <file_paths...>`
-  - Transforms raw dataframes (averages over tsource, converts to real, reindexes)
-  - Expects input from `dataframes/` directory, outputs to `processed_dataframes/`
+### Input generation & aggregation
 
-- **`merge_completed_df.py`** - Merge multiple processed dataframes into a single file
-  - Usage: `python scripts/merge_completed_df.py [-i] <outfile> <filestem>`
-  - Use `-i` flag to compute only the intersection of configurations across files
-  - Useful for combining results from different runs or ensembles
+```bash
+# Generate input file for a specific job/series/config
+pyfm task generate -j hadrons -s a -n 1000
 
-### Analysis Tools
+# Aggregate outputs across all configs
+pyfm task aggregate -j hadrons [-f hdf5] [--average] [--skip-existing]
+```
 
-- **`compare_hdf5_matrices.py`** - Compare a2aMatrix datasets between two HDF5 files
-  - Usage: `python scripts/compare_hdf5_matrices.py <file1> <file2> [-v]`
-  - Validates numerical consistency between files
-  - Reports shape mismatches, dtype differences, and element-wise differences
+### A2A contractions
 
-- **`contract_a2a_diagrams.py`** - Execute all-to-all (A2A) contraction calculations
-  - Usage: Configured via parameter file with diagram specifications
-  - Computes meson correlators from A2A vectors with support for low/high mode mixing
+```bash
+pyfm contract run params.yaml [--time-average]
+```
+
+### Performance analysis
+
+```bash
+# Summarize timing from a Hadrons output file
+pyfm audit runtime output.log
+
+# Emit JSON benchmark data for an LMI run
+pyfm audit benchmark -j hadrons --log output.log
+```
+
+## Documentation
+
+- [CLI command reference](docs/pyfm-cli-commands-outline.md)
+- [params.yaml parameter reference](docs/pyfm-params-yaml-reference.md)
