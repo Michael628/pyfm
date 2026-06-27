@@ -11,7 +11,7 @@ The CLI is organized into six command groups:
 | `nanny` | Automated HPC job submission via todo files |
 | `task` | Generate input files & aggregate task output |
 | `contract` | Run A2A all-to-all contraction calculations |
-| `performance` | Analyze performance output logs |
+| `audit` | Audit runtime performance output logs |
 | `build` | Compile lattice QCD software components |
 | `workspace` | Initialize & configure a PyFM workspace |
 
@@ -145,22 +145,22 @@ pyfm contract run -p PARAM_FILE [--time-average]
 
 ---
 
-## `pyfm performance analyze`
+## `pyfm audit runtime`
 
 **1. What it does**
-Parses a single Hadrons output file and prints a human-readable performance summary.
+Parses a single Hadrons output file and prints a human-readable runtime performance summary.
 
 **2. Configuration it pulls from**
 - `OUTPUT_FILE` (positional, must exist) → the Hadrons output/log to analyze. No YAML config needed.
 
 **3. The command**
 ```bash
-pyfm performance analyze OUTPUT_FILE
+pyfm audit runtime OUTPUT_FILE
 ```
 
 ---
 
-## `pyfm performance benchmark`
+## `pyfm audit benchmark`
 
 **1. What it does**
 Computes component-first benchmark data for a configured Hadrons/Grid LMI run and emits it as JSON to stdout (sorted keys).
@@ -172,7 +172,7 @@ Computes component-first benchmark data for a configured Hadrons/Grid LMI run an
 
 **3. The command**
 ```bash
-pyfm performance benchmark -j JOB --log LOG_FILE [-p params.yaml]
+pyfm audit benchmark -j JOB --log LOG_FILE [-p params.yaml]
 ```
 
 ---
@@ -235,8 +235,8 @@ eval "$(pyfm workspace env --system NAME [--ext TAG] [--runtime-env true])"
 
 ## Suggestions / Notes
 
-- **Slide grouping:** Consider a divider/title slide before each group (`nanny`, `task`, `contract`, `performance`, `build`, `workspace`) so related commands cluster together.
+- **Slide grouping:** Consider a divider/title slide before each group (`nanny`, `task`, `contract`, `audit`, `build`, `workspace`) so related commands cluster together.
 - **Shared convention:** Almost every data command shares the `-p/--param-file` → `params.yaml` and `--logging-level` pattern. A single "common options" slide up front would let you omit repeating it on each command.
 - **Mode-dependent commands:** `nanny check` and `contract run` behave differently based on which flags are present — a small "before/after" or two-column slide works well for these.
-- **End-to-end flow:** A workflow slide showing the typical lifecycle (`workspace setup` → `build run` → `nanny add` → `nanny run` → `task aggregate` → `performance analyze`) would tie the commands together narratively.
+- **End-to-end flow:** A workflow slide showing the typical lifecycle (`workspace setup` → `build run` → `nanny add` → `nanny run` → `task aggregate` → `audit runtime`) would tie the commands together narratively.
 - **Worth confirming:** I documented behavior from the source; the exact contents of each `params.yaml` section (e.g. the full `ContractConfig`/`job_setup` schema) could be expanded into appendix slides if your audience needs the config detail.

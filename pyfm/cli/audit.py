@@ -7,24 +7,24 @@ from pyfm.performance import analyze_file, benchmark_lmi_performance
 
 
 @click.group()
-def performance():
-    """Analyze performance output logs."""
+def audit():
+    """Audit runtime performance output logs."""
     pass
 
 
-@performance.command(name="analyze")
+@audit.command(name="runtime")
 @click.argument(
     "output_file", type=click.Path(exists=True, dir_okay=False, readable=True)
 )
-def analyze(output_file):
-    """Print a performance summary for a Hadrons OUTPUT_FILE."""
+def runtime(output_file):
+    """Print a runtime performance summary for a Hadrons OUTPUT_FILE."""
     try:
         analyze_file(output_file)
     except ValueError as e:
         raise click.ClickException(str(e)) from e
 
 
-@performance.command(name="benchmark")
+@audit.command(name="benchmark")
 @click.option("-j", "--job", type=str, required=True, help="Job step name.")
 @click.option(
     "--log",
