@@ -46,3 +46,6 @@ tmp/
 thoughts
 AGENTS.md
 CLAUDE.md
+
+# Local agent artifacts
+.rpiv/

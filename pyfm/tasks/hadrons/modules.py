@@ -78,6 +78,23 @@ def action_float(*args, **kwargs) -> t.Dict:
     return res
 
 
+def hisq_action(name: str, mass: str, gauge: str) -> t.Dict:
+    return {
+        "id": {"name": name, "type": "MAction::HighlyImprovedStaggeredMILC"},
+        "options": {
+            "mass": mass,
+            "boundary": "1 1 1 -1",
+            "gauge": gauge,
+        },
+    }
+
+
+def hisq_action_float(name: str, mass: str, gauge: str) -> t.Dict:
+    res = hisq_action(name, mass, gauge)
+    res["id"]["type"] = "MAction::HighlyImprovedStaggeredMILCF"
+    return res
+
+
 def op(name: str, action: str) -> t.Dict:
     return {
         "id": {"name": name, "type": "MFermion::StagOperators"},
