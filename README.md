@@ -12,6 +12,18 @@ pip install -e .
 
 This installs the `pyfm` CLI entry point.
 
+### Shell completion (optional)
+
+Tab completion for subcommands and options is built in. Generate a script for your shell and source it once:
+
+```bash
+pyfm completion --shell bash >> ~/.bashrc      # then: exec bash (or new terminal)
+pyfm completion --shell zsh  > ~/.zsh/_pyfm     # ensure ~/.zsh is on your fpath
+pyfm completion --shell fish > ~/.config/fish/completions/pyfm.fish
+```
+
+The script assumes `pyfm` is on your `PATH`. Use `--prog` if the executable has a different name (e.g. an alias).
+
 ## Workspace setup
 
 ```bash
@@ -84,6 +96,9 @@ pyfm audit runtime output.log
 
 # Emit JSON benchmark data for an LMI run
 pyfm audit benchmark -j hadrons --log output.log
+
+# Compare the outputs of two jobs of the same task type
+pyfm audit output -j baseline rerun -s a -n 1000 [--rtol 1e-9] [--atol 1e-12]
 ```
 
 ## Documentation
