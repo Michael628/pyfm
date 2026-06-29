@@ -29,88 +29,82 @@ shared_params:
   runid: 'LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise'
 
 contract_params:
-  hardware: 'cpu'
-  logging_level: 'DEBUG'
+  hardware: "cpu"
   diagram_params:
+    pion_local_hms:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        - file: "meson" # Label given to location of meson field files (see 'files:' section below)
+          mass_original: "l" # Mass used in creating meson field file
+          mass_updated: "h" # Label for desired mass (from mass: list above)
+          evalfile: 'eval' # Label given to location of eigenvalue files (see 'files:' section below)
+      gammas:
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 16000 # Equal to 2 x eigs
+      outfile: contract # Label given to output files (see 'files:' section below)
+    vec_local_hms:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass_original: "l"
+        mass_updated: "h"
+        evalfile: 'eval'
+      gammas:
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
+      eig_range:
+        min: 0
+        max: 16000
+      outfile: contract
     pion_local:
       gamma_label: pion_local
       symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: 'meson_contract_ll'
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
       gammas:
-      - 'G5_G5'
-      low_label: e8000
-      low_max: 16000
-      mass: '001326'
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 16000
       outfile: contract
     vec_local:
       gamma_label: vec_local
       symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: 'meson_contract_ll'
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
       gammas:
-      - 'GX_GX'
-      - 'GY_GY'
-      - 'GZ_GZ'
-      low_label: e8000
-      low_max: 16000
-      mass: '001326'
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
+      eig_range:
+        min: 0
+        max: 16000
       outfile: contract
     vec_onelink:
       gamma_label: vec_onelink
       symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: 'meson_contract_ll'
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
       gammas:
-      - 'GX_G1'
-      - 'GY_G1'
-      - 'GZ_G1'
-      low_label: e8000
-      low_max: 16000
-      mass: '001326'
-      outfile: contract
-    pion_local_hms:
-      gamma_label: pion_local
-      symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: 'meson_contract_ll'
-      evalfile: 'eval'
-      gammas:
-      - 'G5_G5'
-      low_label: e8000
-      low_max: 16000
-      meson_mass: '001326'
-      mass: '000514'
-      outfile: contract
-    vec_local_hms:
-      gamma_label: vec_local
-      symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: 'meson_contract_ll'
-      evalfile: 'eval'
-      gammas:
-      - 'GX_GX'
-      - 'GY_GY'
-      - 'GZ_GZ'
-      low_label: e8000
-      low_max: 16000
-      meson_mass: '001326'
-      mass: '000514'
-      outfile: contract
-    vec_onelink_hms:
-      gamma_label: vec_onelink
-      symmetric: True
-      contraction_type: conn_2pt
-      mesonfiles: 'meson_contract_ll'
-      evalfile: 'eval'
-      gammas:
-      - 'GX_G1'
-      - 'GY_G1'
-      - 'GZ_G1'
-      low_label: e8000
-      low_max: 16000
-      meson_mass: '001326'
-      mass: '000514'
+        - "GX_G1"
+        - "GY_G1"
+        - "GZ_G1"
+      eig_range:
+        min: 0
+        max: 16000
       outfile: contract
 
 smear_params:
