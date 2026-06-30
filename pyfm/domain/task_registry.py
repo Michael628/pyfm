@@ -23,17 +23,26 @@ class TaskHandler:
         Callable ``(config, ...) -> Any`` that enumerates expected output files.
     build_aggregator_params:
         Callable ``(config, ...) -> Any`` that provides aggregation parameters.
+    compare_outputs:
+        Callable ``(config_a, config_b) -> Any`` that compares two task
+        configs' output data and returns a comparison report.
     """
 
     config_type: Type[ConfigBase]
     build_input_params: Optional[Callable] = None
     create_outfile_catalog: Optional[Callable] = None
     build_aggregator_params: Optional[Callable] = None
+    compare_outputs: Optional[Callable] = None
 
     # Names of the optional callable fields.  Stored as a ClassVar frozenset so
     # it doesn't participate in __init__, __eq__, __repr__, or __hash__.
     _CALLABLE_FIELDS: ClassVar[FrozenSet[str]] = frozenset(
-        {"build_input_params", "create_outfile_catalog", "build_aggregator_params"}
+        {
+            "build_input_params",
+            "create_outfile_catalog",
+            "build_aggregator_params",
+            "compare_outputs",
+        }
     )
 
     def __getattribute__(self, name: str):
@@ -53,7 +62,12 @@ class TaskHandler:
 
 _handlers: Dict[str, TaskHandler] = {}
 
-_VALID_CALLABLES = {"build_input_params", "create_outfile_catalog", "build_aggregator_params"}
+_VALID_CALLABLES = {
+    "build_input_params",
+    "create_outfile_catalog",
+    "build_aggregator_params",
+    "compare_outputs",
+}
 
 
 def register(
@@ -72,7 +86,8 @@ def register(
     **callables:
         Optional callables to attach.  Accepted keywords:
         ``build_input_params``, ``create_outfile_catalog``,
-        ``build_aggregator_params``.  Any other keyword raises ``TypeError``.
+        ``build_aggregator_params``, ``compare_outputs``.  Any other keyword
+        raises ``TypeError``.
 
     Raises
     ------

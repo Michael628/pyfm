@@ -6,6 +6,7 @@ from pyfm.domain.protocols import (
     InputBuilderProtocol,
     OutfileCatalogProtocol,
     AggregatorProtocol,
+    OutputComparisonProtocol,
     TaskHandlerProtocol,
 )
 from pyfm.domain.conftypes import ConfigBase
@@ -39,6 +40,10 @@ def build_aggregator_params_stub(config):
     return {"aggregate": True}
 
 
+def compare_outputs_stub(config_a, config_b):
+    return {"compared": True}
+
+
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -67,6 +72,7 @@ class TestTaskHandler:
         assert object.__getattribute__(handler, "build_input_params") is None
         assert object.__getattribute__(handler, "create_outfile_catalog") is None
         assert object.__getattribute__(handler, "build_aggregator_params") is None
+        assert object.__getattribute__(handler, "compare_outputs") is None
 
     def test_set_callable_accessible(self):
         handler = TaskHandler(
@@ -104,10 +110,12 @@ class TestTaskHandler:
             build_input_params=build_input_params_stub,
             create_outfile_catalog=create_outfile_catalog_stub,
             build_aggregator_params=build_aggregator_params_stub,
+            compare_outputs=compare_outputs_stub,
         )
         assert handler.build_input_params is build_input_params_stub
         assert handler.create_outfile_catalog is create_outfile_catalog_stub
         assert handler.build_aggregator_params is build_aggregator_params_stub
+        assert handler.compare_outputs is compare_outputs_stub
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +128,7 @@ class TestProtocolSatisfaction:
         assert not isinstance(handler, InputBuilderProtocol)
         assert not isinstance(handler, OutfileCatalogProtocol)
         assert not isinstance(handler, AggregatorProtocol)
+        assert not isinstance(handler, OutputComparisonProtocol)
         assert not isinstance(handler, TaskHandlerProtocol)
 
     def test_build_input_params_satisfies_input_builder(self):
@@ -146,6 +155,16 @@ class TestProtocolSatisfaction:
             build_aggregator_params=build_aggregator_params_stub,
         )
         assert isinstance(handler, AggregatorProtocol)
+        assert not isinstance(handler, TaskHandlerProtocol)
+
+    def test_compare_outputs_satisfies_output_comparison(self):
+        handler = TaskHandler(
+            config_type=FakeConfig,
+            compare_outputs=compare_outputs_stub,
+        )
+        assert isinstance(handler, OutputComparisonProtocol)
+        assert not isinstance(handler, InputBuilderProtocol)
+        assert not isinstance(handler, OutfileCatalogProtocol)
         assert not isinstance(handler, TaskHandlerProtocol)
 
     def test_full_handler_satisfies_task_handler_protocol(self):
@@ -188,11 +207,13 @@ class TestRegister:
             build_input_params=build_input_params_stub,
             create_outfile_catalog=create_outfile_catalog_stub,
             build_aggregator_params=build_aggregator_params_stub,
+            compare_outputs=compare_outputs_stub,
         )
         handler = task_registry.get("task_a")
         assert handler.build_input_params is build_input_params_stub
         assert handler.create_outfile_catalog is create_outfile_catalog_stub
         assert handler.build_aggregator_params is build_aggregator_params_stub
+        assert handler.compare_outputs is compare_outputs_stub
 
     def test_register_duplicate_key_raises_value_error(self):
         task_registry.register("task_a", FakeConfig)

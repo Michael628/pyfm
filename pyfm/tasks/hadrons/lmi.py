@@ -196,6 +196,24 @@ def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
     )
 
 
+def compare_outputs(
+    config_a: LMIConfig, config_b: LMIConfig, *, rtol: float = 1e-9, atol: float = 1e-12
+) -> pd.DataFrame:
+    """Compare LMI outputs between two configs.
+
+    Currently delegates to the high-mode correlator comparison only (the primary
+    output). meson/epack comparison is deferred.
+    """
+    if config_a.skip_high_modes or config_b.skip_high_modes:
+        raise ValueError(
+            "compare_outputs requires both configs to compute high_modes "
+            "(skip_high_modes must be False on both sides)."
+        )
+    return highmode.compare_outputs(
+        config_a.high_modes_config, config_b.high_modes_config, rtol=rtol, atol=atol
+    )
+
+
 # Register LMIConfig with all handlers
 register_task(
     "hadrons_lmi",
@@ -203,6 +221,7 @@ register_task(
     create_outfile_catalog,
     build_input_params,
     build_aggregator_params,
+    compare_outputs,
     normalize_params,
     route_params,
     validate=validate_config,

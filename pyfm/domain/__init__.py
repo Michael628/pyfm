@@ -15,6 +15,7 @@ from pyfm.domain.protocols import (
     InputBuilderProtocol,
     OutfileCatalogProtocol,
     AggregatorProtocol,
+    OutputComparisonProtocol,
     TaskHandlerProtocol,
 )
 from pyfm.domain.ops import Gamma, OpList, MassDict
@@ -41,6 +42,7 @@ __all__ = [
     "InputBuilderProtocol",
     "OutfileCatalogProtocol",
     "AggregatorProtocol",
+    "OutputComparisonProtocol",
     "TaskHandlerProtocol",
     "MassDict",
     "Gamma",

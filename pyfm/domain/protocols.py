@@ -81,6 +81,30 @@ class AggregatorProtocol(t.Protocol):
 
 
 @t.runtime_checkable
+class OutputComparisonProtocol(t.Protocol):
+    """Handler that can compare the output data of two task configs.
+
+    ``config_a`` and ``config_b`` are two independently-built configs, each
+    carrying its own resolved output files. Implementations should accept
+    optional ``rtol`` / ``atol`` tolerances (np.allclose-style) and return a
+    comparison report. Note: ``@runtime_checkable`` does NOT enforce the
+    keyword-only tolerances or their defaults — they are a convention that
+    implementations honor; the structural check only verifies the method exists.
+    """
+
+    def compare_outputs(
+        self,
+        config_a: t.Any,
+        config_b: t.Any,
+        *,
+        rtol: float = 1e-9,
+        atol: float = 1e-12,
+    ) -> t.Any:
+        """Compare the outputs of *config_a* against *config_b*; return a report."""
+        ...
+
+
+@t.runtime_checkable
 class TaskHandlerProtocol(InputBuilderProtocol, OutfileCatalogProtocol, t.Protocol):
     """Composite protocol: a fully standalone task handler.
 

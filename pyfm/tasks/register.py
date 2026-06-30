@@ -6,7 +6,12 @@ from pyfm import utils
 
 # Mapping from positional function name to task_registry callable field name
 _TASK_CALLABLE_NAMES = frozenset(
-    {"build_input_params", "create_outfile_catalog", "build_aggregator_params"}
+    {
+        "build_input_params",
+        "create_outfile_catalog",
+        "build_aggregator_params",
+        "compare_outputs",
+    }
 )
 
 # Mapping from positional function name to build_hooks field name

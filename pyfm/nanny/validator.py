@@ -8,6 +8,8 @@ import pandas as pd
 
 from pyfm.nanny.core import create_task, get_nanny_config, NannyConfig, Scheduler, Task
 import pyfm.nanny.todo as todo
+from pyfm.domain.protocols import OutputComparisonProtocol
+from pyfm.tasks.hadrons import highmode
 
 
 @t.runtime_checkable
@@ -57,6 +59,65 @@ def audit_outfiles(task: Task, verbose: bool = False) -> pd.DataFrame | None:
         logger.warn(f"No output files given for task: {task.key}.")
 
     return df
+
+
+def compare_task_outputs(
+    yaml_params: t.Dict,
+    job_a: str,
+    job_b: str,
+    series: str,
+    cfg: str,
+    *,
+    rtol: float = 1e-9,
+    atol: float = 1e-12,
+) -> pd.DataFrame:
+    """Compare the outputs of two jobs of the same task type.
+
+    Four-step flow (mirrors the ``pyfm audit output`` contract):
+      1. Verify the compared (high_modes) outputs exist (and meet good_size)
+         for both jobs.
+      2. Verify both jobs resolve to the same task type.
+      3. Verify the task type has a comparison protocol registered.
+      4. Run ``compare_outputs(config_a, config_b)`` and return the report.
+    """
+    task_a = create_task(job_a, yaml_params, series, cfg)
+    task_b = create_task(job_b, yaml_params, series, cfg)
+
+    # Step 1: the compared outputs (high_modes correlators) exist & are complete
+    # for both jobs. Scoped to high_modes — the subconfig step 4 actually
+    # compares — so unrelated epack/meson outputs don't gate the comparison.
+    # (v1 coupling: hadrons_lmi exposes .high_modes_config; this generalizes
+    # when other task types register compare_outputs.)
+    for task, job in ((task_a, job_a), (task_b, job_b)):
+        df = highmode.create_outfile_catalog(task.config.high_modes_config)
+        if df is None or df.empty:
+            raise ValueError(
+                f"Job {job!r} ({task.key}) has no high_modes outfile catalog; cannot compare."
+            )
+        bad = df[(df["exists"] == False) | (df["file_size"].fillna(0) < df["good_size"])]
+        if not bad.empty:
+            raise ValueError(
+                f"Job {job!r} ({task.key}) is missing or has incomplete high_modes "
+                f"outputs ({len(bad)} file(s) below threshold)."
+            )
+
+    # Step 2: same task type.
+    if task_a.key != task_b.key:
+        raise ValueError(
+            f"Cannot compare jobs of different task types: "
+            f"{job_a!r} -> {task_a.key!r} vs {job_b!r} -> {task_b.key!r}."
+        )
+
+    # Step 3: comparison protocol registered for this task type.
+    handler = task_a.handler
+    if not isinstance(handler, OutputComparisonProtocol):
+        raise ValueError(
+            f"Task type {task_a.key!r} has no comparison protocol registered "
+            f"(compare_outputs not implemented for this task type)."
+        )
+
+    # Step 4: run the comparison.
+    return handler.compare_outputs(task_a.config, task_b.config, rtol=rtol, atol=atol)
 
 
 ### Residual old code from Carleton
