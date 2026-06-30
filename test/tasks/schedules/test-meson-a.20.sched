@@ -1,7 +1,7 @@
 11
 gauge
-gauge_fat
-gauge_long
+gauge_smear_fat
+gauge_smear_long
 gauge_apbc
 stag_mass_zero
 stag_op

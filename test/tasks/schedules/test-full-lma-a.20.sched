@@ -1,7 +1,7 @@
 171
 gauge
-gauge_fat
-gauge_long
+gauge_smear_fat
+gauge_smear_long
 gauge_apbc
 stag_mass_zero
 stag_op
@@ -12,8 +12,8 @@ evecs_mass_u
 stag_mass_l
 mf_local_mass_l
 mf_onelink_mass_l
-gauge_fatf
-gauge_longf
+gauge_smear_fatf
+gauge_smear_longf
 stag_mass_u
 istag_mass_u
 istag_mass_l

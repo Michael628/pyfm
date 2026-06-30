@@ -15,8 +15,19 @@ from pyfm.tasks.register import register_task
 
 class ActionType(SerializableEnum):
     FREE = 0
-    IMPROVED = 1
-    HISQ = 2
+    LOAD = 1
+    SMEAR = 2
+
+
+# Fat/long link field names are action-type independent. For SMEAR they are the
+# outputs of the MGauge::HISQSmear module (named "<module>_fat"/"<module>_long");
+# for FREE/LOAD they are directly created fields. One name pair for every action
+# type keeps the single-precision cast and the ImprovedStaggered actions free of
+# any action_type branching.
+_FAT = "gauge_smear_fat"
+_LONG = "gauge_smear_long"
+# The HISQSmear module name; its outputs are _FAT/_LONG.
+_SMEAR_MODULE = "gauge_smear"
 
 
 @dataclass(frozen=True)
@@ -25,41 +36,60 @@ class GaugeConfig(SimpleConfig):
     gauge_links: Outfile
     long_links: Outfile
     fat_links: Outfile
-    action_type: ActionType = ActionType.IMPROVED
+    action_type: ActionType = ActionType.LOAD
     action_name: str | None = None
+    save_smear: bool = False
 
 
 def build_base_gauge(config: GaugeConfig) -> HadronsInput:
     """Create base gauge modules, including the APBC shift gauge.
 
-    These are always generated as they are the foundation for all computations.
-    ``action_type`` controls construction: ``FREE`` uses unit gauge; ``IMPROVED``
-    and ``HISQ`` load gauge fields from disk. For ``HISQ`` the
-    ``gauge_fat``/``gauge_long`` modules are omitted (the HISQ action smears the
-    thin gauge internally), while ``FREE`` and ``IMPROVED`` still create them.
+    ``action_type`` only controls how the thin gauge and the fat/long links are
+    *produced* — the field names they are published under are identical for every
+    action type (``gauge``, ``gauge_smear_fat``, ``gauge_smear_long``):
+
+    * ``FREE`` — unit thin gauge, smeared on the fly via ``MGauge::HISQSmear``.
+    * ``LOAD`` — thin gauge and pre-smeared fat/long links loaded from disk.
+    * ``SMEAR`` — thin gauge loaded, fat/long links derived on the fly via
+      ``MGauge::HISQSmear``.
+
+    ``FREE`` and ``SMEAR`` both route the thin gauge through ``HISQSmear`` so
+    that the KS phases and boundary conditions are baked into the fat/long links
+    (via rephase), matching the convention of the disk-resident links used by
+    ``LOAD``. When ``config.save_smear`` is set, those on-the-fly links are also
+    written to the ``fat_links``/``long_links`` outfile paths via
+    ``MIO::SaveIldg``.
     """
     modules = {}
     schedule = []
 
-    # Thin gauge: always present. FREE uses unit gauge; IMPROVED/HISQ load it.
+    # Thin gauge: FREE uses unit gauge; LOAD/SMEAR load it.
     if config.action_type == ActionType.FREE:
         modules["gauge"] = hadmods.unit_gauge("gauge")
     else:
         modules["gauge"] = hadmods.load_gauge("gauge", config.gauge_links.filestem)
     schedule.append("gauge")
 
-    # Fat/long links: required by FREE (unit) and IMPROVED (loaded) actions.
-    # Unused by HISQ, which smears the thin gauge internally.
-    if config.action_type != ActionType.HISQ:
-        for name in ("gauge_fat", "gauge_long"):
-            schedule.append(name)
-            if config.action_type == ActionType.FREE:
-                modules[name] = hadmods.unit_gauge(name)
-            else:
-                ofile_label = f"{name.split('_')[-1]}_links"
-                modules[name] = hadmods.load_gauge(
-                    name, getattr(config, ofile_label).filestem
-                )
+    # Fat/long links. Field names are action-type independent; only the producer
+    # differs. LOAD reads them from disk (already smeared, KS phases carried);
+    # FREE/SMEAR derive them on the fly via HISQSmear, which bakes the KS phases
+    # and boundary into the links via rephase.
+    if config.action_type == ActionType.LOAD:
+        for field, ofile in ((_FAT, config.fat_links), (_LONG, config.long_links)):
+            modules[field] = hadmods.load_gauge(field, ofile.filestem)
+            schedule.append(field)
+    else:
+        modules[_SMEAR_MODULE] = hadmods.hisq_smear(_SMEAR_MODULE, gauge="gauge")
+        schedule.append(_SMEAR_MODULE)
+
+        if config.save_smear:
+            modules["save_fat"] = hadmods.save_ildg(
+                "save_fat", gauge=_FAT, filestem=config.fat_links.filestem
+            )
+            modules["save_long"] = hadmods.save_ildg(
+                "save_long", gauge=_LONG, filestem=config.long_links.filestem
+            )
+            schedule += ["save_fat", "save_long"]
 
     modules["gauge_apbc"] = hadmods.apbc_gauge("gauge_apbc", "gauge")
     schedule.append("gauge_apbc")
@@ -68,23 +98,16 @@ def build_base_gauge(config: GaugeConfig) -> HadronsInput:
 
 
 def build_sp_gauge(config: GaugeConfig) -> HadronsInput:
-    """Create single-precision gauge modules for mixed-precision solvers.
+    """Create single-precision fat/long link modules for mixed-precision solvers.
 
-    For ``IMPROVED``/``FREE`` actions these are the single-precision fat/long
-    links (``gauge_fatf``, ``gauge_longf``). For ``HISQ`` the action smears the
-    thin gauge internally, so only the single-precision thin gauge (``gauge_f``)
-    is produced.
+    Casts the double-precision fat/long links (loaded, unit, or smeared) down to
+    single precision. The source field names are action-type independent, so no
+    branching on ``action_type`` is needed here.
     """
-    modules = {}
-    schedule = []
-    if config.action_type == ActionType.HISQ:
-        modules["gauge_f"] = hadmods.cast_gauge("gauge_f", "gauge")
-        schedule.append("gauge_f")
-    else:
-        modules["gauge_fatf"] = hadmods.cast_gauge("gauge_fatf", "gauge_fat")
-        modules["gauge_longf"] = hadmods.cast_gauge("gauge_longf", "gauge_long")
-        schedule += ["gauge_fatf", "gauge_longf"]
-    return HadronsInput(modules=modules, schedule=schedule)
+    modules = {
+        f"{smear}f": hadmods.cast_gauge(f"{smear}f", smear) for smear in [_FAT, _LONG]
+    }
+    return HadronsInput(modules=modules, schedule=list(modules.keys()))
 
 
 def build_action_modules(
@@ -92,7 +115,7 @@ def build_action_modules(
     dp_masses: t.List[str] | None = None,
     sp_masses: t.List[str] | None = None,
 ) -> HadronsInput:
-    """Create action modules for double and single precision.
+    """Create ``ImprovedStaggeredMILC`` action modules for double/single precision.
 
     Args:
         config: GaugeConfig instance
@@ -102,9 +125,10 @@ def build_action_modules(
     Returns:
         HadronsInput with action modules and their schedule entries.
 
-    ``action_type`` selects the module family: ``IMPROVED``/``FREE`` use the
-    fat/long-link ``ImprovedStaggeredMILC`` action; ``HISQ`` uses the
-    thin-gauge ``HighlyImprovedStaggeredMILC`` action (which smears internally).
+    Every action type feeds the fat/long links into the fat/long-link
+    ``ImprovedStaggeredMILC`` action. The link field names are action-type
+    independent (``gauge_smear_fat``/``gauge_smear_long`` for dp,
+    ``gauge_smear_fatf``/``gauge_smear_longf`` for sp).
     """
     if dp_masses is None:
         dp_masses = []
@@ -118,29 +142,18 @@ def build_action_modules(
     for mass_label in dp_masses:
         mass = config.mass.to_string(mass_label)
         name = config.action_name.format(mass=mass_label)
-        if config.action_type == ActionType.HISQ:
-            modules[name] = hadmods.hisq_action(name=name, mass=mass, gauge="gauge")
-        else:
-            modules[name] = hadmods.action(
-                name=name, mass=mass, gauge_fat="gauge_fat", gauge_long="gauge_long"
-            )
+        modules[name] = hadmods.action(
+            name=name, mass=mass, gauge_fat=_FAT, gauge_long=_LONG
+        )
         schedule.append(name)
 
     # Single-precision actions
     for mass_label in sp_masses:
         mass = config.mass.to_string(mass_label)
         iname = f"i{config.action_name.format(mass=mass_label)}"
-        if config.action_type == ActionType.HISQ:
-            modules[iname] = hadmods.hisq_action_float(
-                name=iname, mass=mass, gauge="gauge_f"
-            )
-        else:
-            modules[iname] = hadmods.action_float(
-                name=iname,
-                mass=mass,
-                gauge_fat="gauge_fatf",
-                gauge_long="gauge_longf",
-            )
+        modules[iname] = hadmods.action_float(
+            name=iname, mass=mass, gauge_fat=f"{_FAT}f", gauge_long=f"{_LONG}f"
+        )
         schedule.append(iname)
 
     return HadronsInput(modules=modules, schedule=schedule)
@@ -153,7 +166,7 @@ def normalize_params(params: t.Dict) -> t.Dict:
     ``action_type``. This hook runs before routing (and is skipped for
     already-canonical generated inputs) and maps the legacy flag onto
     ``action_type``. An explicit ``action_type`` always wins; absent both, the
-    ``IMPROVED`` default applies at construction.
+    ``LOAD`` default applies at construction.
     """
     combined = params | params.pop("_preprocessor", {})
     if "free" in combined:
@@ -161,7 +174,7 @@ def normalize_params(params: t.Dict) -> t.Dict:
         is_free = raw is True or (
             isinstance(raw, str) and raw.strip().lower() == "true"
         )
-        combined.setdefault("action_type", "free" if is_free else "improved")
+        combined.setdefault("action_type", "free" if is_free else "load")
     return combined
 
 

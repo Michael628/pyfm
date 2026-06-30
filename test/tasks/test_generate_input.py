@@ -64,8 +64,8 @@ def test_generate_high_modes_cg_input(tmp_path, monkeypatch, hadrons_params):
     assert "MSolver::StagMixedPrecisionCG" not in xml
     assert "MSolver::RBPrecCGMILC" not in xml
     assert "<guesser />" in xml or "<guesser></guesser>" in xml
-    assert "gauge_fatf" not in schedule
-    assert "gauge_longf" not in schedule
+    assert "gauge_smear_fatf" not in schedule
+    assert "gauge_smear_longf" not in schedule
 
 
 GRID_CASES = [

@@ -1,13 +1,13 @@
 86
 gauge
-gauge_fat
-gauge_long
+gauge_smear_fat
+gauge_smear_long
 gauge_apbc
 epack
 evecs_mass_u
 evecs_mass_l
-gauge_fatf
-gauge_longf
+gauge_smear_fatf
+gauge_smear_longf
 stag_mass_u
 stag_mass_l
 istag_mass_u

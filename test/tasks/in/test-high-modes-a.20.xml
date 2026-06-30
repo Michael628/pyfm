@@ -11,7 +11,7 @@
     </module>
     <module>
       <id>
-        <name>gauge_fat</name>
+        <name>gauge_smear_fat</name>
         <type>MIO::LoadIldg</type>
       </id>
       <options>
@@ -20,7 +20,7 @@
     </module>
     <module>
       <id>
-        <name>gauge_long</name>
+        <name>gauge_smear_long</name>
         <type>MIO::LoadIldg</type>
       </id>
       <options>
@@ -76,20 +76,20 @@
     </module>
     <module>
       <id>
-        <name>gauge_fatf</name>
+        <name>gauge_smear_fatf</name>
         <type>MUtilities::GaugeSinglePrecisionCast</type>
       </id>
       <options>
-        <field>gauge_fat</field>
+        <field>gauge_smear_fat</field>
       </options>
     </module>
     <module>
       <id>
-        <name>gauge_longf</name>
+        <name>gauge_smear_longf</name>
         <type>MUtilities::GaugeSinglePrecisionCast</type>
       </id>
       <options>
-        <field>gauge_long</field>
+        <field>gauge_smear_long</field>
       </options>
     </module>
     <module>
@@ -102,8 +102,8 @@
         <boundary>1 1 1 1</boundary>
         <c1>1.0</c1>
         <c2>1.0</c2>
-        <gaugefat>gauge_fat</gaugefat>
-        <gaugelong>gauge_long</gaugelong>
+        <gaugefat>gauge_smear_fat</gaugefat>
+        <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.001524</mass>
         <tad>1.0</tad>
         <twist>0 0 0</twist>
@@ -119,8 +119,8 @@
         <boundary>1 1 1 1</boundary>
         <c1>1.0</c1>
         <c2>1.0</c2>
-        <gaugefat>gauge_fat</gaugefat>
-        <gaugelong>gauge_long</gaugelong>
+        <gaugefat>gauge_smear_fat</gaugefat>
+        <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.002426</mass>
         <tad>1.0</tad>
         <twist>0 0 0</twist>
@@ -136,8 +136,8 @@
         <boundary>1 1 1 1</boundary>
         <c1>1.0</c1>
         <c2>1.0</c2>
-        <gaugefat>gauge_fatf</gaugefat>
-        <gaugelong>gauge_longf</gaugelong>
+        <gaugefat>gauge_smear_fatf</gaugefat>
+        <gaugelong>gauge_smear_longf</gaugelong>
         <mass>0.001524</mass>
         <tad>1.0</tad>
         <twist>0 0 0</twist>
@@ -153,8 +153,8 @@
         <boundary>1 1 1 1</boundary>
         <c1>1.0</c1>
         <c2>1.0</c2>
-        <gaugefat>gauge_fatf</gaugefat>
-        <gaugelong>gauge_longf</gaugelong>
+        <gaugefat>gauge_smear_fatf</gaugefat>
+        <gaugelong>gauge_smear_longf</gaugelong>
         <mass>0.002426</mass>
         <tad>1.0</tad>
         <twist>0 0 0</twist>

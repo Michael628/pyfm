@@ -37,6 +37,23 @@ def load_gauge(name: str, file: str) -> t.Dict:
     return {"id": {"name": name, "type": "MIO::LoadIldg"}, "options": {"file": file}}
 
 
+def save_ildg(name: str, gauge: str, filestem: str, ensemble_label: str = "") -> t.Dict:
+    """Wrap ``MIO::SaveIldg``.
+
+    Writes the named gauge field to ``<filestem>.<traj>`` as an ILDG file. The
+    trajectory number is appended by the C++ module, matching ``LoadIldg``'s
+    read convention, so ``filestem`` should be the bare path (no extension).
+    """
+    return {
+        "id": {"name": name, "type": "MIO::SaveIldg"},
+        "options": {
+            "gauge": gauge,
+            "fileStem": filestem,
+            "ensembleLabel": ensemble_label,
+        },
+    }
+
+
 def unit_gauge(name: str) -> t.Dict:
     return {"id": {"name": name, "type": "MGauge::Unit"}}
 
@@ -55,17 +72,26 @@ def apbc_gauge(name: str, gauge: str) -> t.Dict:
     }
 
 
+def hisq_smear(name: str, gauge: str, boundary: str = "1 1 1 -1") -> t.Dict:
+    """Wrap ``MGauge::HISQSmear``.
+
+    Smears the thin ``gauge`` field into fat7 + Naik (long) links, producing
+    outputs named ``<name>_fat`` and ``<name>_long``. The KS phases and
+    ``boundary`` are baked into the links via rephase, so the downstream
+    ``ImprovedStaggered`` action consumes them with a plain ``1 1 1 1``
+    boundary (no double rephase), matching the loaded-link convention.
+    """
+    return {
+        "id": {"name": name, "type": "MGauge::HISQSmear"},
+        "options": {"gauge": gauge, "boundary": boundary},
+    }
+
+
 def action(name: str, mass: str, gauge_fat: str, gauge_long: str) -> t.Dict:
     return {
         "id": {"name": name, "type": "MAction::ImprovedStaggeredMILC"},
         "options": {
             "mass": mass,
-            "c1": "1.0",
-            "c2": "1.0",
-            "tad": "1.0",
-            "boundary": "1 1 1 1",
-            "twist": "0 0 0",
-            "Ls": "1",
             "gaugefat": gauge_fat,
             "gaugelong": gauge_long,
         },
@@ -75,23 +101,6 @@ def action(name: str, mass: str, gauge_fat: str, gauge_long: str) -> t.Dict:
 def action_float(*args, **kwargs) -> t.Dict:
     res = action(*args, **kwargs)
     res["id"]["type"] = "MAction::ImprovedStaggeredMILCF"
-    return res
-
-
-def hisq_action(name: str, mass: str, gauge: str) -> t.Dict:
-    return {
-        "id": {"name": name, "type": "MAction::HighlyImprovedStaggeredMILC"},
-        "options": {
-            "mass": mass,
-            "boundary": "1 1 1 -1",
-            "gauge": gauge,
-        },
-    }
-
-
-def hisq_action_float(name: str, mass: str, gauge: str) -> t.Dict:
-    res = hisq_action(name, mass, gauge)
-    res["id"]["type"] = "MAction::HighlyImprovedStaggeredMILCF"
     return res
 
 

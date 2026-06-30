@@ -405,6 +405,61 @@ job_setup:
 
 ---
 
+## `job_setup.hadrons.tasks.gauge` — `GaugeConfig` *(optional)*
+
+The `gauge` sub-block is **optional**. When omitted, `GaugeConfig` defaults to
+`action_type: load` — the thin gauge and pre-smeared `fat_links`/`long_links`
+are loaded from disk (the behavior in the worked example). Add a `gauge` block
+only when you want to change how the fat/long links are produced.
+
+```yaml
+job_setup:
+  hadrons:
+    tasks:
+      gauge:
+        action_type: smear   # load (default) | smear | free
+        save_smear: true      # write on-the-fly links to fat/long_links paths
+      epack:
+        load: false
+        save_evals: true
+        save_eigs: true
+      # ... meson, high_modes
+```
+
+`action_type` selects how the thin gauge and fat/long links are produced (they
+are published under the same field names regardless):
+
+- **`load`** *(default)* — thin gauge loaded from `gauge_links`; pre-smeared
+  `fat_links`/`long_links` loaded from disk.
+- **`smear`** — thin gauge loaded from `gauge_links`; fat/long links derived on
+  the fly via `MGauge::HISQSmear`.
+- **`free`** — unit thin gauge, smeared on the fly via `MGauge::HISQSmear`
+  (no gauge file read).
+
+```yaml
+# HISQ-smear a loaded thin gauge on the fly, without persisting the links:
+gauge:
+  action_type: smear
+
+# Free-field (unit gauge) test, smeared on the fly and saved:
+gauge:
+  action_type: free
+  save_smear: true
+```
+
+| Key | Role | Consumed as |
+|-----|------|-------------|
+| `action_type` | `load` (default) / `smear` / `free`; how thin gauge + fat/long links are produced | `GaugeConfig.action_type` (`ActionType`) |
+| `save_smear` | When `smear`/`free`, also write the on-the-fly fat/long links to the `fat_links`/`long_links` paths via `MIO::SaveIldg` | `GaugeConfig.save_smear` |
+| `free` *(legacy)* | Legacy boolean; `true`→`action_type: free`, `false`→`load`. An explicit `action_type` always wins | Normalized to `action_type` |
+
+`action_name`, `mass`, and the `gauge_links`/`fat_links`/`long_links` `Outfile`s
+are supplied by the LMI parent + `files` (not set in this block). `save_smear`
+only has an effect for `smear`/`free` (under `load` the links are already on
+disk).
+
+---
+
 ## `files` — file label catalog
 
 ```yaml

@@ -11,7 +11,7 @@
     </module>
     <module>
       <id>
-        <name>gauge_fat</name>
+        <name>gauge_smear_fat</name>
         <type>MIO::LoadIldg</type>
       </id>
       <options>
@@ -20,7 +20,7 @@
     </module>
     <module>
       <id>
-        <name>gauge_long</name>
+        <name>gauge_smear_long</name>
         <type>MIO::LoadIldg</type>
       </id>
       <options>
