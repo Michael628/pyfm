@@ -19,6 +19,18 @@ class ActionType(SerializableEnum):
     SMEAR = 2
 
 
+class GaugeFileFormat(SerializableEnum):
+    """On-disk format of a gauge configuration, selecting its reader module.
+
+    Each member's value is the Hadrons module that loads that format, so
+    :func:`pyfm.tasks.hadrons.modules.load_gauge` can pick the reader from
+    ``format.value`` without importing this module (avoiding a circular import).
+    """
+
+    ILDG = "MIO::LoadIldg"
+    MILCV5 = "MIO::LoadMilc"
+
+
 # Fat/long link field names are action-type independent. For SMEAR they are the
 # outputs of the MGauge::HISQSmear module (named "<module>_fat"/"<module>_long");
 # for FREE/LOAD they are directly created fields. One name pair for every action
@@ -39,6 +51,7 @@ class GaugeConfig(SimpleConfig):
     action_type: ActionType = ActionType.LOAD
     action_name: str | None = None
     save_smear: bool = False
+    format: GaugeFileFormat = GaugeFileFormat.ILDG
 
 
 def build_base_gauge(config: GaugeConfig) -> HadronsInput:
@@ -67,7 +80,9 @@ def build_base_gauge(config: GaugeConfig) -> HadronsInput:
     if config.action_type == ActionType.FREE:
         modules["gauge"] = hadmods.unit_gauge("gauge")
     else:
-        modules["gauge"] = hadmods.load_gauge("gauge", config.gauge_links.filestem)
+        modules["gauge"] = hadmods.load_gauge(
+            "gauge", config.gauge_links.filestem, config.format.value
+        )
     schedule.append("gauge")
 
     # Fat/long links. Field names are action-type independent; only the producer
@@ -76,7 +91,9 @@ def build_base_gauge(config: GaugeConfig) -> HadronsInput:
     # and boundary into the links via rephase.
     if config.action_type == ActionType.LOAD:
         for field, ofile in ((_FAT, config.fat_links), (_LONG, config.long_links)):
-            modules[field] = hadmods.load_gauge(field, ofile.filestem)
+            modules[field] = hadmods.load_gauge(
+                field, ofile.filestem, config.format.value
+            )
             schedule.append(field)
     else:
         modules[_SMEAR_MODULE] = hadmods.hisq_smear(_SMEAR_MODULE, gauge="gauge")

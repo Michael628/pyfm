@@ -33,8 +33,19 @@ def xml_wrapper(runid: str, sched: str, cfg: str) -> dict:
     return params
 
 
-def load_gauge(name: str, file: str) -> t.Dict:
-    return {"id": {"name": name, "type": "MIO::LoadIldg"}, "options": {"file": file}}
+def load_gauge(name: str, file: str, load_module_type: str) -> t.Dict:
+    """Wrap a gauge-reader module (e.g. ``MIO::LoadIldg``, ``MIO::LoadMilc``).
+
+    Loads the named gauge field from ``<file>.<traj>`` using the reader named by
+    ``load_module_type``. Both readers append the trajectory number to the bare
+    ``file`` namestem, so ``file`` should carry no extension. The caller picks
+    the module (typically from a ``GaugeFileFormat.value``) so this wrapper stays
+    free of any enum import.
+    """
+    return {
+        "id": {"name": name, "type": load_module_type},
+        "options": {"file": file},
+    }
 
 
 def save_ildg(name: str, gauge: str, filestem: str, ensemble_label: str = "") -> t.Dict:

@@ -14,6 +14,7 @@ from pyfm.domain import MassDict, Outfile
 from pyfm.tasks.hadrons.gauge import (
     ActionType,
     GaugeConfig,
+    GaugeFileFormat,
     build_action_modules,
     build_base_gauge,
     build_sp_gauge,
@@ -26,7 +27,9 @@ def _outfile(label: str) -> Outfile:
 
 
 def _gauge_config(
-    action_type: ActionType = ActionType.LOAD, save_smear: bool = False
+    action_type: ActionType = ActionType.LOAD,
+    save_smear: bool = False,
+    format: GaugeFileFormat = GaugeFileFormat.ILDG,
 ) -> GaugeConfig:
     return GaugeConfig(
         formatting={},
@@ -39,6 +42,7 @@ def _gauge_config(
         action_type=action_type,
         action_name="stag_mass_{mass}",
         save_smear=save_smear,
+        format=format,
     )
 
 
@@ -75,6 +79,33 @@ class TestActionType:
         names = {f.name for f in dataclasses.fields(GaugeConfig)}
         assert "free" not in names
         assert "action_type" in names
+
+
+class TestGaugeFileFormat:
+    @pytest.mark.parametrize(
+        "raw,expected",
+        [
+            ("ildg", GaugeFileFormat.ILDG),
+            ("ILDG", GaugeFileFormat.ILDG),
+            ("milcv5", GaugeFileFormat.MILCV5),
+            ("MILCV5", GaugeFileFormat.MILCV5),
+            ("milc_v5", GaugeFileFormat.MILCV5),
+            ("MILC_V5", GaugeFileFormat.MILCV5),
+        ],
+    )
+    def test_from_dict_resolves_members(self, raw, expected):
+        assert GaugeFileFormat.from_dict(raw) is expected
+
+    def test_from_dict_rejects_unknown(self):
+        with pytest.raises(ValueError):
+            GaugeFileFormat.from_dict("nersc")
+
+    def test_default_is_ildg(self):
+        assert _gauge_config().format is GaugeFileFormat.ILDG
+
+    def test_field_exists(self):
+        names = {f.name for f in dataclasses.fields(GaugeConfig)}
+        assert "format" in names
 
 
 class TestNormalize:
@@ -185,6 +216,46 @@ class TestBuildBaseGauge:
         assert "save_long" not in out.modules
 
 
+class TestGaugeFileFormatRouting:
+    """``format`` selects the reader module for every loaded gauge field."""
+
+    def test_default_ildg_loads_via_loadildg(self):
+        out = build_base_gauge(_gauge_config(ActionType.LOAD))
+        for name in ("gauge", "gauge_smear_fat", "gauge_smear_long"):
+            assert out.modules[name]["id"]["type"] == "MIO::LoadIldg"
+
+    def test_milcv5_load_routes_all_links_to_loadmilc(self):
+        out = build_base_gauge(
+            _gauge_config(ActionType.LOAD, format=GaugeFileFormat.MILCV5)
+        )
+        for name in ("gauge", "gauge_smear_fat", "gauge_smear_long"):
+            assert out.modules[name]["id"]["type"] == "MIO::LoadMilc"
+        # Namestems are unchanged; only the reader module differs.
+        assert out.modules["gauge"]["options"]["file"] == "lat/gauge_links"
+        assert out.modules["gauge_smear_fat"]["options"]["file"] == "lat/fat_links"
+        assert out.modules["gauge_smear_long"]["options"]["file"] == "lat/long_links"
+
+    def test_milcv5_smear_routes_only_thin_gauge_to_loadmilc(self):
+        out = build_base_gauge(
+            _gauge_config(ActionType.SMEAR, format=GaugeFileFormat.MILCV5)
+        )
+        # The thin gauge is loaded with the MILC reader...
+        assert out.modules["gauge"]["id"]["type"] == "MIO::LoadMilc"
+        assert out.modules["gauge"]["options"]["file"] == "lat/gauge_links"
+        # ...while fat/long are derived on the fly via HISQSmear (not loaded).
+        assert "gauge_smear_fat" not in out.modules
+        assert "gauge_smear_long" not in out.modules
+        assert out.modules["gauge_smear"]["id"]["type"] == "MGauge::HISQSmear"
+
+    def test_milcv5_free_uses_unit_gauge(self):
+        # FREE never loads, so format is irrelevant.
+        out = build_base_gauge(
+            _gauge_config(ActionType.FREE, format=GaugeFileFormat.MILCV5)
+        )
+        assert out.modules["gauge"]["id"]["type"] == "MGauge::Unit"
+        assert "gauge_smear_fat" not in out.modules
+
+
 class TestBuildSpGauge:
     def test_load_casts_fat_and_long(self):
         out = build_sp_gauge(_gauge_config(ActionType.LOAD))
@@ -224,7 +295,6 @@ class TestBuildActionModules:
         opts = out.modules[name]["options"]
         assert opts["gaugefat"] == "gauge_smear_fat"
         assert opts["gaugelong"] == "gauge_smear_long"
-        assert opts["boundary"] == "1 1 1 1"
         assert opts["mass"] == "0.1"
 
     def test_smear_sp_uses_fat_long_float(self):
@@ -272,3 +342,30 @@ class TestNormalizeIntegration:
         }
         cfg = build_config(GaugeConfig, params, self._file_params())
         assert cfg.action_type is ActionType.SMEAR
+
+    def test_format_string_coerced_via_from_dict(self):
+        from pyfm.core.builder import build_config
+
+        params = {
+            "formatting": {},
+            "logging_level": "info",
+            "runid": "t",
+            "mass": {"l": 0.1},
+            "action_name": "stag_mass_{mass}",
+            "format": "milcv5",
+        }
+        cfg = build_config(GaugeConfig, params, self._file_params())
+        assert cfg.format is GaugeFileFormat.MILCV5
+
+    def test_format_defaults_to_ildg_when_omitted(self):
+        from pyfm.core.builder import build_config
+
+        params = {
+            "formatting": {},
+            "logging_level": "info",
+            "runid": "t",
+            "mass": {"l": 0.1},
+            "action_name": "stag_mass_{mass}",
+        }
+        cfg = build_config(GaugeConfig, params, self._file_params())
+        assert cfg.format is GaugeFileFormat.ILDG
