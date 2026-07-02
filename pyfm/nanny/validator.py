@@ -37,26 +37,36 @@ def audit_outfiles(task: Task, verbose: bool = False) -> pd.DataFrame | None:
 
     df = get_outfiles(task)
     MAX_FILES = 5
-    output_count = 0
 
-    if df is not None:
-        for i, row in df.iterrows():
-            if not row["exists"]:
-                logger.info(f"File {row['filepath']} does not exist")
-            elif not row["file_size"] >= row["good_size"]:
-                logger.info(f"File {row['filepath']} is not complete")
-            elif verbose:
-                logger.info(f"File {row['filepath']} is complete")
-            else:
-                continue
-
-            output_count += 1
-
-            if output_count >= MAX_FILES:
-                logger.info("...")
-                break
-    else:
+    if df is None:
         logger.warn(f"No output files given for task: {task.key}.")
+        return df
+
+    # Classify every row, then order so the interesting rows come first.
+    complete = df["exists"] & (df["file_size"] >= df["good_size"])
+    status = pd.Series("complete", index=df.index)
+    status[df["exists"] & ~complete] = "too small"
+    status[~df["exists"]] = "missing"
+
+    order = pd.Categorical(status, categories=["missing", "too small", "complete"])
+    view = df.assign(status=status).iloc[order.argsort(kind="stable")]
+
+    # verbose -> all rows; otherwise just the first MAX_FILES incomplete ones.
+    if not verbose:
+        view = view[view["status"] != "complete"]
+    view = view.head(None if verbose else MAX_FILES)
+
+    counts = status.value_counts().to_dict()
+    logger.info(
+        f"Outfile audit for {task.key}: "
+        f"{counts.get('missing', 0)} missing, "
+        f"{counts.get('too small', 0)} too small, "
+        f"{counts.get('complete', 0)} complete"
+    )
+    if not view.empty:
+        logger.info("\n" + view[["status", "filepath"]].to_string(index=False))
+    if not verbose and (status != "complete").sum() > MAX_FILES:
+        logger.info("...")
 
     return df
 
@@ -94,7 +104,9 @@ def compare_task_outputs(
             raise ValueError(
                 f"Job {job!r} ({task.key}) has no high_modes outfile catalog; cannot compare."
             )
-        bad = df[(df["exists"] == False) | (df["file_size"].fillna(0) < df["good_size"])]
+        bad = df[
+            (df["exists"] == False) | (df["file_size"].fillna(0) < df["good_size"])
+        ]
         if not bad.empty:
             raise ValueError(
                 f"Job {job!r} ({task.key}) is missing or has incomplete high_modes "
