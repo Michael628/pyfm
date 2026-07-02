@@ -59,6 +59,7 @@ job_setup:
     io: "grid-epack-solve"
     wall_time: "24:00:00"
     job_type: grid
+    task_type: lma
     tasks:
       epack:
         load: false
@@ -69,6 +70,7 @@ job_setup:
     io: "grid-epack-load"
     wall_time: "24:00:00"
     job_type: grid
+    task_type: lma
     tasks:
       epack:
         load: true
@@ -79,6 +81,7 @@ job_setup:
     io: "grid-full-lma"
     wall_time: "24:00:00"
     job_type: grid
+    task_type: lma
     tasks:
       epack:
         load: false
@@ -107,6 +110,7 @@ job_setup:
     io: "grid-meson"
     wall_time: "24:00:00"
     job_type: grid
+    task_type: lma
     tasks:
       epack:
         load: false
@@ -125,6 +129,7 @@ job_setup:
     io: "grid-high-modes"
     wall_time: "24:00:00"
     job_type: grid
+    task_type: lma
     tasks:
       epack:
         load: true
