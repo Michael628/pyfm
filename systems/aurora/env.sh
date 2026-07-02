@@ -1,5 +1,6 @@
 #! /bin/bash
 
+ml hdf5/1.14.6
 ml miniforge3
 # module reset 
 # module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/Core 

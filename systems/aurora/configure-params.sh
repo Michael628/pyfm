@@ -18,7 +18,6 @@ function grid_configure() {
     ext_flags='$ext_flags --enable-old-rng'
   fi
 
-  # ext_flags="$ext_flags --enable-accelerator-aware-mpi=no  --enable-reduction=grid"
   ext_flags="$ext_flags --enable-accelerator-aware-mpi=yes  --enable-reduction=grid"
 
   ${PYFMTOPDIR}/Grid/configure \

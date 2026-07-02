@@ -127,9 +127,9 @@ def get_submit_command(
         case Scheduler.LSF:
             cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
         case Scheduler.PBS:
-            cmd = f"qsub -l nodes={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
+            #cmd = f"qsub -l nodes={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
+            cmd = f"qsub -l select={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
         case Scheduler.SLURM:
-            # NEEDS UPDATING
             cmd = f"sbatch -N {str(nodes)} -n {str(np)} -J {job_name} -t {wall_time} {job_script}"
         case Scheduler.INTERACTIVE:
             cmd = f"./{job_script}"
