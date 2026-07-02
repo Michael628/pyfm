@@ -32,7 +32,6 @@ class NannyConfig(SimpleConfig):
 class JobConfig(SimpleConfig):
     run: str
     job_type: str
-    tasks: t.Dict[str, t.Any]
     step: str
     io: str
     wall_time: str
@@ -41,6 +40,7 @@ class JobConfig(SimpleConfig):
     lattice: t.List[int]
     geom: t.List[int]
     params: t.Dict[str, t.Any]
+    tasks: t.Dict[str, t.Any] | None = None
     node_minimum: int | None = None
     task_type: str | None = None
     barrier: bool = True
@@ -120,7 +120,7 @@ def get_task_params(
     )
 
     # Keep task configs separate
-    task_params = job_config.tasks
+    task_params = job_config.tasks if job_config.tasks is not None else {}
 
     return global_params, task_params
 
