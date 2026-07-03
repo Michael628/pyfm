@@ -6,7 +6,14 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 
-from pyfm.nanny.core import create_task, get_nanny_config, NannyConfig, Scheduler, Task
+from pyfm.nanny.core import (
+    create_task,
+    get_job_config,
+    get_nanny_config,
+    NannyConfig,
+    Scheduler,
+    Task,
+)
 import pyfm.nanny.todo as todo
 from pyfm.domain.protocols import OutputComparisonProtocol
 from pyfm.tasks.hadrons import highmode
@@ -307,9 +314,15 @@ def check_jobs(yaml_params: t.Dict):
         if status:
             todo_list[cfgno][index] = f"{step}_X"
             logger.info(f"Job step {step} is COMPLETE")
-        else:
+        elif get_job_config(step, yaml_params).barrier:
             todo_list[cfgno][index] = f"{step}_XXfix"
             logger.info("Marking todo entry XXfix.  Fix before rerunning.")
+        else:
+            todo_list[cfgno][index] = f"{step}_XXfixcont"
+            logger.info(
+                "Marking todo entry XXfixcont.  Non-blocking task failed; "
+                "checking and submission will continue past it."
+            )
         todo.write_todo(todo_file, todo_list)
         todo.remove_todo_lock(lock_file)
 

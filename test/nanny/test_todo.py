@@ -143,6 +143,23 @@ class TestFindNextUnfinishedTask:
         result = todo.find_next_unfinished_task(line, step_request="contract")
         assert result is None
 
+    def test_step_request_blocked_by_unsubmitted_predecessor(self):
+        # smear is unsubmitted (not a Q/XXfix barrier). Requesting "hadrons"
+        # must NOT skip past the unsubmitted predecessor: hadrons is not yet
+        # ready to run, so it must not be bundled.
+        line = ["a.60", "smear", "0", "hadrons", "0"]
+        result = todo.find_next_unfinished_task(line, step_request="hadrons")
+        assert result is None
+        # Without the request, the next ready task is smear itself.
+        result = todo.find_next_unfinished_task(line)
+        assert result == (1, "a.60", "smear")
+
+    def test_step_request_allowed_past_noncont_predecessor(self):
+        # A non-blocking predecessor (Qcont) does not gate the requested step.
+        line = ["b.100", "smear_Qcont", "1000", "hadrons", "0"]
+        result = todo.find_next_unfinished_task(line, step_request="hadrons")
+        assert result == (3, "b.100", "hadrons")
+
 
 class TestFindNextQueuedTask:
     def test_finds_queued(self):
