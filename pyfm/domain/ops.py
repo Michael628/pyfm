@@ -41,19 +41,49 @@ class MassDict:
 
 class Gamma(Enum):
     G1_G1 = auto()
-    G5_G5 = auto()
     GX_GX = auto()
     GY_GY = auto()
     GZ_GZ = auto()
     GT_GT = auto()
+    GXY_GXY = auto()
+    GXT_GXT = auto()
+    GYZ_GYZ = auto()
+    GYT_GYT = auto()
+    GZX_GZX = auto()
+    GZT_GZT = auto()
+    G5T_G5T = auto()
+    G5X_G5X = auto()
+    G5Y_G5Y = auto()
+    G5Z_G5Z = auto()
+    G5_G5 = auto()
     GX_G1 = auto()
     GY_G1 = auto()
     GZ_G1 = auto()
     GT_G1 = auto()
-    G5X_G5X = auto()
-    G5Y_G5Y = auto()
-    G5Z_G5Z = auto()
-    G5T_G5T = auto()
+    GX_GXY = auto()
+    GX_GZX = auto()
+    GX_GXT = auto()
+    GY_GXY = auto()
+    GY_GYZ = auto()
+    GY_GYT = auto()
+    GZ_GZX = auto()
+    GZ_GYZ = auto()
+    GZ_GZT = auto()
+    GT_GXT = auto()
+    GT_GYT = auto()
+    GT_GZT = auto()
+    GXY_G5T = auto()
+    GXY_G5Z = auto()
+    GYZ_G5T = auto()
+    GYZ_G5X = auto()
+    GZX_G5T = auto()
+    GZX_G5Y = auto()
+    GXT_G5Z = auto()
+    GXT_G5Y = auto()
+    GYT_G5Z = auto()
+    GYT_G5X = auto()
+    GZT_G5Y = auto()
+    GZT_G5X = auto()
     G5X_G5 = auto()
     G5Y_G5 = auto()
     G5Z_G5 = auto()
@@ -129,15 +159,21 @@ class Gamma(Enum):
             Gamma.AXIAL_VEC_LOCAL,
             Gamma.IDENTITY,
             Gamma.G1_G1,
-            Gamma.G5_G5,
             Gamma.GX_GX,
             Gamma.GY_GY,
             Gamma.GZ_GZ,
             Gamma.GT_GT,
+            Gamma.GXY_GXY,
+            Gamma.GXT_GXT,
+            Gamma.GYZ_GYZ,
+            Gamma.GYT_GYT,
+            Gamma.GZX_GZX,
+            Gamma.GZT_GZT,
+            Gamma.G5T_G5T,
             Gamma.G5X_G5X,
             Gamma.G5Y_G5Y,
             Gamma.G5Z_G5Z,
-            Gamma.G5T_G5T,
+            Gamma.G5_G5,
             Gamma.FOURVEC_LOCAL,
             Gamma.AXIAL_FOURVEC_LOCAL,
         ]
@@ -152,6 +188,30 @@ class Gamma(Enum):
             Gamma.GY_G1,
             Gamma.GZ_G1,
             Gamma.GT_G1,
+            Gamma.GX_GXY,
+            Gamma.GX_GZX,
+            Gamma.GX_GXT,
+            Gamma.GY_GXY,
+            Gamma.GY_GYZ,
+            Gamma.GY_GYT,
+            Gamma.GZ_GZX,
+            Gamma.GZ_GYZ,
+            Gamma.GZ_GZT,
+            Gamma.GT_GXT,
+            Gamma.GT_GYT,
+            Gamma.GT_GZT,
+            Gamma.GXY_G5T,
+            Gamma.GXY_G5Z,
+            Gamma.GYZ_G5T,
+            Gamma.GYZ_G5X,
+            Gamma.GZX_G5T,
+            Gamma.GZX_G5Y,
+            Gamma.GXT_G5Z,
+            Gamma.GXT_G5Y,
+            Gamma.GYT_G5Z,
+            Gamma.GYT_G5X,
+            Gamma.GZT_G5Y,
+            Gamma.GZT_G5X,
             Gamma.G5X_G5,
             Gamma.G5Y_G5,
             Gamma.G5Z_G5,

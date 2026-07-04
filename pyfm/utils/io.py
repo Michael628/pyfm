@@ -298,4 +298,8 @@ def get_processed_filename(filename: str, remove: t.List[str], suffix: str = "")
 
 
 def get_bad_files(df: pd.DataFrame) -> t.List[str]:
-    return list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
+    return (
+        list(df[(df["file_size"] >= df["good_size"]) != True]["filepath"])
+        if len(df)
+        else []
+    )
