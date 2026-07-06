@@ -170,7 +170,6 @@ job_setup:
           - "l"
 
 files:
-  home: /pscratch/sd/m/mlynch/gm2/LMI/l96192f211b672m0008m022m260
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg
     good_size: 97844720000 
@@ -190,15 +189,15 @@ files:
     filestem: eigen/eval/eval{ens}nv{eigs}{series}
     good_size: 18000 
   high_modes:
-    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
     good_size: 14000
   meson:
-    filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
     good_size: 24576006000
   contract:
-    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
     good_size: 13100
   contract_legacy:
-    filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
     good_size: 13100
 

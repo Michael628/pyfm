@@ -28,6 +28,7 @@ _arg_storage=""
 _arg_lattice=""
 _arg_system=""
 
+PYFM_WORKSPACE_DATASUBDIR=""
 while test $# -gt 0; do
   case "$1" in
     --workspace)
@@ -39,6 +40,7 @@ while test $# -gt 0; do
       shift
       _arg_storage="$1"
       shift
+      PYFM_WORKSPACE_DATASUBDIR="run/"
       ;;
     --scheduler)
       shift
@@ -126,6 +128,7 @@ cp "${PARAMS_FILE}" "${NEW_PARAMS_FILE}"
 sed -i \
   -e "s|PYFM_WORKSPACE_TOPDIR|${PYFM_WORKSPACE_TOPDIR}|g" \
   -e "s|PYFM_WORKSPACE_SCHEDULER|${PYFM_WORKSPACE_SCHEDULER}|g" \
+  -e "s|PYFM_WORKSPACE_DATASUBDIR|${PYFM_WORKSPACE_DATASUBDIR}|g" \
   "${NEW_PARAMS_FILE}"
 
 mkdir -p "${WORKSPACE_SUBDIR}/in" "${WORKSPACE_SUBDIR}/out" "${WORKSPACE_SUBDIR}/schedules"
@@ -135,6 +138,7 @@ mkdir -p "${STORAGE_SUBDIR}/eigen" "${STORAGE_SUBDIR}/lat/scidac" "${STORAGE_SUB
 if [ "${WORKSPACE_SUBDIR}" != "${STORAGE_SUBDIR}" ]; then
   ln -sfn "${STORAGE_SUBDIR}/eigen" "${WORKSPACE_SUBDIR}/eigen"
   ln -sfn "${STORAGE_SUBDIR}/lat" "${WORKSPACE_SUBDIR}/lat"
+  ln -sfn "${STORAGE_SUBDIR}" "${WORKSPACE_SUBDIR}/run"
 fi
 
 TODO_FILE="${WORKSPACE_SUBDIR}/todo"
