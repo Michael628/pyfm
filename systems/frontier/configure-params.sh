@@ -14,7 +14,7 @@ function grid_configure() {
   fi
 
   if [ $OLD_RNG = 'true' ]; then
-    ext_flags='$ext_flags --enable-old-rng'
+    ext_flags="$ext_flags --enable-old-rng"
   fi
   
   CLIME=`spack find --paths c-lime@2-3-9 | grep c-lime| cut -c 15-`

@@ -57,6 +57,7 @@ Build Configuration Options:
   --debug            Enable debug build
   --mpi-reduction    Enable MPI reduction
   --force            Force rebuild (clean build directories)
+  --old-rng          Use old random number generator algorithm when building Grid
   --skip-make        Skip make step, only configure
 
 Component Selection:
@@ -106,7 +107,6 @@ function parse_flags() {
       --old-rng)
         shift
         OLD_RNG='true'
-        shift
       ;;
       --threads)
         shift

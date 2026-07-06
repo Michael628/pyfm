@@ -37,6 +37,7 @@ def build():
 @click.option("--system", type=str, default="scalar", help="Target system profile name (default: scalar).")
 @click.option("--ext", type=str, default=None, help="Extension/variant tag for the system profile.")
 @click.option("--threads", type=int, default=4, help="Number of parallel make threads (default: 4).")
+@click.option("--old-rng", is_flag=True, default=False, help="Use Grid's old rng population algorithm.")
 def build_run(
     gmp,
     mpfr,
@@ -57,6 +58,7 @@ def build_run(
     system,
     ext,
     threads,
+    old_rng,
 ):
     """Build selected software components for the given system profile."""
     script = _SYSTEMS_DIR / "build.sh"
@@ -91,6 +93,8 @@ def build_run(
         args.append("--hlma")
     if glma:
         args.append("--glma")
+    if old_rng:
+        args.append("--old-rng")
     if all_components:
         args.append("--all")
     if ext is not None:
