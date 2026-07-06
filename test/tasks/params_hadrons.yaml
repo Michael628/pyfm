@@ -153,7 +153,7 @@ files:
   long_links:
     filestem: lat/scidac/lng{ens}{series}.ildg
     good_size: 76000
-  gauge_links:
+  ildg_links:
     filestem: lat/scidac/l{ens}{series}.ildg
     good_size: 76000
   eig:

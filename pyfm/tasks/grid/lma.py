@@ -70,9 +70,7 @@ def build_a2a_params(config: meson.MesonConfig) -> t.List[t.Dict]:
         mass_label = op.mass[0]
 
         if not config.overwrite:
-            gammas = meson.get_incomplete_gammas(
-                config, gammas, mass_label, bad_files
-            )
+            gammas = meson.get_incomplete_gammas(config, gammas, mass_label, bad_files)
             if not gammas:
                 continue
 
@@ -99,7 +97,7 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
     """
 
     gauge = gridmods.gauge_files(
-        link=config.gauge_config.gauge_links.filestem,
+        link=config.gauge_config.ildg_links.filestem,
         fatlink=config.gauge_config.fat_links.filestem,
         longlink=config.gauge_config.long_links.filestem,
     )
@@ -194,9 +192,7 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
         lma=gridmods.lma(),
         mpcg=gridmods.mpcg(
             residual=str(config.high_modes_config.residual[0]),
-            mixed_precision=str(
-                config.high_modes_config.solver == "mpcg"
-            ).lower(),
+            mixed_precision=str(config.high_modes_config.solver == "mpcg").lower(),
         ),
         **{k: v for k, v in optional.items() if v is not None},
     )

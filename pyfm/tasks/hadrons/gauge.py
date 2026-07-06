@@ -14,92 +14,100 @@ from pyfm.tasks.register import register_task
 
 
 class ActionType(SerializableEnum):
-    FREE = 0
-    LOAD = 1
-    SMEAR = 2
+    """Selects both how the thin gauge is produced and its on-disk format.
 
-
-class GaugeFileFormat(SerializableEnum):
-    """On-disk format of a gauge configuration, selecting its reader module.
-
-    Each member's value is the Hadrons module that loads that format, so
-    :func:`pyfm.tasks.hadrons.modules.load_gauge` can pick the reader from
-    ``format.value`` without importing this module (avoiding a circular import).
+    * ``FREE`` — thin gauge is a generated unit field (no file read).
+    * ``LOAD`` — thin gauge and pre-smeared fat/long links are all read from
+      disk as ILDG (previously written by a ``SMEAR*`` run's ``save_ildg``).
+    * ``SMEARILDG`` — thin gauge is read from disk as ILDG, then smeared
+      on the fly into fat/long links.
+    * ``SMEARV5`` — thin gauge is read from disk as a raw MILC v5 file, then
+      smeared on the fly into fat/long links.
     """
 
-    ILDG = "MIO::LoadIldg"
-    MILCV5 = "MIO::LoadMilc"
+    FREE = 0
+    LOAD = 1
+    SMEARILDG = 2
+    SMEARV5 = 3
+    SMEAR = 2  # alias of SMEARILDG, kept for backward compat with old configs
 
 
-# Fat/long link field names are action-type independent. For SMEAR they are the
+# Fat/long link field names are action-type independent. For SMEAR* they are the
 # outputs of the MGauge::HISQSmear module (named "<module>_fat"/"<module>_long");
-# for FREE/LOAD they are directly created fields. One name pair for every action
+# for LOAD they are directly created fields. One name pair for every action
 # type keeps the single-precision cast and the ImprovedStaggered actions free of
 # any action_type branching.
 _FAT = "gauge_smear_fat"
 _LONG = "gauge_smear_long"
 # The HISQSmear module name; its outputs are _FAT/_LONG.
 _SMEAR_MODULE = "gauge_smear"
+_GAUGE = "gauge"
 
 
 @dataclass(frozen=True)
 class GaugeConfig(SimpleConfig):
     mass: MassDict
-    gauge_links: Outfile
-    long_links: Outfile
-    fat_links: Outfile
+    ildg_links: Outfile | None = None
+    long_links: Outfile | None = None
+    fat_links: Outfile | None = None
+    v5_links: Outfile | None = None
     action_type: ActionType = ActionType.LOAD
     action_name: str | None = None
-    save_smear: bool = False
-    format: GaugeFileFormat = GaugeFileFormat.ILDG
+    save_ildg: bool = False
 
 
 def build_base_gauge(config: GaugeConfig) -> HadronsInput:
     """Create base gauge modules, including the APBC shift gauge.
 
-    ``action_type`` only controls how the thin gauge and the fat/long links are
+    ``action_type`` controls how the thin gauge and the fat/long links are
     *produced* — the field names they are published under are identical for every
     action type (``gauge``, ``gauge_smear_fat``, ``gauge_smear_long``):
 
     * ``FREE`` — unit thin gauge, smeared on the fly via ``MGauge::HISQSmear``.
-    * ``LOAD`` — thin gauge and pre-smeared fat/long links loaded from disk.
-    * ``SMEAR`` — thin gauge loaded, fat/long links derived on the fly via
-      ``MGauge::HISQSmear``.
+    * ``LOAD`` — thin gauge and pre-smeared fat/long links loaded from disk as ILDG.
+    * ``SMEARILDG`` — thin gauge loaded from disk as ILDG, fat/long links derived
+      on the fly via ``MGauge::HISQSmear``.
+    * ``SMEARV5`` — thin gauge loaded from disk as a raw MILC v5 file, fat/long
+      links derived on the fly via ``MGauge::HISQSmear``.
 
-    ``FREE`` and ``SMEAR`` both route the thin gauge through ``HISQSmear`` so
-    that the KS phases and boundary conditions are baked into the fat/long links
-    (via rephase), matching the convention of the disk-resident links used by
-    ``LOAD``. When ``config.save_smear`` is set, those on-the-fly links are also
-    written to the ``fat_links``/``long_links`` outfile paths via
-    ``MIO::SaveIldg``.
+    ``FREE`` and both ``SMEAR*`` action types route the thin gauge through
+    ``HISQSmear`` so that the KS phases and boundary conditions are baked into
+    the fat/long links (via rephase), matching the convention of the
+    disk-resident links used by ``LOAD``. When ``config.save_ildg`` is set,
+    those on-the-fly links are also written to the ``fat_links``/``long_links``
+    outfile paths via ``MIO::SaveIldg``.
     """
     modules = {}
     schedule = []
 
-    # Thin gauge: FREE uses unit gauge; LOAD/SMEAR load it.
     if config.action_type == ActionType.FREE:
-        modules["gauge"] = hadmods.unit_gauge("gauge")
+        modules[_GAUGE] = hadmods.unit_gauge(_GAUGE)
+    elif config.action_type == ActionType.SMEARV5:
+        modules[_GAUGE] = hadmods.load_milcv5(_GAUGE, config.v5_links.filestem)
     else:
-        modules["gauge"] = hadmods.load_gauge(
-            "gauge", config.gauge_links.filestem, config.format.value
-        )
-    schedule.append("gauge")
+        modules[_GAUGE] = hadmods.load_ildg(_GAUGE, config.ildg_links.filestem)
+    schedule.append(_GAUGE)
 
     # Fat/long links. Field names are action-type independent; only the producer
-    # differs. LOAD reads them from disk (already smeared, KS phases carried);
-    # FREE/SMEAR derive them on the fly via HISQSmear, which bakes the KS phases
-    # and boundary into the links via rephase.
+    # differs. LOAD reads them from disk as ILDG (already smeared, KS phases
+    # carried); FREE/SMEAR* derive them on the fly via HISQSmear, which bakes the
+    # KS phases and boundary into the links via rephase.
     if config.action_type == ActionType.LOAD:
         for field, ofile in ((_FAT, config.fat_links), (_LONG, config.long_links)):
-            modules[field] = hadmods.load_gauge(
-                field, ofile.filestem, config.format.value
-            )
+            modules[field] = hadmods.load_ildg(field, ofile.filestem)
             schedule.append(field)
     else:
-        modules[_SMEAR_MODULE] = hadmods.hisq_smear(_SMEAR_MODULE, gauge="gauge")
+        modules[_SMEAR_MODULE] = hadmods.hisq_smear(_SMEAR_MODULE, gauge=_GAUGE)
         schedule.append(_SMEAR_MODULE)
 
-        if config.save_smear:
+        if config.save_ildg:
+            if config.action_type == ActionType.SMEARV5:
+                # The thin gauge was read as raw MILC v5; also write it out as
+                # ILDG so downstream LOAD runs can consume it.
+                modules["save_gauge"] = hadmods.save_ildg(
+                    "save_gauge", gauge=_GAUGE, filestem=config.ildg_links.filestem
+                )
+                schedule.append("save_gauge")
             modules["save_fat"] = hadmods.save_ildg(
                 "save_fat", gauge=_FAT, filestem=config.fat_links.filestem
             )
@@ -108,8 +116,8 @@ def build_base_gauge(config: GaugeConfig) -> HadronsInput:
             )
             schedule += ["save_fat", "save_long"]
 
-    modules["gauge_apbc"] = hadmods.apbc_gauge("gauge_apbc", "gauge")
-    schedule.append("gauge_apbc")
+    modules[f"{_GAUGE}_apbc"] = hadmods.apbc_gauge(f"{_GAUGE}_apbc", _GAUGE)
+    schedule.append(f"{_GAUGE}_apbc")
 
     return HadronsInput(modules=modules, schedule=schedule)
 
@@ -186,6 +194,8 @@ def normalize_params(params: t.Dict) -> t.Dict:
     ``LOAD`` default applies at construction.
     """
     combined = params | params.pop("_preprocessor", {})
+    if "gauge_links" in combined:
+        combined["ildg_links"] = combined.pop("gauge_links")
     if "free" in combined:
         raw = combined.pop("free")
         is_free = raw is True or (
@@ -195,5 +205,43 @@ def normalize_params(params: t.Dict) -> t.Dict:
     return combined
 
 
+_REQUIRED_LINKS_BY_ACTION_TYPE: t.Dict[ActionType, t.Tuple[str, ...]] = {
+    ActionType.FREE: (),
+    ActionType.LOAD: ("ildg_links", "fat_links", "long_links"),
+    ActionType.SMEARILDG: ("ildg_links",),
+    ActionType.SMEARV5: ("v5_links",),
+}
+
+
+def validate_config(config: GaugeConfig) -> None:
+    """Validate that GaugeConfig carries the Outfiles its action_type needs.
+
+    Each ``action_type`` reads a different subset of the link fields (see
+    :class:`ActionType`); ``save_ildg`` additionally requires ``fat_links``/
+    ``long_links`` as write targets for the on-the-fly smeared links. For
+    ``SMEARV5`` specifically, ``save_ildg`` also writes the thin gauge back out
+    as ILDG, so ``ildg_links`` is required too.
+    """
+    required = list(_REQUIRED_LINKS_BY_ACTION_TYPE[config.action_type])
+    if config.save_ildg:
+        required += ["fat_links", "long_links"]
+        if config.action_type == ActionType.SMEARV5:
+            required.append("ildg_links")
+
+    missing = [
+        name for name in dict.fromkeys(required) if getattr(config, name) is None
+    ]
+    if missing:
+        raise ValueError(
+            f"GaugeConfig with action_type={config.action_type.name} is missing "
+            f"required Outfile(s): {', '.join(missing)}"
+        )
+
+
 # Register GaugeConfig (not as a complete handler task, just for infrastructure)
-register_task("hadrons_gauge", GaugeConfig, normalize_params=normalize_params)
+register_task(
+    "hadrons_gauge",
+    GaugeConfig,
+    normalize_params=normalize_params,
+    validate=validate_config,
+)

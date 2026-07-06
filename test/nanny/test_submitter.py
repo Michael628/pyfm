@@ -59,7 +59,7 @@ class TestGetSubmitCommand:
 
         nc = replace(nanny_config, scheduler=Scheduler.PBS)
         cmd = get_submit_command(nc, job_config, "test-h1", 2, 8)
-        assert cmd == f"qsub -l nodes=2 -l walltime=01:00:00 -N test-h1 {job_config.run}"
+        assert cmd == f"qsub -l select=2 -l walltime=01:00:00 -N test-h1 {job_config.run}"
 
     def test_lsf(self, nanny_config, job_config):
         from dataclasses import replace

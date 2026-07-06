@@ -43,15 +43,9 @@
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
       <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
         <gaugefat>gauge_smear_fat</gaugefat>
         <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.0</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
       </options>
     </module>
     <module>
@@ -130,15 +124,9 @@
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
       <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
         <gaugefat>gauge_smear_fat</gaugefat>
         <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.002426</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
       </options>
     </module>
     <module>
@@ -209,32 +197,9 @@
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
       <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
         <gaugefat>gauge_smear_fat</gaugefat>
         <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.001524</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>istag_mass_u</name>
-        <type>MAction::ImprovedStaggeredMILCF</type>
-      </id>
-      <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
-        <gaugefat>gauge_smear_fatf</gaugefat>
-        <gaugelong>gauge_smear_longf</gaugelong>
-        <mass>0.001524</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
       </options>
     </module>
     <module>
@@ -243,15 +208,20 @@
         <type>MAction::ImprovedStaggeredMILCF</type>
       </id>
       <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
         <gaugefat>gauge_smear_fatf</gaugefat>
         <gaugelong>gauge_smear_longf</gaugelong>
         <mass>0.002426</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>istag_mass_u</name>
+        <type>MAction::ImprovedStaggeredMILCF</type>
+      </id>
+      <options>
+        <gaugefat>gauge_smear_fatf</gaugefat>
+        <gaugelong>gauge_smear_longf</gaugelong>
+        <mass>0.001524</mass>
       </options>
     </module>
     <module>
@@ -317,33 +287,6 @@
     </module>
     <module>
       <id>
-        <name>stag_ranLL_mass_u</name>
-        <type>MSolver::StagLMA</type>
-      </id>
-      <options>
-        <action>stag_mass_u</action>
-        <eigStart>0</eigStart>
-        <lowModes>evecs_mass_u</lowModes>
-        <nEigs>-1</nEigs>
-        <projector>false</projector>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>stag_ama_mass_u</name>
-        <type>MSolver::StagMixedPrecisionCG</type>
-      </id>
-      <options>
-        <innerAction>istag_mass_u</innerAction>
-        <isEven>false</isEven>
-        <maxInnerIteration>10000</maxInnerIteration>
-        <maxOuterIteration>10000</maxOuterIteration>
-        <outerAction>stag_mass_u</outerAction>
-        <residual>1e-08</residual>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>stag_ranLL_mass_l</name>
         <type>MSolver::StagLMA</type>
       </id>
@@ -371,66 +314,29 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_fourvec_onelink_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <name>stag_ranLL_mass_u</name>
+        <type>MSolver::StagLMA</type>
       </id>
       <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
+        <action>stag_mass_u</action>
+        <eigStart>0</eigStart>
+        <lowModes>evecs_mass_u</lowModes>
+        <nEigs>-1</nEigs>
+        <projector>false</projector>
       </options>
     </module>
     <module>
       <id>
-        <name>quark_ranLL_fourvec_local_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <name>stag_ama_mass_u</name>
+        <type>MSolver::StagMixedPrecisionCG</type>
       </id>
       <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ama_fourvec_onelink_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_u_t0</guess>
-        <solver>stag_ama_mass_u</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_scalar_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
-          <gauge></gauge>
-        </spinTaste>
+        <innerAction>istag_mass_u</innerAction>
+        <isEven>false</isEven>
+        <maxInnerIteration>10000</maxInnerIteration>
+        <maxOuterIteration>10000</maxOuterIteration>
+        <outerAction>stag_mass_u</outerAction>
+        <residual>1e-08</residual>
       </options>
     </module>
     <module>
@@ -467,54 +373,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_local_mass_u_t0</guess>
-        <solver>stag_ama_mass_u</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ama_fourvec_onelink_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_l_t0</guess>
-        <solver>stag_ama_mass_l</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_onelink_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_fourvec_local_mass_l_t0</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -531,7 +389,39 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_l_t0</name>
+        <name>quark_ama_fourvec_local_mass_u_t0</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_local_mass_u_t0</guess>
+        <solver>stag_ama_mass_u</solver>
+        <source>noise_t0</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_u_t0</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t0</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_l_t0</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
@@ -540,7 +430,23 @@
         <source>noise_t0</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_l_t0</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t0</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -579,38 +485,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_scalar_local_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t0</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_scalar_local_mass_u_t0</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -627,45 +501,45 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_fourvec_onelink_mass_l_t1</name>
+        <name>quark_ranLL_pion_local_mass_l_t0</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
         <guess></guess>
         <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t1</source>
+        <source>noise_t0</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_local_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t1</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_onelink_mass_u_t1</name>
+        <name>quark_ranLL_pion_local_mass_u_t0</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_u_t1</guess>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t0</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ama_fourvec_onelink_mass_u_t0</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_u_t0</guess>
         <solver>stag_ama_mass_u</solver>
-        <source>noise_t1</source>
+        <source>noise_t0</source>
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
@@ -675,16 +549,48 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_scalar_local_mass_u_t1</name>
+        <name>quark_ama_fourvec_onelink_mass_l_t0</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_l_t0</guess>
+        <solver>stag_ama_mass_l</solver>
+        <source>noise_t0</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_u_t0</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
         <guess></guess>
         <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t1</source>
+        <source>noise_t0</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_local_mass_l_t0</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t0</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -723,54 +629,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_local_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_local_mass_u_t1</guess>
-        <solver>stag_ama_mass_u</solver>
-        <source>noise_t1</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ama_fourvec_onelink_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_l_t1</guess>
-        <solver>stag_ama_mass_l</solver>
-        <source>noise_t1</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_onelink_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t1</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_fourvec_local_mass_l_t1</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -787,7 +645,39 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_l_t1</name>
+        <name>quark_ama_fourvec_local_mass_u_t1</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_local_mass_u_t1</guess>
+        <solver>stag_ama_mass_u</solver>
+        <source>noise_t1</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_u_t1</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t1</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_l_t1</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
@@ -796,7 +686,23 @@
         <source>noise_t1</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_l_t1</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t1</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -835,38 +741,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t1</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_scalar_local_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t1</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_scalar_local_mass_u_t1</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -883,45 +757,45 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_fourvec_onelink_mass_l_t2</name>
+        <name>quark_ranLL_pion_local_mass_l_t1</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
         <guess></guess>
         <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t2</source>
+        <source>noise_t1</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_local_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t2</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_onelink_mass_u_t2</name>
+        <name>quark_ranLL_pion_local_mass_u_t1</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_u_t2</guess>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t1</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ama_fourvec_onelink_mass_u_t1</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_u_t1</guess>
         <solver>stag_ama_mass_u</solver>
-        <source>noise_t2</source>
+        <source>noise_t1</source>
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
@@ -931,16 +805,48 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_scalar_local_mass_u_t2</name>
+        <name>quark_ama_fourvec_onelink_mass_l_t1</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_l_t1</guess>
+        <solver>stag_ama_mass_l</solver>
+        <source>noise_t1</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_u_t1</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
         <guess></guess>
         <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t2</source>
+        <source>noise_t1</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_local_mass_l_t1</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t1</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -979,54 +885,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_local_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_local_mass_u_t2</guess>
-        <solver>stag_ama_mass_u</solver>
-        <source>noise_t2</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ama_fourvec_onelink_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_l_t2</guess>
-        <solver>stag_ama_mass_l</solver>
-        <source>noise_t2</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_onelink_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t2</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_fourvec_local_mass_l_t2</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -1043,7 +901,39 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_l_t2</name>
+        <name>quark_ama_fourvec_local_mass_u_t2</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_local_mass_u_t2</guess>
+        <solver>stag_ama_mass_u</solver>
+        <source>noise_t2</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_u_t2</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t2</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_l_t2</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
@@ -1052,7 +942,23 @@
         <source>noise_t2</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_l_t2</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t2</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -1091,38 +997,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t2</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_scalar_local_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t2</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_scalar_local_mass_u_t2</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -1139,45 +1013,45 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_fourvec_onelink_mass_l_t3</name>
+        <name>quark_ranLL_pion_local_mass_l_t2</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
         <guess></guess>
         <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t3</source>
+        <source>noise_t2</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_local_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t3</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_onelink_mass_u_t3</name>
+        <name>quark_ranLL_pion_local_mass_u_t2</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_u_t3</guess>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t2</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ama_fourvec_onelink_mass_u_t2</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_u_t2</guess>
         <solver>stag_ama_mass_u</solver>
-        <source>noise_t3</source>
+        <source>noise_t2</source>
         <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
@@ -1187,16 +1061,48 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_scalar_local_mass_u_t3</name>
+        <name>quark_ama_fourvec_onelink_mass_l_t2</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_l_t2</guess>
+        <solver>stag_ama_mass_l</solver>
+        <source>noise_t2</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_u_t2</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
         <guess></guess>
         <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t3</source>
+        <source>noise_t2</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_local_mass_l_t2</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t2</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -1235,54 +1141,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ama_fourvec_local_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_local_mass_u_t3</guess>
-        <solver>stag_ama_mass_u</solver>
-        <source>noise_t3</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ama_fourvec_onelink_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess>quark_ranLL_fourvec_onelink_mass_l_t3</guess>
-        <solver>stag_ama_mass_l</solver>
-        <source>noise_t3</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_fourvec_onelink_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t3</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_fourvec_local_mass_l_t3</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -1299,7 +1157,39 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_l_t3</name>
+        <name>quark_ama_fourvec_local_mass_u_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_local_mass_u_t3</guess>
+        <solver>stag_ama_mass_u</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_u_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_l_t3</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
@@ -1308,7 +1198,23 @@
         <source>noise_t3</source>
         <spinTaste>
           <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_scalar_local_mass_l_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
           <gauge></gauge>
         </spinTaste>
       </options>
@@ -1347,38 +1253,6 @@
     </module>
     <module>
       <id>
-        <name>quark_ranLL_pion_local_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_u</solver>
-        <source>noise_t3</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>quark_ranLL_scalar_local_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
-      </id>
-      <options>
-        <guess></guess>
-        <solver>stag_ranLL_mass_l</solver>
-        <source>noise_t3</source>
-        <spinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G1 G1)</gammas>
-          <gauge></gauge>
-        </spinTaste>
-      </options>
-    </module>
-    <module>
-      <id>
         <name>quark_ama_scalar_local_mass_u_t3</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
@@ -1395,19 +1269,115 @@
     </module>
     <module>
       <id>
-        <name>corr_ama_fourvec_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
+        <name>quark_ranLL_pion_local_mass_l_t3</name>
+        <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t0_a</output>
-        <sink>quark_ama_pion_local_mass_l_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_pion_local_mass_u_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ama_fourvec_onelink_mass_u_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_u_t3</guess>
+        <solver>stag_ama_mass_u</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ama_fourvec_onelink_mass_l_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess>quark_ranLL_fourvec_onelink_mass_l_t3</guess>
+        <solver>stag_ama_mass_l</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_onelink_mass_u_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_u</solver>
+        <source>noise_t3</source>
+        <spinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>quark_ranLL_fourvec_local_mass_l_t3</name>
+        <type>MFermion::StagGaugeProp</type>
+      </id>
+      <options>
+        <guess></guess>
+        <solver>stag_ranLL_mass_l</solver>
+        <source>noise_t3</source>
+        <spinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_axial_fourvec_local_mass_u_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t0_a</output>
+        <sink>quark_ranLL_scalar_local_mass_u_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t0</source>
+        <source>quark_ranLL_fourvec_local_mass_u_t0</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t0_shift</sourceShift>
       </options>
@@ -1433,6 +1403,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ama_fourvec_local_mass_l_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t0_a</output>
+        <sink>quark_ama_pion_local_mass_l_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t0</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ranLL_axial_fourvec_onelink_mass_l_t0</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -1452,96 +1441,39 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_onelink_mass_u_t0</name>
+        <name>corr_ama_pion_local_mass_l_t0</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t0_a</output>
-        <sink>quark_ranLL_pion_local_mass_u_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_u_t0</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t0_a</output>
-        <sink>quark_ranLL_scalar_local_mass_l_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t0</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_axial_fourvec_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t0_a</output>
-        <sink>quark_ama_scalar_local_mass_l_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t0</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t0_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t0</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_pion_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t0_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t0</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t0_a</output>
+        <sink>quark_ama_pion_local_mass_l_t0</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_pion_local_mass_l_t0</source>
+        <source>quark_ama_pion_local_mass_l_t0</source>
         <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_u_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t0_a</output>
+        <sink>quark_ranLL_pion_local_mass_u_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_u_t0</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t0_shift</sourceShift>
       </options>
     </module>
@@ -1561,25 +1493,6 @@
         </sinkSpinTaste>
         <source>quark_ama_fourvec_local_mass_u_t0</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_onelink_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t0_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_l_t0</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
         <sourceShift>noise_t0_shift</sourceShift>
       </options>
     </module>
@@ -1623,6 +1536,63 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_fourvec_onelink_mass_l_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t0_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_l_t0</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_axial_fourvec_local_mass_l_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t0_a</output>
+        <sink>quark_ama_scalar_local_mass_l_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t0</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_pion_local_mass_l_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t0_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_pion_local_mass_l_t0</source>
+        <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_axial_fourvec_onelink_mass_l_t0</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -1642,19 +1612,57 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_local_mass_u_t0</name>
+        <name>corr_ranLL_fourvec_onelink_mass_u_t0</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t0_a</output>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t0_a</output>
         <sink>quark_ranLL_pion_local_mass_u_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_u_t0</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_l_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t0_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t0</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t0</source>
+        <source>quark_ranLL_fourvec_local_mass_l_t0</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_fourvec_local_mass_u_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t0_a</output>
+        <sink>quark_ama_pion_local_mass_u_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_u_t0</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t0_shift</sourceShift>
       </options>
@@ -1699,6 +1707,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_axial_fourvec_local_mass_l_t0</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t0_a</output>
+        <sink>quark_ranLL_scalar_local_mass_l_t0</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_l_t0</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t0_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_fourvec_onelink_mass_l_t0</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -1718,76 +1745,19 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_u_t0</name>
+        <name>corr_ranLL_axial_fourvec_local_mass_u_t1</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t0_a</output>
-        <sink>quark_ranLL_scalar_local_mass_u_t0</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t1_a</output>
+        <sink>quark_ranLL_scalar_local_mass_u_t1</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t0</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_pion_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t0_a</output>
-        <sink>quark_ama_pion_local_mass_l_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_pion_local_mass_l_t0</source>
-        <sourceGammas>(G5 G5)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_u_t0</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t0_a</output>
-        <sink>quark_ama_pion_local_mass_u_t0</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_u_t0</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t0_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t1_a</output>
-        <sink>quark_ama_pion_local_mass_l_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t1</source>
+        <source>quark_ranLL_fourvec_local_mass_u_t1</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t1_shift</sourceShift>
       </options>
@@ -1813,6 +1783,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ama_fourvec_local_mass_l_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t1_a</output>
+        <sink>quark_ama_pion_local_mass_l_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t1</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ranLL_axial_fourvec_onelink_mass_l_t1</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -1832,96 +1821,39 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_onelink_mass_u_t1</name>
+        <name>corr_ama_pion_local_mass_l_t1</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t1_a</output>
-        <sink>quark_ranLL_pion_local_mass_u_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_u_t1</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t1_a</output>
-        <sink>quark_ranLL_scalar_local_mass_l_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t1</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_axial_fourvec_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t1_a</output>
-        <sink>quark_ama_scalar_local_mass_l_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t1</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t1_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t1</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_pion_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t1_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t1</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t1_a</output>
+        <sink>quark_ama_pion_local_mass_l_t1</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_pion_local_mass_l_t1</source>
+        <source>quark_ama_pion_local_mass_l_t1</source>
         <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_u_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t1_a</output>
+        <sink>quark_ranLL_pion_local_mass_u_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_u_t1</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t1_shift</sourceShift>
       </options>
     </module>
@@ -1941,25 +1873,6 @@
         </sinkSpinTaste>
         <source>quark_ama_fourvec_local_mass_u_t1</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_onelink_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t1_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_l_t1</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
         <sourceShift>noise_t1_shift</sourceShift>
       </options>
     </module>
@@ -2003,6 +1916,63 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_fourvec_onelink_mass_l_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t1_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_l_t1</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_axial_fourvec_local_mass_l_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t1_a</output>
+        <sink>quark_ama_scalar_local_mass_l_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t1</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_pion_local_mass_l_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t1_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_pion_local_mass_l_t1</source>
+        <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_axial_fourvec_onelink_mass_l_t1</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2022,19 +1992,57 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_local_mass_u_t1</name>
+        <name>corr_ranLL_fourvec_onelink_mass_u_t1</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t1_a</output>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t1_a</output>
         <sink>quark_ranLL_pion_local_mass_u_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_u_t1</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_l_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t1_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t1</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t1</source>
+        <source>quark_ranLL_fourvec_local_mass_l_t1</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_fourvec_local_mass_u_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t1_a</output>
+        <sink>quark_ama_pion_local_mass_u_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_u_t1</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t1_shift</sourceShift>
       </options>
@@ -2079,6 +2087,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_axial_fourvec_local_mass_l_t1</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t1_a</output>
+        <sink>quark_ranLL_scalar_local_mass_l_t1</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_l_t1</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t1_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_fourvec_onelink_mass_l_t1</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2098,76 +2125,19 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_u_t1</name>
+        <name>corr_ranLL_axial_fourvec_local_mass_u_t2</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t1_a</output>
-        <sink>quark_ranLL_scalar_local_mass_u_t1</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t2_a</output>
+        <sink>quark_ranLL_scalar_local_mass_u_t2</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t1</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_pion_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t1_a</output>
-        <sink>quark_ama_pion_local_mass_l_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_pion_local_mass_l_t1</source>
-        <sourceGammas>(G5 G5)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_u_t1</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t1_a</output>
-        <sink>quark_ama_pion_local_mass_u_t1</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_u_t1</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t1_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t2_a</output>
-        <sink>quark_ama_pion_local_mass_l_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t2</source>
+        <source>quark_ranLL_fourvec_local_mass_u_t2</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t2_shift</sourceShift>
       </options>
@@ -2193,6 +2163,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ama_fourvec_local_mass_l_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t2_a</output>
+        <sink>quark_ama_pion_local_mass_l_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t2</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ranLL_axial_fourvec_onelink_mass_l_t2</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2212,96 +2201,39 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_onelink_mass_u_t2</name>
+        <name>corr_ama_pion_local_mass_l_t2</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t2_a</output>
-        <sink>quark_ranLL_pion_local_mass_u_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_u_t2</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t2_a</output>
-        <sink>quark_ranLL_scalar_local_mass_l_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t2</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_axial_fourvec_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t2_a</output>
-        <sink>quark_ama_scalar_local_mass_l_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t2</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t2_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t2</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_pion_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t2_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t2</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t2_a</output>
+        <sink>quark_ama_pion_local_mass_l_t2</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_pion_local_mass_l_t2</source>
+        <source>quark_ama_pion_local_mass_l_t2</source>
         <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_u_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t2_a</output>
+        <sink>quark_ranLL_pion_local_mass_u_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_u_t2</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t2_shift</sourceShift>
       </options>
     </module>
@@ -2321,25 +2253,6 @@
         </sinkSpinTaste>
         <source>quark_ama_fourvec_local_mass_u_t2</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_onelink_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t2_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_l_t2</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
         <sourceShift>noise_t2_shift</sourceShift>
       </options>
     </module>
@@ -2383,6 +2296,63 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_fourvec_onelink_mass_l_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t2_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_l_t2</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_axial_fourvec_local_mass_l_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t2_a</output>
+        <sink>quark_ama_scalar_local_mass_l_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t2</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_pion_local_mass_l_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t2_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_pion_local_mass_l_t2</source>
+        <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_axial_fourvec_onelink_mass_l_t2</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2402,19 +2372,57 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_local_mass_u_t2</name>
+        <name>corr_ranLL_fourvec_onelink_mass_u_t2</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t2_a</output>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t2_a</output>
         <sink>quark_ranLL_pion_local_mass_u_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_u_t2</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_l_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t2_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t2</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t2</source>
+        <source>quark_ranLL_fourvec_local_mass_l_t2</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_fourvec_local_mass_u_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t2_a</output>
+        <sink>quark_ama_pion_local_mass_u_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_u_t2</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t2_shift</sourceShift>
       </options>
@@ -2459,6 +2467,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_axial_fourvec_local_mass_l_t2</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t2_a</output>
+        <sink>quark_ranLL_scalar_local_mass_l_t2</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_l_t2</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t2_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_fourvec_onelink_mass_l_t2</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2478,76 +2505,19 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_u_t2</name>
+        <name>corr_ranLL_axial_fourvec_local_mass_u_t3</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t2_a</output>
-        <sink>quark_ranLL_scalar_local_mass_u_t2</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t3_a</output>
+        <sink>quark_ranLL_scalar_local_mass_u_t3</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t2</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_pion_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t2_a</output>
-        <sink>quark_ama_pion_local_mass_l_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_pion_local_mass_l_t2</source>
-        <sourceGammas>(G5 G5)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_u_t2</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t2_a</output>
-        <sink>quark_ama_pion_local_mass_u_t2</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_u_t2</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t2_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t3_a</output>
-        <sink>quark_ama_pion_local_mass_l_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t3</source>
+        <source>quark_ranLL_fourvec_local_mass_u_t3</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t3_shift</sourceShift>
       </options>
@@ -2573,6 +2543,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ama_fourvec_local_mass_l_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ama/corr_fourvec_local_ama_m002426_t3_a</output>
+        <sink>quark_ama_pion_local_mass_l_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t3</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ranLL_axial_fourvec_onelink_mass_l_t3</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2592,96 +2581,39 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_onelink_mass_u_t3</name>
+        <name>corr_ama_pion_local_mass_l_t3</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t3_a</output>
-        <sink>quark_ranLL_pion_local_mass_u_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_u_t3</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t3_a</output>
-        <sink>quark_ranLL_scalar_local_mass_l_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t3</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_axial_fourvec_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t3_a</output>
-        <sink>quark_ama_scalar_local_mass_l_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_l_t3</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t3_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_l_t3</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_pion_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t3_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t3</sink>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t3_a</output>
+        <sink>quark_ama_pion_local_mass_l_t3</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(G5 G5)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_pion_local_mass_l_t3</source>
+        <source>quark_ama_pion_local_mass_l_t3</source>
         <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_u_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t3_a</output>
+        <sink>quark_ranLL_pion_local_mass_u_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_u_t3</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t3_shift</sourceShift>
       </options>
     </module>
@@ -2701,25 +2633,6 @@
         </sinkSpinTaste>
         <source>quark_ama_fourvec_local_mass_u_t3</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_fourvec_onelink_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t3_a</output>
-        <sink>quark_ranLL_pion_local_mass_l_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
-          <gauge>gauge_apbc</gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_onelink_mass_l_t3</source>
-        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
         <sourceShift>noise_t3_shift</sourceShift>
       </options>
     </module>
@@ -2763,6 +2676,63 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_fourvec_onelink_mass_l_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m002426_t3_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_l_t3</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_axial_fourvec_local_mass_l_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ama/corr_axial_fourvec_local_ama_m002426_t3_a</output>
+        <sink>quark_ama_scalar_local_mass_l_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_l_t3</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_pion_local_mass_l_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t3_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_pion_local_mass_l_t3</source>
+        <sourceGammas>(G5 G5)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_axial_fourvec_onelink_mass_l_t3</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2782,19 +2752,57 @@
     </module>
     <module>
       <id>
-        <name>corr_ranLL_fourvec_local_mass_u_t3</name>
+        <name>corr_ranLL_fourvec_onelink_mass_u_t3</name>
         <type>MContraction::StagMeson</type>
       </id>
       <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ranLL/corr_fourvec_local_ranLL_m001524_t3_a</output>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_onelink/ranLL/corr_fourvec_onelink_ranLL_m001524_t3_a</output>
         <sink>quark_ranLL_pion_local_mass_u_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (GT G1)</gammas>
+          <gauge>gauge_apbc</gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_onelink_mass_u_t3</source>
+        <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ranLL_fourvec_local_mass_l_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/fourvec_local/ranLL/corr_fourvec_local_ranLL_m002426_t3_a</output>
+        <sink>quark_ranLL_pion_local_mass_l_t3</sink>
         <sinkFunc>sink</sinkFunc>
         <sinkSpinTaste>
           <applyG5>true</applyG5>
           <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
           <gauge></gauge>
         </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t3</source>
+        <source>quark_ranLL_fourvec_local_mass_l_t3</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>corr_ama_fourvec_local_mass_u_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t3_a</output>
+        <sink>quark_ama_pion_local_mass_u_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ama_fourvec_local_mass_u_t3</source>
         <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t3_shift</sourceShift>
       </options>
@@ -2839,6 +2847,25 @@
     </module>
     <module>
       <id>
+        <name>corr_ranLL_axial_fourvec_local_mass_l_t3</name>
+        <type>MContraction::StagMeson</type>
+      </id>
+      <options>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m002426_t3_a</output>
+        <sink>quark_ranLL_scalar_local_mass_l_t3</sink>
+        <sinkFunc>sink</sinkFunc>
+        <sinkSpinTaste>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
+          <gauge></gauge>
+        </sinkSpinTaste>
+        <source>quark_ranLL_fourvec_local_mass_l_t3</source>
+        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
+        <sourceShift>noise_t3_shift</sourceShift>
+      </options>
+    </module>
+    <module>
+      <id>
         <name>corr_ama_fourvec_onelink_mass_l_t3</name>
         <type>MContraction::StagMeson</type>
       </id>
@@ -2853,63 +2880,6 @@
         </sinkSpinTaste>
         <source>quark_ama_fourvec_onelink_mass_l_t3</source>
         <sourceGammas>(GX G1) (GY G1) (GZ G1) (GT G1)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ranLL_axial_fourvec_local_mass_u_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_fourvec_local/ranLL/corr_axial_fourvec_local_ranLL_m001524_t3_a</output>
-        <sink>quark_ranLL_scalar_local_mass_u_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z) (G5T G5T)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ranLL_fourvec_local_mass_u_t3</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_pion_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t3_a</output>
-        <sink>quark_ama_pion_local_mass_l_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(G5 G5)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_pion_local_mass_l_t3</source>
-        <sourceGammas>(G5 G5)</sourceGammas>
-        <sourceShift>noise_t3_shift</sourceShift>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>corr_ama_fourvec_local_mass_u_t3</name>
-        <type>MContraction::StagMeson</type>
-      </id>
-      <options>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/fourvec_local/ama/corr_fourvec_local_ama_m001524_t3_a</output>
-        <sink>quark_ama_pion_local_mass_u_t3</sink>
-        <sinkFunc>sink</sinkFunc>
-        <sinkSpinTaste>
-          <applyG5>true</applyG5>
-          <gammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</gammas>
-          <gauge></gauge>
-        </sinkSpinTaste>
-        <source>quark_ama_fourvec_local_mass_u_t3</source>
-        <sourceGammas>(GX GX) (GY GY) (GZ GZ) (GT GT)</sourceGammas>
         <sourceShift>noise_t3_shift</sourceShift>
       </options>
     </module>

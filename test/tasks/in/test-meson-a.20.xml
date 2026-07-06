@@ -43,15 +43,9 @@
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
       <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
         <gaugefat>gauge_smear_fat</gaugefat>
         <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.0</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
       </options>
     </module>
     <module>
@@ -108,15 +102,9 @@
         <type>MAction::ImprovedStaggeredMILC</type>
       </id>
       <options>
-        <Ls>1</Ls>
-        <boundary>1 1 1 1</boundary>
-        <c1>1.0</c1>
-        <c2>1.0</c2>
         <gaugefat>gauge_smear_fat</gaugefat>
         <gaugelong>gauge_smear_long</gaugelong>
         <mass>0.002426</mass>
-        <tad>1.0</tad>
-        <twist>0 0 0</twist>
       </options>
     </module>
     <module>
