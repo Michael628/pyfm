@@ -12,7 +12,7 @@ CPU_AFFINITY=$(taskset -pc $$ 2>&1 | awk '{print $6}')
 
 echo "CPU Affinity: $CPU_AFFINITY"
 
-NUMA_NODE=$(nvidia-smi topo -m | grep "$CPU_AFFINITY" | awk '{print $5}')
+NUMA_NODE=$(nvidia-smi topo -m | grep "$CPU_AFFINITY" | awk '{print $(NF-1)}')
 GPU_ID=$(nvidia-smi topo -m | grep "$CPU_AFFINITY" | awk '{print $1}')
 GPU_ID=${GPU_ID:3}
 
