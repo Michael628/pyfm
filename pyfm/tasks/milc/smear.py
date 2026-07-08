@@ -14,17 +14,17 @@ class SmearConfig(SimpleConfig):
     time: int
     space: int
     node_geometry: str
-    gauge_links: Outfile
+    ildg_links: Outfile
     long_links: Outfile
     fat_links: Outfile
-    unsmeared_file: str
+    v5_links: Outfile
 
 
 
 def build_input_params(config: SmearConfig) -> str:
     """Generates input paramters for smearing HISQ lattice using milc txt parameter input"""
-    lat = config.unsmeared_file
-    lat_ildg_path = config.gauge_links.filename
+    lat = config.v5_links.filename
+    lat_ildg_path = config.ildg_links.filename
     long_ildg_path = config.long_links.filename
     fat_ildg_path = config.fat_links.filename
 
@@ -64,7 +64,7 @@ def build_input_params(config: SmearConfig) -> str:
 
 def create_outfile_catalog(config: SmearConfig) -> pd.DataFrame:
     outfile_configs = [
-        config.gauge_links,
+        config.ildg_links,
         config.long_links,
         config.fat_links,
     ]
@@ -100,5 +100,30 @@ def create_outfile_catalog(config: SmearConfig) -> pd.DataFrame:
     return df
 
 
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize SmearConfig input: absorb the ``_preprocessor`` slice and migrate legacy keys.
+
+    - Translate the legacy ``gauge_links`` key onto the canonical ``ildg_links``.
+    - Warn and drop the legacy ``unsmeared_file`` string; the input configuration
+      for smearing is read from ``v5_links`` instead.
+    """
+    combined = params | params.pop("_preprocessor", {})
+    if "gauge_links" in combined:
+        combined["ildg_links"] = combined.pop("gauge_links")
+    if "unsmeared_file" in combined:
+        utils.get_logger().warning(
+            "SmearConfig: ignoring legacy 'unsmeared_file'; the input "
+            "configuration for smearing is read from 'v5_links'."
+        )
+        del combined["unsmeared_file"]
+    return combined
+
+
 # Register SmearConfig as the config for 'smear' task type
-register_task("smear", SmearConfig, create_outfile_catalog, build_input_params)
+register_task(
+    "smear",
+    SmearConfig,
+    create_outfile_catalog,
+    build_input_params,
+    normalize_params=normalize_params,
+)
