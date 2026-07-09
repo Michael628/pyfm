@@ -46,7 +46,7 @@ def audit_outfiles(task: Task, verbose: bool = False) -> pd.DataFrame | None:
     MAX_FILES = 5
 
     if df is None:
-        logger.warn(f"No output files given for task: {task.key}.")
+        logger.warning(f"No output files given for task: {task.key}.")
         return df
 
     # Classify every row, then order so the interesting rows come first.

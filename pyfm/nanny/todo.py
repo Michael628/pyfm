@@ -23,7 +23,7 @@ def wait_set_todo_lock(lock_file):
     """Set lock file"""
 
     while os.access(lock_file, os.R_OK):
-        utils.get_logger().warn("Lock file present. Sleeping.")
+        utils.get_logger().warning("Lock file present. Sleeping.")
         sys.stdout.flush()
         time.sleep(600)
 
@@ -58,7 +58,7 @@ def read_todo(todo_file):
                 a[i] = a[i].decode("ASCII")
         key = a[0]
         if key in todo_list:
-            utils.get_logger().warn(
+            utils.get_logger().warning(
                 f"Duplicate cfgno '{key}' in {todo_file} — keeping last occurrence"
             )
         todo_list[key] = a

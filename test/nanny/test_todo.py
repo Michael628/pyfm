@@ -39,7 +39,9 @@ class TestReadTodo:
 
     def test_strips_inline_comments(self, tmp_path):
         f = tmp_path / "todo"
-        f.write_text("a.60 smear 0 # submit smear first\nb.60 hadrons 0 # submit hadrons\n")
+        f.write_text(
+            "a.60 smear 0 # submit smear first\nb.60 hadrons 0 # submit hadrons\n"
+        )
         result = todo.read_todo(str(f))
         assert result["a.60"] == ["a.60", "smear", "0"]
         assert result["b.60"] == ["b.60", "hadrons", "0"]
@@ -83,8 +85,8 @@ class TestReadTodoDuplicates:
         mock_logger = MagicMock()
         with patch("pyfm.utils.get_logger", return_value=mock_logger):
             todo.read_todo(str(f))
-        mock_logger.warn.assert_called_once()
-        call_args = mock_logger.warn.call_args[0][0]
+        mock_logger.warning.assert_called_once()
+        call_args = mock_logger.warning.call_args[0][0]
         assert "a.60" in call_args
 
     def test_last_write_wins(self, tmp_path):
