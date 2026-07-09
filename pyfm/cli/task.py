@@ -12,7 +12,7 @@ def task():
 
 
 @task.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
 @click.option("-j", "--job", type=str, required=True, help="Job step name.")
 @click.option("-s", "--series", type=str, required=True, help="Gauge field series label.")
 @click.option("-n", "--config", "cfg", type=str, required=True, help="Configuration number.")
@@ -24,7 +24,7 @@ def generate(param_file, job, series, cfg):
 
 
 @task.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
 @click.option("-j", "--job", type=str, required=True, help="Job step name to aggregate.")
 @click.option("-f", "--format", "fmt", type=str, default="csv", help="Output file format (csv, hdf5).")
 @click.option("--average", is_flag=True, default=False, help="Average over configurations after aggregation.")

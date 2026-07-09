@@ -109,8 +109,8 @@ def workspace():
 
 
 @workspace.command()
-@click.option("--workspace", "workspace_dir", type=str, default=None, help="Workspace root directory path.")
-@click.option("--storage", type=str, default=None, help="Storage root directory for job data.")
+@click.option("--workspace", "workspace_dir", type=click.Path(file_okay=False), default=None, help="Workspace root directory path.")
+@click.option("--storage", type=click.Path(file_okay=False), default=None, help="Storage root directory for job data.")
 @click.option("--scheduler", type=str, default=None, help="HPC scheduler type (slurm, pbs, lsf).")
 @click.option("--lattice", type=str, default=None, help="Lattice geometry descriptor.")
 @click.option("--system", type=str, default=None, help="System profile name to configure.")

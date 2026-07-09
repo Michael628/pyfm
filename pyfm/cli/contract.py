@@ -25,11 +25,13 @@ def contract():
 
 
 @contract.command()
-@click.argument("param-file", type=str, required=False, default=None)
+@click.argument(
+    "param-file", type=click.Path(dir_okay=False), required=False, default=None
+)
 @click.option(
     "-p",
     "--param-file-opt",
-    type=str,
+    type=click.Path(dir_okay=False),
     default=None,
     help="Path to YAML parameter file.",
 )

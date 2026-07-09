@@ -24,7 +24,7 @@ def nanny():
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
 @click.option("-j", "--job", type=str, default=None, help="Restrict nanny loop to this job step only.")
 @click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
 def run(param_file, job, logging_level):
@@ -35,8 +35,8 @@ def run(param_file, job, logging_level):
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
-@click.option("-i", "--input", "input_file", type=str, required=True, help="Input file list to submit.")
+@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-i", "--input", "input_file", type=click.Path(dir_okay=False), required=True, help="Input file list to submit.")
 @click.option("-j", "--job", type=str, required=True, help="Job step name to submit.")
 @click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
 def submit(param_file, input_file, job, logging_level):
@@ -54,7 +54,7 @@ def submit(param_file, input_file, job, logging_level):
 @click.argument("steps", nargs=-1, required=True)
 @click.option("--cfg", "cfg_list", multiple=True, type=int, help="Individual configuration numbers to add.")
 @click.option("--cfg-range", "cfg_range", nargs=3, type=int, default=None, help="Config range as START STOP STEP (exclusive stop).")
-@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
 def add(series, steps, cfg_list, cfg_range, param_file):
     """Add todo entries for SERIES and STEPS.
 
@@ -89,7 +89,7 @@ def add(series, steps, cfg_list, cfg_range, param_file):
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=str, default="params.yaml", help="Path to YAML parameter file.")
+@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
 @click.option("-j", "--job", type=str, default=None, help="Job step to inspect.")
 @click.option("-s", "--series", type=str, default=None, help="Gauge field series to filter on.")
 @click.option("-n", "--config", "config", type=str, default=None, help="Configuration number to filter on.")
