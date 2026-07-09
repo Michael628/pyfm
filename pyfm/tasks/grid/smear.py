@@ -9,7 +9,6 @@ from pyfm import utils
 from pyfm.domain import SimpleConfig, Outfile
 from pyfm.tasks.register import register_task
 
-
 # Antiperiodic time boundary, matching the grid_milc_to_ildg default applied in
 # C++ when ``boundary`` is empty (see HighlyImprovedStaggeredFermionImpl setup).
 DEFAULT_BOUNDARY = "1 1 1 -1"
@@ -31,7 +30,7 @@ class GridSmearConfig(SimpleConfig):
     configurable fields.
     """
 
-    gauge_links: Outfile
+    ildg_links: Outfile
     long_links: Outfile
     fat_links: Outfile
     v5_links: Outfile
@@ -58,7 +57,7 @@ def build_input_params(config: GridSmearConfig) -> t.Dict:
     """
     return dict(
         milcFile=config.v5_links.filestem,
-        gaugeStem=config.gauge_links.filestem,
+        gaugeStem=config.ildg_links.filestem,
         gaugeFatStem=config.fat_links.filestem,
         gaugeLongStem=config.long_links.filestem,
         boundary=DEFAULT_BOUNDARY,
@@ -78,7 +77,7 @@ def create_outfile_catalog(config: GridSmearConfig) -> pd.DataFrame:
         repls["filepath"] = filepath
         return repls
 
-    outfile_configs = [config.gauge_links, config.fat_links, config.long_links]
+    outfile_configs = [config.ildg_links, config.fat_links, config.long_links]
 
     df = []
     for outfile_config in outfile_configs:

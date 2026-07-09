@@ -20,7 +20,6 @@ class SmearConfig(SimpleConfig):
     v5_links: Outfile
 
 
-
 def build_input_params(config: SmearConfig) -> str:
     """Generates input paramters for smearing HISQ lattice using milc txt parameter input"""
     lat = config.v5_links.filename
@@ -121,7 +120,7 @@ def normalize_params(params: t.Dict) -> t.Dict:
 
 # Register SmearConfig as the config for 'smear' task type
 register_task(
-    "smear",
+    "milc_smear",
     SmearConfig,
     create_outfile_catalog,
     build_input_params,

@@ -25,7 +25,7 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
     infile_stem = task.config.format_string(infile_template)
 
     task_key = task.key
-    if "smear" in task_key:
+    if "milc" in task_key:
         infile = utils.io.write_plain_text(
             infile_stem, task.handler.build_input_params(task.config), ext="txt"
         )

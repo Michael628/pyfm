@@ -1,4 +1,5 @@
 """Tests for the standalone grid_smear task (grid_milc_to_ildg driver)."""
+
 import pytest
 
 from pyfm.domain import Outfile
@@ -19,7 +20,7 @@ def _config() -> GridSmearConfig:
         formatting={},
         logging_level="info",
         runid="test",
-        gauge_links=_outfile("out/gauge.20"),
+        ildg_links=_outfile("out/gauge.20"),
         long_links=_outfile("out/long.20"),
         fat_links=_outfile("out/fat.20"),
         v5_links=_outfile("in/milc.20", good_size=0),
