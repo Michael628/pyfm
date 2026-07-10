@@ -282,7 +282,7 @@ def catalog_files(
         df.append(new_df)
 
     if len(df) == 0:
-        return pd.DataFrame()
+        return pd.DataFrame(columns=["filepath", "good_size", "exists", "file_size"])
     else:
         return pd.concat(df, ignore_index=True)
 

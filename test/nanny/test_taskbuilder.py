@@ -181,14 +181,14 @@ class TestGetOutfiles:
         # (both build_input_params AND create_outfile_catalog). A handler without
         # create_outfile_catalog cannot be used with create_task / get_outfiles —
         # so we test the isinstance guard directly on a TaskHandler stub.
-        from pyfm.nanny.validator import TaskOutputProtocol
+        from pyfm.domain.protocols import OutfileCatalogProtocol
 
         handler_no_catalog = TaskHandler(
             config_type=_StubSimpleConfig,
             build_input_params=build_input_params,
             build_aggregator_params=build_aggregator_params,
         )
-        assert not isinstance(handler_no_catalog, TaskOutputProtocol)
+        assert not isinstance(handler_no_catalog, OutfileCatalogProtocol)
 
     def test_returns_dataframe_when_catalog_present(self):
         _register_stub_with_catalog()

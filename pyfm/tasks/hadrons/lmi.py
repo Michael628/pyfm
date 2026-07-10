@@ -180,12 +180,17 @@ def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
     df = [
         m.create_outfile_catalog(c)
         for m, c in zip(
-            [epack, meson, highmode],
-            [config.epack_config, config.meson_config, config.high_modes_config],
+            [gauge, epack, meson, highmode],
+            [
+                config.gauge_config,
+                config.epack_config,
+                config.meson_config,
+                config.high_modes_config,
+            ],
         )
         if c is not None
     ]
-    return pd.concat(df)
+    return pd.concat(df, ignore_index=True)
 
 
 def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:

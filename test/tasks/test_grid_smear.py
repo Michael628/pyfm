@@ -90,3 +90,7 @@ class TestCreateOutfileCatalog:
     def test_carries_good_size(self):
         cat = create_outfile_catalog(_config())
         assert list(cat["good_size"]) == [100, 100, 100]
+
+    def test_has_four_base_columns(self):
+        cat = create_outfile_catalog(_config())
+        assert set(cat.columns) == {"filepath", "good_size", "exists", "file_size"}

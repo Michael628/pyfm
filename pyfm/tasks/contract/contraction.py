@@ -72,7 +72,7 @@ def build_aggregator_params(config: ContractConfig, average: bool) -> t.Dict:
 
 def create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
     df = [dmod.create_outfile_catalog(d) for d in config.diagrams.values()]
-    return pd.concat(df)
+    return pd.concat(df, ignore_index=True)
 
 
 def validate_config(config: ContractConfig) -> None:

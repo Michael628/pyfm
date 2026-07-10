@@ -49,6 +49,8 @@ def get_high_mode_run_tsources(config: HighModeConfig) -> t.List[str]:
         return list(map(str, config.tsource_range))
 
     df = highmode.create_outfile_catalog(config)
+    if df.empty:
+        return []
     missing_files = df[df["exists"] == False]
     return [
         str(tsource)

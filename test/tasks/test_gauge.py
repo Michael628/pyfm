@@ -19,6 +19,7 @@ from pyfm.tasks.hadrons.gauge import (
     build_action_modules,
     build_base_gauge,
     build_sp_gauge,
+    create_outfile_catalog,
     normalize_params,
     validate_config,
 )
@@ -403,3 +404,68 @@ class TestNormalizeIntegration:
         }
         cfg = build_config(GaugeConfig, params, self._file_params())
         assert cfg.action_type is ActionType.SMEARILDG
+
+
+class TestCreateOutfileCatalog:
+    """create_outfile_catalog must mirror build_base_gauge's save_ildg output path.
+
+    Only the ``save_ildg`` path writes files; ``LOAD`` never writes (it consumes
+    pre-smeared links from disk); ``SMEARV5`` also re-writes the thin gauge as
+    ILDG. The ``{cfg}`` placeholder is resolved at config-build time, so configs
+    are built via ``build_config`` with ``cfg`` set (the realistic nanny path).
+    """
+
+    @staticmethod
+    def _build(action_type: str, save_ildg: bool) -> GaugeConfig:
+        from pyfm.core.builder import build_config
+
+        params = {
+            "formatting": {},
+            "logging_level": "info",
+            "runid": "t",
+            "mass": {"l": 0.1},
+            "action_name": "stag_mass_{mass}",
+            "cfg": "1234",
+            "save_ildg": save_ildg,
+            "_preprocessor": {"action_type": action_type},
+        }
+        file_params = {
+            "home": "/tmp",
+            "ildg_links": {"filestem": "lat/ildg", "good_size": 100},
+            "fat_links": {"filestem": "lat/fat", "good_size": 100},
+            "long_links": {"filestem": "lat/long", "good_size": 100},
+            "v5_links": {"filestem": "lat/v5", "good_size": 100},
+        }
+        return build_config(GaugeConfig, params, file_params)
+
+    def test_save_ildg_off_returns_empty(self):
+        for action_type in ("smearildg", "smearv5", "free", "load"):
+            df = create_outfile_catalog(self._build(action_type, save_ildg=False))
+            assert df.empty, f"{action_type} should write nothing without save_ildg"
+
+    def test_load_save_ildg_is_noop(self):
+        # LOAD consumes pre-smeared links from disk; it never writes, so
+        # save_ildg produces no catalog entries (mirrors build_base_gauge).
+        df = create_outfile_catalog(self._build("load", save_ildg=True))
+        assert df.empty
+
+    def test_smearildg_writes_fat_and_long(self):
+        df = create_outfile_catalog(self._build("smearildg", save_ildg=True))
+        assert list(df["filepath"]) == ["/tmp/lat/fat.1234", "/tmp/lat/long.1234"]
+        assert (df["good_size"] == 100).all()
+        assert set(df.columns) == {"filepath", "good_size", "exists", "file_size"}
+
+    def test_free_writes_fat_and_long(self):
+        df = create_outfile_catalog(self._build("free", save_ildg=True))
+        assert list(df["filepath"]) == ["/tmp/lat/fat.1234", "/tmp/lat/long.1234"]
+
+    def test_smearv5_also_writes_thin_gauge_as_ildg(self):
+        # SMEARV5 reads the thin gauge as raw MILC v5; save_ildg re-writes it
+        # back out as ILDG (in addition to fat/long) so downstream LOAD runs can
+        # consume it.
+        df = create_outfile_catalog(self._build("smearv5", save_ildg=True))
+        assert list(df["filepath"]) == [
+            "/tmp/lat/ildg.1234",
+            "/tmp/lat/fat.1234",
+            "/tmp/lat/long.1234",
+        ]

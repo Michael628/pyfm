@@ -1,4 +1,3 @@
-import os
 import typing as t
 
 import pandas as pd
@@ -70,36 +69,17 @@ def create_outfile_catalog(config: GridSmearConfig) -> pd.DataFrame:
     """Enumerate the expected ILDG *output* files (thin/fat/long links).
 
     The MILC v5 input (``v5_links``) is a consumed input, not an output, so it
-    is excluded from the catalog.
+    is excluded from the catalog. Delegates to :func:`catalog_files` (same
+    generator interface as ``gauge.create_outfile_catalog``) so the four-column
+    contract and zero-files-match ``ValueError`` are inherited for free.
     """
 
-    def build_row(filepath: str, repls: t.Dict[str, str]) -> t.Dict[str, str]:
-        repls["filepath"] = filepath
-        return repls
+    def generate_outfile_formatting():
+        yield {}, config.ildg_links
+        yield {}, config.fat_links
+        yield {}, config.long_links
 
-    outfile_configs = [config.ildg_links, config.fat_links, config.long_links]
-
-    df = []
-    for outfile_config in outfile_configs:
-        files = utils.io.process_files(outfile_config.filename, processor=build_row)
-
-        dict_of_rows = {
-            k: [file[k] for file in files] for k in files[0] if len(files) > 0
-        }
-
-        new_df = (
-            pd.DataFrame(dict_of_rows)
-            .assign(good_size=outfile_config.good_size)
-            .assign(exists=lambda df: df["filepath"].apply(os.path.exists))
-            .assign(
-                file_size=lambda df: df[df["exists"]]["filepath"].transform(
-                    os.path.getsize
-                )
-            )
-        )
-        df.append(new_df)
-
-    return pd.concat(df, ignore_index=True)
+    return utils.io.catalog_files(generate_outfile_formatting())
 
 
 # Register GridSmearConfig as the config for the 'grid_smear' task type

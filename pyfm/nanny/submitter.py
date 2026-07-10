@@ -284,24 +284,27 @@ def nanny_loop(YAML, require_step: str | None = None):
         # Count queued jobs with our job name
         nqueued = count_jobs_in_queue(scheduler, job_name_pfx)
 
+        job_configs = build_job_configs(yaml_params)
+
+        # Check completion and purge scratch files for complete jobs.
+        # Runs on its own cadence, independent of queue fullness, so a
+        # persistently full queue can't starve completion checking.
+        if check_count <= 0:
+            check_jobs(
+                yaml_params,
+                nanny_config=nanny_config,
+                job_configs=job_configs,
+            )
+            check_count = nanny_config.check_interval
+
         # Submit until we have the desired number of jobs in the queue
         if nqueued < nanny_config.max_queue:
-            job_configs = build_job_configs(yaml_params)
             todo.wait_set_todo_lock(lock_file)
             todo_list = todo.read_todo(todo_file)
             todo.remove_todo_lock(lock_file)
 
             # Plan the next submission from pre-built job configs (config-first)
             bundle = plan_submission(todo_list, job_configs, require_step)
-
-            # Check completion and purge scratch files for complete jobs
-            if check_count == 0:
-                check_jobs(
-                    yaml_params,
-                    nanny_config=nanny_config,
-                    job_configs=job_configs,
-                )
-                check_count = nanny_config.check_interval
 
             if bundle and bundle.ncases > 0:
                 # Make input

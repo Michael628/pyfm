@@ -94,7 +94,7 @@ class HighModeConfig(SimpleConfig):
     def get_mass_labels(self, op:OpList.Op, skip_cross: bool = False) -> t.List[str]:
         mass_labels = [self.mass.to_string(m, True) for m in op.mass]
         if not skip_cross and self.cross_terms in (CrossTerms.MASS, CrossTerms.ALL):
-            cross_labels = [f"{a}_{mass_labels[j]}" for i,a in enumerate(mass_labels) for j in range(i)]
+            cross_labels = [f"{mass_labels[j]}_m{a}" for i,a in enumerate(mass_labels) for j in range(i)]
             mass_labels += cross_labels
         return mass_labels
 

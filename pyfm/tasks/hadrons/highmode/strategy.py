@@ -62,11 +62,14 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
 
     if not config.overwrite:
         df = create_outfile_catalog(config)
-        missing_files = df[df["exists"] == False]
-        run_tsources = []
-        for tsource in config.tsource_range:
-            if any(missing_files["tsource"] == str(tsource)):
-                run_tsources.append(str(tsource))
+        if df.empty:
+            run_tsources = []
+        else:
+            missing_files = df[df["exists"] == False]
+            run_tsources = []
+            for tsource in config.tsource_range:
+                if any(missing_files["tsource"] == str(tsource)):
+                    run_tsources.append(str(tsource))
     else:
         run_tsources = list(map(str, config.tsource_range))
 

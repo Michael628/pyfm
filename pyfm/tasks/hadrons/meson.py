@@ -97,6 +97,8 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
 
         if not config.overwrite:
             gammas = get_incomplete_gammas(config, gammas, mass_label, bad_files)
+            if not gammas:
+                continue
 
         gamma_string = " ".join([x.gamma_string for x in gammas])
 

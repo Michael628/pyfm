@@ -15,22 +15,13 @@ from pyfm.nanny.config import (
 )
 from pyfm.nanny.taskbuilder import Task, create_task
 import pyfm.nanny.todo as todo
-from pyfm.domain.protocols import OutputComparisonProtocol
+from pyfm.domain.protocols import OutputComparisonProtocol, OutfileCatalogProtocol
 from pyfm.tasks.hadrons import highmode
-
-
-@t.runtime_checkable
-class TaskOutputProtocol(t.Protocol):
-    def create_outfile_catalog(self) -> pd.DataFrame:
-        """Creates a dataframe of information on all output files for task including
-        whether the file exists, the size of the file, and whether it matches the expected size.
-        """
-        ...
 
 
 def get_outfiles(task: Task) -> pd.DataFrame | None:
 
-    if isinstance(task.handler, TaskOutputProtocol):
+    if isinstance(task.handler, OutfileCatalogProtocol):
         return task.handler.create_outfile_catalog(task.config)
     else:
         utils.get_logger().debug(
@@ -50,10 +41,11 @@ def audit_outfiles(task: Task, verbose: bool = False) -> pd.DataFrame | None:
         return df
 
     # Classify every row, then order so the interesting rows come first.
-    complete = df["exists"] & (df["file_size"] >= df["good_size"])
+    exists = df["exists"].astype(bool)
+    complete = exists & (df["file_size"] >= df["good_size"])
     status = pd.Series("complete", index=df.index)
-    status[df["exists"] & ~complete] = "too small"
-    status[~df["exists"]] = "missing"
+    status[exists & ~complete] = "too small"
+    status[~exists] = "missing"
 
     order = pd.Categorical(status, categories=["missing", "too small", "complete"])
     view = df.assign(status=status).iloc[order.argsort(kind="stable")]
@@ -253,8 +245,10 @@ def next_finished(
 ######################################################################
 def has_good_output(task: Task) -> bool:
     df = audit_outfiles(task)
+    if df is None or len(df) == 0:
+        return False
     bad_file_mask = (df["exists"] == False) | (df["file_size"] < df["good_size"])
-    has_good_files = df is not None and df[bad_file_mask].empty
+    has_good_files = df[bad_file_mask].empty
     if has_good_files:
         return True
     return False

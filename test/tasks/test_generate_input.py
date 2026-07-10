@@ -154,3 +154,54 @@ def test_generate_contract_input(
         (tasks_data_dir / "in" / "test-contract-a.20.yaml").read_text()
     )
     assert actual == expected, "Contract YAML output mismatch"
+
+
+class TestEmptyOpListGuards:
+    """Empty op_list produces an empty catalog that lacks the 'tsource' column.
+
+    Both get_high_mode_run_tsources and build_input_params must guard against
+    df["tsource"] KeyError by short-circuiting to an empty run_tsources list.
+    """
+
+    @staticmethod
+    def _empty_op_config(**overrides):
+        from pyfm.domain import MassDict, OpList, Outfile
+        from pyfm.tasks.hadrons.types import HighModeConfig
+
+        return HighModeConfig(
+            formatting={},
+            logging_level="INFO",
+            runid="test",
+            mass=MassDict.from_dict({"l": 0.01}),
+            action_name="action_{mass}",
+            solver_name="solver_{solver}_{mass}",
+            low_modes_name="low_modes",
+            operations=OpList([]),
+            high_modes=Outfile(
+                filestem="corr/corr_{tsource}", ext=".h5", good_size=1
+            ),
+            tstart=0,
+            tstop=3,
+            dt=1,
+            noise=1,
+            time=64,
+            skip_cg=True,
+            shift_gauge_name="shift_gauge",
+            **overrides,
+        )
+
+    def test_get_high_mode_run_tsources_empty_op_list(self):
+        from pyfm.tasks.grid.lma import get_high_mode_run_tsources
+
+        config = self._empty_op_config(overwrite=False)
+        # Must not raise KeyError on df["tsource"]
+        assert get_high_mode_run_tsources(config) == []
+
+    def test_build_input_params_empty_op_list_no_crash(self):
+        from pyfm.tasks.hadrons.highmode.strategy import build_input_params
+
+        config = self._empty_op_config(overwrite=False)
+        # Must not raise KeyError on df["tsource"]
+        result = build_input_params(config)
+        # No noise modules since run_tsources is empty
+        assert all("noise_t" not in name for name in result.schedule)

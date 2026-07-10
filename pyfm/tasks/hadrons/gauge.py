@@ -1,6 +1,8 @@
 import typing as t
+import pandas as pd
 from pydantic.dataclasses import dataclass
 
+from pyfm import utils
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import (
@@ -238,10 +240,35 @@ def validate_config(config: GaugeConfig) -> None:
         )
 
 
+def create_outfile_catalog(config: GaugeConfig) -> pd.DataFrame:
+    """Catalog the output files GaugeConfig writes to disk.
+
+    The gauge module only produces output files on the ``save_ildg`` path: the
+    on-the-fly HISQ-smeared fat/long links are written via ``MIO::SaveIldg``.
+    For ``SMEARV5`` the thin gauge (read as raw MILC v5) is also re-written as
+    ILDG. ``LOAD`` never writes — it consumes pre-smeared links from disk — so
+    ``save_ildg`` is a no-op for it, exactly as in :func:`build_base_gauge`.
+    When ``save_ildg`` is off, no files are written and an empty DataFrame is
+    returned.
+    """
+    def generate_outfile_formatting():
+        if not config.save_ildg or config.action_type == ActionType.LOAD:
+            return
+        # SMEARV5 re-writes the thin gauge (read as raw MILC v5) back out as ILDG
+        # so downstream LOAD runs can consume it.
+        if config.action_type == ActionType.SMEARV5:
+            yield {}, config.ildg_links
+        yield {}, config.fat_links
+        yield {}, config.long_links
+
+    return utils.io.catalog_files(generate_outfile_formatting())
+
+
 # Register GaugeConfig (not as a complete handler task, just for infrastructure)
 register_task(
     "hadrons_gauge",
     GaugeConfig,
+    create_outfile_catalog,
     normalize_params=normalize_params,
     validate=validate_config,
 )

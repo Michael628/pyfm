@@ -146,7 +146,7 @@ def contraction_gen(
             # Set quark
             match op.gamma:
                 case Gamma.PION_LOCAL:
-                    quark = antiquark
+                    quark = TwoPointOp.Op(gamma=Gamma.PION_LOCAL, **common2)
                 case Gamma.VEC_LOCAL | Gamma.AXIAL_VEC_LOCAL:
                     quark = TwoPointOp.Op(gamma=Gamma.VEC_LOCAL, **common2)
                 case Gamma.FOURVEC_LOCAL | Gamma.AXIAL_FOURVEC_LOCAL:
