@@ -113,7 +113,7 @@ submit:
   scheduler: SLURM
   # scheduler: INTERACTIVE
   job_name_pfx: LMI
-  layout:
+  resources:
     ppn: 4 # Number of processes per node
     contract:
       nodes: 1

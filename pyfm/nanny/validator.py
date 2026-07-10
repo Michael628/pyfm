@@ -8,8 +8,9 @@ import pandas as pd
 
 from pyfm.nanny.core import (
     create_task,
-    get_job_config,
+    build_job_configs,
     get_nanny_config,
+    JobConfig,
     NannyConfig,
     Scheduler,
     Task,
@@ -261,12 +262,24 @@ def has_good_output(task: Task) -> bool:
 
 
 ######################################################################
-def check_jobs(yaml_params: t.Dict):
-    """Process all entries marked Q in the todolist"""
+def check_jobs(
+    yaml_params: t.Dict,
+    *,
+    nanny_config: NannyConfig | None = None,
+    job_configs: t.Dict[str, JobConfig] | None = None,
+):
+    """Process all entries marked Q in the todolist.
 
+    ``nanny_config`` and ``job_configs`` may be pre-built by the caller (e.g. the
+    nanny loop, which builds them once per iteration) to avoid rebuilds; when
+    omitted (standalone callers) they are built from ``yaml_params``.
+    """
     logger = utils.get_logger()
 
-    nanny_config = get_nanny_config(yaml_params)
+    if nanny_config is None:
+        nanny_config = get_nanny_config(yaml_params)
+    if job_configs is None:
+        job_configs = build_job_configs(yaml_params)
 
     # Read the to-do file
     todo_file = nanny_config.todo_file
@@ -314,7 +327,7 @@ def check_jobs(yaml_params: t.Dict):
         if status:
             todo_list[cfgno][index] = f"{step}_X"
             logger.info(f"Job step {step} is COMPLETE")
-        elif get_job_config(step, yaml_params).barrier:
+        elif job_configs[step].barrier:
             todo_list[cfgno][index] = f"{step}_XXfix"
             logger.info("Marking todo entry XXfix.  Fix before rerunning.")
         else:

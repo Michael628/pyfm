@@ -2,10 +2,17 @@ import typing as t
 from enum import auto
 from pydantic.dataclasses import dataclass
 
-from pyfm.domain import ConfigBase, SimpleConfig, SerializableEnum
+from pyfm.domain import ConfigBase, SimpleConfig, SerializableEnum, build_hooks
 from pyfm.domain.task_registry import TaskHandler
 from pyfm.core.builder import build_config
-from pyfm.tasks import get_task_handler, get_task_key, list_registered_types
+from pyfm.tasks import get_task_handler, get_task_key
+from pyfm.nanny.jobconfig import (
+    JobConfig,
+    JobBundle,
+    get_job_config,
+    build_job_configs,
+)
+from pyfm import utils
 
 
 class Scheduler(SerializableEnum):
@@ -20,7 +27,6 @@ class Scheduler(SerializableEnum):
 class NannyConfig(SimpleConfig):
     home: str
     todo_file: str
-    max_cases: int
     max_queue: int
     wait: int
     check_interval: int
@@ -28,22 +34,26 @@ class NannyConfig(SimpleConfig):
     scheduler: Scheduler
 
 
-@dataclass(frozen=True)
-class JobConfig(SimpleConfig):
-    run: str
-    job_type: str
-    step: str
-    io: str
-    wall_time: str
-    ppn: int
-    nodes: int
-    lattice: t.List[int]
-    geom: t.List[int]
-    params: t.Dict[str, t.Any]
-    tasks: t.Dict[str, t.Any] | None = None
-    node_minimum: int | None = None
-    task_type: str | None = None
-    barrier: bool = True
+def warn_moved_max_cases(params: t.Dict) -> t.Dict:
+    """Normalize hook for NannyConfig: warn when the legacy ``nanny.max_cases``
+    key is present.
+
+    Must be a ``normalize`` hook (runs on raw params before construction), not
+    ``validate`` — pydantic drops unknown keys at construction, so a removed
+    ``max_cases`` field is invisible to ``validate``. The legacy value is ignored;
+    the user must set ``submit:->resources:->max_cases`` or a per-step override.
+    """
+    if "max_cases" in params:
+        utils.get_logger().warning(
+            "`max_cases` has moved from the `nanny:` stanza to the "
+            "`submit:->resources:` stanza (global) or a per-step override "
+            "(`submit:->resources:-><step>:->max_cases`). The `nanny.max_cases` "
+            "value is no longer read."
+        )
+    return params
+
+
+build_hooks.register(NannyConfig, normalize=warn_moved_max_cases)
 
 
 class Task(t.NamedTuple):
@@ -58,32 +68,6 @@ def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
     nanny_params |= yaml_params["submit"]
     nanny_params |= yaml_params.get("files", {})
     return build_config(NannyConfig, nanny_params)
-
-
-def get_job_config(job_step: str, yaml_params: t.Dict[str, t.Any]) -> JobConfig:
-    job_defaults = yaml_params.get("shared_params", {})
-    # job_defaults |= {"job_type": "hadrons", "task_type": "lmi", "step": job_step}
-    job_defaults |= {"step": job_step, "params": {}}
-    if "job_setup" not in yaml_params:
-        raise ValueError("No `job_setup` parameters provided.")
-    if job_step not in yaml_params["job_setup"]:
-        raise ValueError(f"No `job_setup` parameters provided for `{job_step}`.")
-
-    job_params = job_defaults | yaml_params.get("job_setup").get(job_step)
-
-    job_type, task_type = job_params.get("job_type", None), job_params.get(
-        "task_type", None
-    )
-
-    if get_task_handler(job_type, task_type) is None:
-        raise ValueError(
-            f"No task handler found for job_type={job_type!r}, task_type={task_type!r}. "
-            f"Registered types: {list_registered_types()}"
-        )
-
-    job_params |= yaml_params["submit"]["layout"]
-    job_params |= yaml_params["submit"]["layout"].get(job_step, {})
-    return build_config(JobConfig, job_params)
 
 
 def get_task_params(

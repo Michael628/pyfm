@@ -113,7 +113,6 @@ smear_params:
 nanny:
   todo_file: todo
   # todo_file: todo_checkGhms
-  max_cases: 1
   max_queue: 200
   wait:     5
   check_interval: 30
@@ -122,8 +121,9 @@ submit:
   scheduler: PYFM_WORKSPACE_SCHEDULER
   # scheduler: INTERACTIVE
   job_name_pfx: LMI
-  layout:
+  resources:
     ppn: 4
+    max_cases: 1 # Bundle up to N jobs together (global default; per-step override below)
     smear:
       nodes: 16
       geom: [2,2,4,4]

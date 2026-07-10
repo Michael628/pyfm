@@ -4,7 +4,13 @@ import pytest
 import pandas as pd
 from pydantic.dataclasses import dataclass
 
-from pyfm.nanny.core import Task, create_task
+from pyfm.nanny.core import (
+    Task,
+    create_task,
+    get_nanny_config,
+    warn_moved_max_cases,
+    NannyConfig,
+)
 from pyfm.nanny.validator import get_outfiles
 from pyfm.domain.task_registry import TaskHandler
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig
@@ -50,7 +56,6 @@ _BASE_YAML_PARAMS: t.Dict[str, t.Any] = {
     "nanny": {
         "home": "/tmp",
         "todo_file": "todo",
-        "max_cases": 1,
         "max_queue": 1,
         "wait": 1,
         "check_interval": 1,
@@ -58,7 +63,7 @@ _BASE_YAML_PARAMS: t.Dict[str, t.Any] = {
         "scheduler": "SLURM",
     },
     "submit": {
-        "layout": {},
+        "resources": {},
     },
     "job_setup": {
         "stub_step": {
@@ -89,6 +94,7 @@ def _reset_registries():
     saved_config_to_task_key = dict(_config_to_task_key)
     task_registry.clear()
     build_hooks.clear()
+    build_hooks.register(NannyConfig, normalize=warn_moved_max_cases)
     _config_to_task_key.clear()
     yield
     task_registry.clear()
@@ -192,3 +198,21 @@ class TestGetOutfiles:
         assert result is not None
         assert isinstance(result, pd.DataFrame)
         assert not result.empty
+
+
+# ---------------------------------------------------------------------------
+# NannyConfig legacy `nanny.max_cases` warning hook
+# ---------------------------------------------------------------------------
+
+class TestNannyConfigMaxCasesWarning:
+    def test_nanny_max_cases_warns(self, caplog):
+        import logging
+
+        params = {
+            **_BASE_YAML_PARAMS,
+            "nanny": {**_BASE_YAML_PARAMS["nanny"], "max_cases": 4},
+        }
+        with caplog.at_level(logging.WARNING):
+            get_nanny_config(params)
+        assert "max_cases" in caplog.text
+        assert "moved" in caplog.text

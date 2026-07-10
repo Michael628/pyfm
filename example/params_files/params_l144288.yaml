@@ -81,10 +81,6 @@ contract_params:
 nanny:
   todo_file: todo
   # todo_file: todo_checkGhms
-  max_cases: 1
-  # max_cases: 10
-  # max_cases: 12
-  # max_cases: 6
   max_queue: 200
   wait: 5
   check_interval: 30
@@ -92,8 +88,9 @@ nanny:
 submit:
   scheduler: PYFM_WORKSPACE_SCHEDULER
   job_name_pfx: LMI
-  layout:
+  resources:
     ppn: 12
+    max_cases: 1 # Bundle up to N jobs together (global default; per-step override below)
     smear:
       nodes: 16
       geom: [4, 4, 2, 4]

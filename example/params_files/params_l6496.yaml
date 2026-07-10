@@ -166,7 +166,6 @@ hadrons_params:
 
 nanny:
   todo_file: todo
-  max_cases: 1
   max_queue: 200
   wait:     5
   check_interval: 30
@@ -175,8 +174,9 @@ submit:
   scheduler: PYFM_WORKSPACE_SCHEDULER
   # scheduler: INTERACTIVE
   job_name_pfx: LMI
-  layout:
+  resources:
     ppn: 4
+    max_cases: 1 # Bundle up to N jobs together (global default; per-step override below)
     smear:
       nodes: 1
       geom: [1,1,2,2]

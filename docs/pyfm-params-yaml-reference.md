@@ -22,7 +22,7 @@ Two substitution mechanisms appear throughout:
 `shared_params`  
 - defaults injected EVERYWHERE (nanny config, every job_type, e.g. `hadrons`, and every task_type, e.g. `lmi`)
 \+ `nanny` + `submit` + `files`         → NannyConfig
-\+ `job_setup.<step>` + `submit.layout` → JobConfig
+\+ `job_setup.<step>` + `submit.resources` → JobConfig
 \+ `<job_type>_params` (e.g. `hadrons_params`, `contract_params`) + `job_setup.<step>.params` → task global params
 \+ `job_setup.<step>.tasks`           → the task's nested config structure
 
@@ -217,7 +217,6 @@ Direct inputs to the Lanczos/IRL eigensolver (`pyfm/tasks/hadrons/types.py`). Al
 ```yaml
 nanny:
   todo_file: todo
-  max_cases: 1
   max_queue: 200
   wait: 5
   check_interval: 30
@@ -228,7 +227,6 @@ Merged into `NannyConfig` (`pyfm/nanny/core.py`). Controls the automated submiss
 | Key | Role |
 |-----|------|
 | `todo_file` | Filename listing jobs to run per configuration |
-| `max_cases` | Bundle up to N jobs together (`>1` = bundling) |
 | `max_queue` | Don't submit if this many jobs already queued |
 | `wait` | Seconds between submissions |
 | `check_interval` | Seconds between completion checks |
@@ -241,11 +239,13 @@ Merged into `NannyConfig` (`pyfm/nanny/core.py`). Controls the automated submiss
 submit:
   scheduler: PYFM_WORKSPACE_SCHEDULER
   job_name_pfx: LMI
-  layout:
-    ppn: 4             # default processes per node
+  resources:
+    ppn: 4
+    max_cases: 1           # global default; bundle up to N jobs
     hadrons:
       nodes: 1
       geom: [1, 1, 1, 2]
+      max_cases: 1         # per-step override (mirrors ppn override pattern)
     smear:
       ppn: 1
       nodes: 1
@@ -256,16 +256,20 @@ submit:
       geom: [1, 1, 1, 1]
 ```
 
-Also merged into `NannyConfig`; its `layout` sub-block is merged into each `JobConfig`.
+Also merged into `NannyConfig`; its `resources` sub-block is merged into each `JobConfig` (a legacy `layout` key is accepted and renamed).
 
 | Key | Role | Consumed as |
 |-----|------|-------------|
 | `scheduler` | `SLURM`/`PBS`/`LSF`/`INTERACTIVE`/`COBALT` (or `PYFM_WORKSPACE_SCHEDULER`) | `NannyConfig.scheduler` (`Scheduler` enum) |
 | `job_name_pfx` | Prefix for submitted job names | `NannyConfig.job_name_pfx` |
-| `layout.ppn` | Default processes per node | `JobConfig.ppn` |
-| `layout.<step>.nodes` | Node count for that step | `JobConfig.nodes` |
-| `layout.<step>.geom` | MPI geometry split of the lattice; product must equal `nodes*ppn` | `JobConfig.geom` |
-| `layout.<step>.ppn` | Per-step override of `ppn` | `JobConfig.ppn` |
+| `resources.ppn` | Default processes per node | `JobConfig.ppn` |
+| `resources.max_cases` | Global bundle limit (per-step overrides via `resources.<step>.max_cases`) | `JobConfig.max_cases` |
+| `resources.<step>.nodes` | Node count for that step | `JobConfig.nodes` |
+| `resources.<step>.geom` | MPI geometry split of the lattice; product must equal `nodes*ppn` | `JobConfig.geom` |
+| `resources.<step>.ppn` | Per-step override of `ppn` | `JobConfig.ppn` |
+
+`max_cases` moved here from the `nanny:` stanza (legacy `nanny.max_cases`
+emits a warning and is ignored).
 
 ---
 
@@ -294,7 +298,7 @@ job_setup:
     tasks: ...
 ```
 
-A map of step-name → job definition. Each entry merges with `shared_params` + `submit.layout` to build a `JobConfig`. The `job_type`/`task_type` pair selects the registered task handler.
+A map of step-name → job definition. Each entry merges with `shared_params` + `submit.resources` to build a `JobConfig`. The `job_type`/`task_type` pair selects the registered task handler.
 
 | Key | Role | Consumed as |
 |-----|------|-------------|

@@ -163,7 +163,6 @@ hadrons_params:
 
 nanny:
   todo_file: todo # Filename for listing jobs to be completed for each configuration
-  max_cases: 1 # If max_cases > 1 will bundle jobs together up to max_cases
   max_queue: 200 # Will not submit more jobs if max_queue jobs are in the queue
   wait: 5 # Wait interval between job submissions
   check_interval: 30 # Wait interval between checks for job completion
@@ -172,8 +171,9 @@ submit:
   scheduler: PYFM_WORKSPACE_SCHEDULER
   # scheduler: INTERACTIVE
   job_name_pfx: LMI
-  layout:
+  resources:
     ppn: 4 # Number of processes per node
+    max_cases: 1 # Bundle up to N jobs together (global default; per-step override below)
     hadrons:
       nodes: 1
       geom: [1, 1, 1, 2] # mpi geometry. How full lattice is split between processes.

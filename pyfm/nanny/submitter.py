@@ -6,13 +6,8 @@ import typing as t
 from pyfm import utils
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
-from pyfm.nanny.core import (
-    get_job_config,
-    get_nanny_config,
-    NannyConfig,
-    JobConfig,
-    Scheduler,
-)
+from pyfm.nanny.core import get_nanny_config, NannyConfig, Scheduler
+from pyfm.nanny.jobconfig import JobConfig, JobBundle, build_job_configs
 import pyfm.nanny.todo as todo
 
 from functools import reduce
@@ -52,14 +47,24 @@ def count_jobs_in_queue(scheduler, myjob_name_pfx):
 
 
 ######################################################################
-def next_cfgno_steps(max_cases, todo_list, step_request: str | None = None):
-    """Get next sets of cfgnos / job steps from the to-do file"""
+def plan_submission(
+    todo_list,
+    job_configs: t.Dict[str, JobConfig],
+    step_request: str | None = None,
+) -> JobBundle | None:
+    """Select the next step from todo state and bundle its cfgnos into a JobBundle.
 
-    # Return a list of cfgnos and indices to be submitted in the next job
-    # All subjobs in a single job must do the same step
-
+    Walks the todo in priority order, latches the active step from the first
+    unfinished task, resolves its pre-built JobConfig, and bundles contiguous
+    same-step cfgnos up to ``job_config.max_cases`` (a config object, not a raw
+    int). Preserves the contiguity and ``step_request`` semantics of the old
+    step-selection/bundling pass it replaces. Returns None when no tasks are
+    ready.
+    """
     current_step = None
+    job_config = None
     cfgno_steps = []
+
     for line in sorted(todo_list, key=todo.key_todo_entries):
         a = todo_list[line]
         if len(a) < 2:
@@ -71,13 +76,18 @@ def next_cfgno_steps(max_cases, todo_list, step_request: str | None = None):
             index, cfgno, new_step = n
             if current_step is None:
                 current_step = new_step
+                if current_step not in job_configs:
+                    raise ValueError(
+                        f"No `job_setup` parameters provided for `{current_step}`."
+                    )
+                job_config = job_configs[current_step]
             elif current_step != new_step:
                 # Ensure only one step type per bundled job
                 break
             cfgno_steps.append([cfgno, index])
 
         # Stop when we have enough for a bundle
-        if len(cfgno_steps) >= max_cases:
+        if job_config is not None and len(cfgno_steps) >= job_config.max_cases:
             break
 
     ncases = len(cfgno_steps)
@@ -86,7 +96,9 @@ def next_cfgno_steps(max_cases, todo_list, step_request: str | None = None):
         print("Found", ncases, "cases...", cfgno_steps)
         sys.stdout.flush()
 
-    return current_step, cfgno_steps
+    if current_step is None or job_config is None:
+        return None
+    return JobBundle(job_config=job_config, cfgno_steps=cfgno_steps)
 
 
 def make_inputs(param, step, cfgno_steps):
@@ -258,7 +270,6 @@ def nanny_loop(YAML, require_step: str | None = None):
 
         nanny_config = get_nanny_config(yaml_params)
         todo_file = os.path.join(nanny_config.home, nanny_config.todo_file)
-        max_cases = nanny_config.max_cases
         job_name_pfx = nanny_config.job_name_pfx
         scheduler = nanny_config.scheduler
 
@@ -269,33 +280,42 @@ def nanny_loop(YAML, require_step: str | None = None):
 
         # Submit until we have the desired number of jobs in the queue
         if nqueued < nanny_config.max_queue:
+            job_configs = build_job_configs(yaml_params)
             todo.wait_set_todo_lock(lock_file)
             todo_list = todo.read_todo(todo_file)
             todo.remove_todo_lock(lock_file)
 
-            # List a set of cfgnos
-            step, cfgno_steps = next_cfgno_steps(max_cases, todo_list, require_step)
-            ncases = len(cfgno_steps)
+            # Plan the next submission from pre-built job configs (config-first)
+            bundle = plan_submission(todo_list, job_configs, require_step)
 
             # Check completion and purge scratch files for complete jobs
             if check_count == 0:
-                # TODO: Replace check_jobs param with config object(s)
-                check_jobs(yaml_params)
+                check_jobs(
+                    yaml_params,
+                    nanny_config=nanny_config,
+                    job_configs=job_configs,
+                )
                 check_count = nanny_config.check_interval
 
-            if ncases > 0:
+            if bundle and bundle.ncases > 0:
                 # Make input
-                make_inputs(yaml_params, step, cfgno_steps)
+                make_inputs(yaml_params, bundle.job_config.step, bundle.cfgno_steps)
 
                 # Submit the job
+                status, jobid = submit_job(
+                    nanny_config, bundle.job_config, bundle.ncases
+                )
 
-                job_config = get_job_config(step, yaml_params)
-                status, jobid = submit_job(nanny_config, job_config, ncases)
-
-                cfgnos = ", ".join(c[0] for c in cfgno_steps)
+                cfgnos = ", ".join(c[0] for c in bundle.cfgno_steps)
                 date = subprocess.check_output("date", shell=True).rstrip().decode()
                 print(
-                    date, "Submitted job", jobid, "for", cfgnos, "step", job_config.step
+                    date,
+                    "Submitted job",
+                    jobid,
+                    "for",
+                    cfgnos,
+                    "step",
+                    bundle.job_config.step,
                 )
 
                 # Job submissions succeeded
@@ -305,7 +325,11 @@ def nanny_loop(YAML, require_step: str | None = None):
                     todo.wait_set_todo_lock(lock_file)
                     todo_list = todo.read_todo(todo_file)
                     mark_queued_todo_entries(
-                        step, cfgno_steps, jobid, todo_list, job_config.barrier
+                        bundle.job_config.step,
+                        bundle.cfgno_steps,
+                        jobid,
+                        todo_list,
+                        bundle.job_config.barrier,
                     )
                     todo.write_todo(todo_file, todo_list)
                     todo.remove_todo_lock(lock_file)
@@ -316,7 +340,7 @@ def nanny_loop(YAML, require_step: str | None = None):
                         print("Quitting")
                         sys.exit(1)
                     else:
-                        print("Will retry submitting", cfgno_steps, "later")
+                        print("Will retry submitting", bundle.cfgno_steps, "later")
 
         sys.stdout.flush()
 

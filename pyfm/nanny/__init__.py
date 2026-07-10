@@ -6,7 +6,9 @@ from pyfm.nanny.validator import (
 )
 from pyfm.nanny.core import (
     JobConfig,
+    JobBundle,
     NannyConfig,
+    build_job_configs,
     create_task,
     get_job_config,
     get_nanny_config,
@@ -17,7 +19,9 @@ from pyfm.nanny.todo_writer import parse_cfgs, validate_steps, add_entries
 
 __all__ = [
     "JobConfig",
+    "JobBundle",
     "NannyConfig",
+    "build_job_configs",
     "create_task",
     "get_job_config",
     "get_nanny_config",

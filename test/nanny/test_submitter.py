@@ -1,10 +1,11 @@
 import pytest
 
-from pyfm.nanny.core import NannyConfig, JobConfig, Scheduler
+from pyfm.nanny.core import NannyConfig, Scheduler
+from pyfm.nanny.jobconfig import JobConfig
 from pyfm.nanny.submitter import (
     get_submit_command,
     get_jobid,
-    next_cfgno_steps,
+    plan_submission,
     mark_queued_todo_entries,
     make_inputs,
 )
@@ -17,7 +18,6 @@ class TestGetSubmitCommand:
         return NannyConfig(
             home=str(tmp_path),
             todo_file="todo",
-            max_cases=4,
             max_queue=2,
             wait=60,
             check_interval=5,
@@ -106,15 +106,34 @@ class TestGetJobid:
         assert get_jobid(Scheduler.COBALT, reply) == "1607897"
 
 
-class TestNextCfgnoSteps:
+def _job_config(step, max_cases):
+    return JobConfig(
+        run="x",
+        job_type="stub",
+        step=step,
+        io="i",
+        wall_time="0:1",
+        ppn=1,
+        nodes=1,
+        lattice=[1, 1, 1, 1],
+        geom=[1, 1, 1, 1],
+        params={},
+        max_cases=max_cases,
+        formatting={},
+        logging_level="INFO",
+        runid="r",
+    )
+
+
+class TestPlanSubmission:
     def test_finds_ready_tasks(self):
         todo_list = {
             "a.60": ["a.60", "smear", "0"],
             "a.100": ["a.100", "smear", "0"],
         }
-        step, cfgno_steps = next_cfgno_steps(10, todo_list)
-        assert step == "smear"
-        assert len(cfgno_steps) == 2
+        bundle = plan_submission(todo_list, {"smear": _job_config("smear", 10)})
+        assert bundle.job_config.step == "smear"
+        assert len(bundle.cfgno_steps) == 2
 
     def test_respects_max_cases(self):
         todo_list = {
@@ -122,8 +141,8 @@ class TestNextCfgnoSteps:
             "a.100": ["a.100", "smear", "0"],
             "a.140": ["a.140", "smear", "0"],
         }
-        step, cfgno_steps = next_cfgno_steps(2, todo_list)
-        assert len(cfgno_steps) == 2
+        bundle = plan_submission(todo_list, {"smear": _job_config("smear", 2)})
+        assert len(bundle.cfgno_steps) == 2
 
     def test_groups_by_step(self):
         # Only bundles configs with the same step
@@ -131,37 +150,53 @@ class TestNextCfgnoSteps:
             "a.60": ["a.60", "smear", "0"],
             "a.100": ["a.100", "hadrons", "0"],
         }
-        step, cfgno_steps = next_cfgno_steps(10, todo_list)
-        assert step == "smear"
-        assert len(cfgno_steps) == 1
-        assert cfgno_steps[0][0] == "a.60"
+        bundle = plan_submission(
+            todo_list,
+            {"smear": _job_config("smear", 10), "hadrons": _job_config("hadrons", 10)},
+        )
+        assert bundle.job_config.step == "smear"
+        assert len(bundle.cfgno_steps) == 1
+        assert bundle.cfgno_steps[0][0] == "a.60"
 
     def test_skips_blocked_entries(self):
         todo_list = {
             "a.60": ["a.60", "smear_Q", "1000", "hadrons", "0"],
             "a.100": ["a.100", "smear_X", "1000", "hadrons", "0"],
         }
-        step, cfgno_steps = next_cfgno_steps(10, todo_list)
-        assert step == "hadrons"
-        assert len(cfgno_steps) == 1
-        assert cfgno_steps[0][0] == "a.100"
+        bundle = plan_submission(todo_list, {"hadrons": _job_config("hadrons", 10)})
+        assert bundle.job_config.step == "hadrons"
+        assert len(bundle.cfgno_steps) == 1
+        assert bundle.cfgno_steps[0][0] == "a.100"
 
-    def test_empty_when_all_done(self):
+    def test_returns_none_when_all_done(self):
         todo_list = {
             "a.60": ["a.60", "smear_X", "1000"],
         }
-        step, cfgno_steps = next_cfgno_steps(10, todo_list)
-        assert step is None
-        assert len(cfgno_steps) == 0
+        bundle = plan_submission(todo_list, {"smear": _job_config("smear", 10)})
+        assert bundle is None
 
     def test_step_request_filter(self):
         todo_list = {
             "a.60": ["a.60", "smear", "0"],
             "a.100": ["a.100", "hadrons", "0"],
         }
-        step, cfgno_steps = next_cfgno_steps(10, todo_list, step_request="hadrons")
-        assert step == "hadrons"
-        assert len(cfgno_steps) == 1
+        bundle = plan_submission(
+            todo_list,
+            {"smear": _job_config("smear", 10), "hadrons": _job_config("hadrons", 10)},
+            step_request="hadrons",
+        )
+        assert bundle.job_config.step == "hadrons"
+        assert len(bundle.cfgno_steps) == 1
+
+    def test_per_job_max_cases_drives_bundling(self):
+        # max_cases read from the job config, not a passed int
+        todo_list = {
+            "a.60": ["a.60", "smear", "0"],
+            "a.100": ["a.100", "smear", "0"],
+            "a.140": ["a.140", "smear", "0"],
+        }
+        bundle = plan_submission(todo_list, {"smear": _job_config("smear", 3)})
+        assert len(bundle.cfgno_steps) == 3
 
 
 class TestMarkQueuedTodoEntries:
