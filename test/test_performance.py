@@ -274,7 +274,7 @@ def test_benchmark_lmi_performance_rejects_unsupported_task_key(tmp_path):
     log_file.write_text("dummy")
     task = SimpleNamespace(key="nanny_other")
 
-    with patch("pyfm.nanny.core.create_task", return_value=task):
+    with patch("pyfm.nanny.taskbuilder.create_task", return_value=task):
         try:
             benchmark_lmi_performance("other", str(log_file), {})
         except ValueError as e:
@@ -316,7 +316,7 @@ def test_benchmark_lmi_performance_uses_grid_parser_and_preserves_json_shape(
     handler = SimpleNamespace(build_input_params=lambda config: planned_input)
     task = SimpleNamespace(key="nanny_grid", handler=handler, config=config)
 
-    with patch("pyfm.nanny.core.create_task", return_value=task):
+    with patch("pyfm.nanny.taskbuilder.create_task", return_value=task):
         result = benchmark_lmi_performance("grid", str(log_file), {})
 
     assert result["schema_version"] == 1

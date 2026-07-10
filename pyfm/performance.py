@@ -1501,7 +1501,7 @@ def benchmark_lmi_performance(
     yaml_params: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Build v1 component-first benchmark JSON data for a configured LMI job."""
-    from pyfm.nanny.core import create_task
+    from pyfm.nanny.taskbuilder import create_task
 
     task = create_task(job, yaml_params, series="a", cfg="1")
     validate_benchmark_task_key(task.key)

@@ -6,13 +6,13 @@ Core configuration types, registry, and protocols.
 
 ::: pyfm.domain.conftypes
 
-## Builder Types
-
-::: pyfm.domain.buildertypes
-
 ## Registry
 
-::: pyfm.domain.registry
+::: pyfm.domain.task_registry
+
+## Build Hooks
+
+::: pyfm.domain.build_hooks
 
 ## Protocols
 

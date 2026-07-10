@@ -1,4 +1,3 @@
-from pyfm.domain.buildertypes import ConfigBuilder
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig, CompositeConfig, SerializableEnum
 from pyfm.domain.task_registry import TaskHandler
 from pyfm.domain import task_registry
@@ -25,7 +24,6 @@ from pyfm.domain.io import LoadArrayConfig, LoadDictConfig, LoadH5Config
 __all__ = [
     "BuildHooks",
     "build_hooks",
-    "ConfigBuilder",
     "ConfigBase",
     "SimpleConfig",
     "CompositeConfig",

@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 from pydantic.dataclasses import dataclass
 
-from pyfm.nanny.jobconfig import (
+from pyfm.nanny.config import (
     JobConfig,
     JobBundle,
     build_job_configs,

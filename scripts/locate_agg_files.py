@@ -21,7 +21,7 @@ import pandas as pd
 from pyfm import utils
 import pyfm.dataio as dio
 from pyfm.dataio import processor as pc
-from pyfm.nanny.core import create_task
+from pyfm.nanny.taskbuilder import create_task
 
 # Input formats understood by the loader, mapped to their file extension.
 INPUT_EXTENSIONS = {"csv": ".csv", "hdf5": ".h5", "parquet": ".parquet", "dict": ".npy"}

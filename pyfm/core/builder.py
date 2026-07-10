@@ -1,7 +1,7 @@
 import typing as t
+from pyfm.core.configbuilder import ConfigBuilder
 from pyfm.domain import (
     ConfigBase,
-    ConfigBuilder,
     CompositeConfig,
     SimpleConfig,
     build_hooks,
@@ -64,11 +64,6 @@ def build_config(
         config = new_builder(processed_params).with_files(file_params).build()
         return postproc_and_validate(config)
 
-    def _preprocessor_root(processed: t.Dict[str, t.Any]) -> t.Dict[str, t.Any]:
-        """Return the nested routing table under ``_preprocessor`` (possibly empty)."""
-        root = processed.get("_preprocessor")
-        return root if isinstance(root, dict) else {}
-
     def build_composite_config() -> CompositeConfig:
         """Build a ``CompositeConfig`` by recursively constructing each subconfig field.
 
@@ -91,7 +86,7 @@ def build_config(
         """
 
         processed_params = preprocess(params)
-        prep = _preprocessor_root(processed_params)
+        prep = processed_params.get("_preprocessor", {})
 
         subconfigs = {}
         for subconfig_label, field in config_type.get_subconfigs().items():

@@ -213,7 +213,7 @@ class TestRegisterTask:
         def format_string(config, s):
             return s
 
-        # nanny/core.py pattern — should not raise
+        # nanny/taskbuilder.py pattern — should not raise
         register_task(FakeConfig, format_string)
         handler = task_registry.get("nanny_fake_task")
         assert handler.config_type is FakeConfig

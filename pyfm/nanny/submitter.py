@@ -6,8 +6,14 @@ import typing as t
 from pyfm import utils
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
-from pyfm.nanny.core import get_nanny_config, NannyConfig, Scheduler
-from pyfm.nanny.jobconfig import JobConfig, JobBundle, build_job_configs
+from pyfm.nanny.config import (
+    JobBundle,
+    JobConfig,
+    NannyConfig,
+    Scheduler,
+    build_job_configs,
+    get_nanny_config,
+)
 import pyfm.nanny.todo as todo
 
 from functools import reduce

@@ -57,12 +57,16 @@ packages = [
     "pyfm",
     "pyfm.a2a",
     "pyfm.cli",
+    "pyfm.core",
     "pyfm.dataio",
     "pyfm.domain",
     "pyfm.nanny",
     "pyfm.tasks",
+    "pyfm.tasks.contract",
+    "pyfm.tasks.grid",
     "pyfm.tasks.hadrons",
     "pyfm.tasks.hadrons.highmode",
+    "pyfm.tasks.milc",
     "pyfm.utils",
 ]
 

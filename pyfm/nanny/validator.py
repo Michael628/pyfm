@@ -6,15 +6,14 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 
-from pyfm.nanny.core import (
-    create_task,
+from pyfm.nanny.config import (
     build_job_configs,
     get_nanny_config,
     JobConfig,
     NannyConfig,
     Scheduler,
-    Task,
 )
+from pyfm.nanny.taskbuilder import Task, create_task
 import pyfm.nanny.todo as todo
 from pyfm.domain.protocols import OutputComparisonProtocol
 from pyfm.tasks.hadrons import highmode

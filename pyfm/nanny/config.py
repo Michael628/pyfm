@@ -1,11 +1,31 @@
 import typing as t
+from enum import auto
 
 from pydantic.dataclasses import dataclass
 
 from pyfm import utils
 from pyfm.core.builder import build_config
-from pyfm.domain import SimpleConfig, build_hooks
+from pyfm.domain import SimpleConfig, SerializableEnum, build_hooks
 from pyfm.tasks import get_task_handler, list_registered_types
+
+
+class Scheduler(SerializableEnum):
+    LSF = auto()
+    PBS = auto()
+    SLURM = auto()
+    INTERACTIVE = auto()
+    COBALT = auto()
+
+
+@dataclass(frozen=True)
+class NannyConfig(SimpleConfig):
+    home: str
+    todo_file: str
+    max_queue: int
+    wait: int
+    check_interval: int
+    job_name_pfx: str
+    scheduler: Scheduler
 
 
 @dataclass(frozen=True)
@@ -127,3 +147,30 @@ def validate_job(config: JobConfig) -> None:
 
 
 build_hooks.register(JobConfig, normalize=normalize_resources, validate=validate_job)
+
+
+def warn_moved_max_cases(params: t.Dict) -> t.Dict:
+    """Normalize hook for NannyConfig: warn when the legacy ``nanny.max_cases``
+    key is present.
+
+    Must be a ``normalize`` hook (runs on raw params before construction), not
+    ``validate`` — pydantic drops unknown keys at construction, so a removed
+    ``max_cases`` field is invisible to ``validate``. The legacy value is ignored;
+    the user must set ``submit:->resources:->max_cases`` or a per-step override.
+    """
+    if "max_cases" in params:
+        utils.get_logger().warning(
+            "`nanny:->max_cases` has moved to " "`submit:->resources:->max_cases`"
+        )
+    return params
+
+
+build_hooks.register(NannyConfig, normalize=warn_moved_max_cases)
+
+
+def get_nanny_config(yaml_params: t.Dict[str, t.Any]) -> NannyConfig:
+    nanny_params = yaml_params.get("shared_params", {})
+    nanny_params |= yaml_params["nanny"]
+    nanny_params |= yaml_params["submit"]
+    nanny_params |= yaml_params.get("files", {})
+    return build_config(NannyConfig, nanny_params)

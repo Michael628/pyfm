@@ -4,15 +4,15 @@ from pyfm.nanny.validator import (
     check_jobs,
     audit_outfiles,
 )
-from pyfm.nanny.core import (
+from pyfm.nanny.config import (
     JobConfig,
     JobBundle,
     NannyConfig,
     build_job_configs,
-    create_task,
     get_job_config,
     get_nanny_config,
 )
+from pyfm.nanny.taskbuilder import create_task
 from pyfm.nanny.aggregator import aggregate_task_data, load_data, process_data
 from pyfm.nanny.submitter import nanny_loop, submit_job
 from pyfm.nanny.todo_writer import parse_cfgs, validate_steps, add_entries

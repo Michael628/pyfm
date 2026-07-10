@@ -17,7 +17,7 @@ Two substitution mechanisms appear throughout:
 
 **Merge hierarchy**:
 > how `params.yaml` sections combine to build config objects 
-> (from `pyfm/nanny/core.py`)
+> (from `pyfm/nanny/taskbuilder.py`)
 
 `shared_params`  
 - defaults injected EVERYWHERE (nanny config, every job_type, e.g. `hadrons`, and every task_type, e.g. `lmi`)
@@ -222,7 +222,7 @@ nanny:
   check_interval: 30
 ```
 
-Merged into `NannyConfig` (`pyfm/nanny/core.py`). Controls the automated submission loop, not the physics.
+Merged into `NannyConfig` (`pyfm/nanny/config.py`). Controls the automated submission loop, not the physics.
 
 | Key | Role |
 |-----|------|

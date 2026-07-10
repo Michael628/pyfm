@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 import yaml
 
-from pyfm.nanny.core import create_task
+from pyfm.nanny.taskbuilder import create_task
 from pyfm.nanny import write_input_file
 from pyfm.tasks.hadrons import highmode, meson
 

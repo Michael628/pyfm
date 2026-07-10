@@ -4,9 +4,8 @@ import pytest
 import pandas as pd
 from pydantic.dataclasses import dataclass
 
-from pyfm.nanny.core import (
-    Task,
-    create_task,
+from pyfm.nanny.taskbuilder import Task, create_task
+from pyfm.nanny.config import (
     get_nanny_config,
     warn_moved_max_cases,
     NannyConfig,

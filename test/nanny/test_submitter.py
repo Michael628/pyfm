@@ -1,7 +1,6 @@
 import pytest
 
-from pyfm.nanny.core import NannyConfig, Scheduler
-from pyfm.nanny.jobconfig import JobConfig
+from pyfm.nanny.config import JobConfig, NannyConfig, Scheduler
 from pyfm.nanny.submitter import (
     get_submit_command,
     get_jobid,

@@ -4,7 +4,7 @@ import pytest
 import pandas as pd
 from pydantic.dataclasses import dataclass
 
-from pyfm.nanny.core import Task
+from pyfm.nanny.taskbuilder import Task
 from pyfm.domain.task_registry import TaskHandler
 from pyfm.domain.conftypes import ConfigBase, SimpleConfig
 
@@ -137,10 +137,10 @@ class TestHandlerProtocolCheck:
 
 
 # ---------------------------------------------------------------------------
-# BoundTaskHandler no longer exported from core
+# BoundTaskHandler no longer exported from taskbuilder
 # ---------------------------------------------------------------------------
 
 def test_bound_task_handler_removed():
-    """BoundTaskHandler must not exist in pyfm.nanny.core after the refactor."""
-    import pyfm.nanny.core as core_module
-    assert not hasattr(core_module, "BoundTaskHandler")
+    """BoundTaskHandler must not exist in pyfm.nanny.taskbuilder after the refactor."""
+    import pyfm.nanny.taskbuilder as taskbuilder_module
+    assert not hasattr(taskbuilder_module, "BoundTaskHandler")
