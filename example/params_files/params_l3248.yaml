@@ -245,7 +245,10 @@ files: # labels and corresponding locations of all input and output files used i
   long_links:
     filestem: lat/scidac/lng{ens}{series}.ildg
     good_size: 905900000
-  gauge_links:
+  v5_links:
+    filestem: lat/v5/l{ens}{series}
+    good_size: 452900000
+  ildg_links:
     filestem: lat/scidac/l{ens}{series}.ildg
     good_size: 452900000
   eig:

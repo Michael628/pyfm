@@ -433,9 +433,9 @@ job_setup:
 `action_type` selects how the thin gauge and fat/long links are produced (they
 are published under the same field names regardless):
 
-- **`load`** *(default)* — thin gauge loaded from `gauge_links`; pre-smeared
+- **`load`** *(default)* — thin gauge loaded from `ildg_links`; pre-smeared
   `fat_links`/`long_links` loaded from disk.
-- **`smear`** — thin gauge loaded from `gauge_links`; fat/long links derived on
+- **`smear`** — thin gauge loaded from `ildg_links`; fat/long links derived on
   the fly via `MGauge::HISQSmear`.
 - **`free`** — unit thin gauge, smeared on the fly via `MGauge::HISQSmear`
   (no gauge file read).
@@ -457,7 +457,7 @@ gauge:
 | `save_smear` | When `smear`/`free`, also write the on-the-fly fat/long links to the `fat_links`/`long_links` paths via `MIO::SaveIldg` | `GaugeConfig.save_smear` |
 | `free` *(legacy)* | Legacy boolean; `true`→`action_type: free`, `false`→`load`. An explicit `action_type` always wins | Normalized to `action_type` |
 
-`action_name`, `mass`, and the `gauge_links`/`fat_links`/`long_links` `Outfile`s
+`action_name`, `mass`, and the `ildg_links`/`fat_links`/`long_links` `Outfile`s
 are supplied by the LMI parent + `files` (not set in this block). `save_smear`
 only has an effect for `smear`/`free` (under `load` the links are already on
 disk).
@@ -483,14 +483,14 @@ files:
   contract:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
     good_size: 400
-  # ... long_links, gauge_links, eigdir, high_modes follow the same pattern
+  # ... long_links, ildg_links, eigdir, high_modes follow the same pattern
 ```
 
 The single source of truth for every input/output path. Each label becomes an `Outfile` object with a `filestem` (template) and a `good_size` (the byte threshold validation uses to judge completeness). Other sections refer to these by **label** (e.g. `outfile: contract`, `file: meson`).
 
 | Label | Role |
 |-------|------|
-| `fat_links` / `long_links` / `gauge_links` | SciDAC/ILDG gauge field files |
+| `fat_links` / `long_links` / `ildg_links` | SciDAC/ILDG gauge field files |
 | `eig` / `eigdir` | Eigenvector file / directory |
 | `eval` | Eigenvalue file |
 | `high_modes` | High-mode correlator output |

@@ -21,7 +21,7 @@ class GridSmearConfig(SimpleConfig):
     Unlike the hadrons ``GaugeConfig`` (which carries mass/action behaviour for
     full LMA-style jobs), this config only describes a file-format conversion +
     smearing run: a MILC v5 configuration goes in (``v5_links``) and the thin,
-    fat, and long gauge fields come out as ILDG (``gauge_links`` /
+    fat, and long gauge fields come out as ILDG (``ildg_links`` /
     ``fat_links`` / ``long_links``).
 
     The executable always reads MILC v5 and always writes all three ILDG fields,

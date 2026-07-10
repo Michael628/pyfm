@@ -176,7 +176,10 @@ files:
   long_links:
     filestem: lat/scidac/lng{ens}{series}.ildg
     good_size: 97844720000 
-  gauge_links:
+  v5_links:
+    filestem: lat/v5/l{ens}{series}
+    good_size: 48922360000 
+  ildg_links:
     filestem: lat/scidac/l{ens}{series}.ildg
     good_size: 48922360000 
   eig:
