@@ -42,7 +42,10 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
 
         schedule_file = utils.io.write_schedule(infile_stem, hadrons_input.schedule)
         xml_dict = hadmods.xml_wrapper(
-            runid=task.config.runid, sched=schedule_file, cfg=cfg
+            runid=task.config.runid,
+            sched=schedule_file,
+            cfg=cfg,
+            mpi_split=getattr(task.config, "split_mpi_layout", None),
         )
         modules = list(hadrons_input.modules.values())
         xml_dict["grid"]["modules"] = {"module": modules}

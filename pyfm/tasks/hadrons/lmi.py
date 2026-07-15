@@ -22,6 +22,18 @@ class LMIConfig(CompositeConfig):
     skip_meson: bool = False
     skip_high_modes: bool = False
 
+    @property
+    def split_mpi_layout(self) -> str | None:
+        """Re-expose the split-grid MPI layout from the high-modes subconfig.
+
+        ``split_mpi_layout`` lives on :class:`HighModeConfig`; this property lets
+        ``inputgen.write_input_file`` read it uniformly from a composite
+        ``LMIConfig`` (standalone ``HighModeConfig`` exposes it as a direct field).
+        Always available -- ``high_modes_config`` is built for every subconfig
+        regardless of ``skip_high_modes``.
+        """
+        return self.high_modes_config.split_mpi_layout
+
 
 _OPTIONAL_CONFIGS = ["meson", "high_modes", "epack"]
 

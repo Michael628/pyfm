@@ -40,6 +40,9 @@ test = [
 parquet = [
     "pyarrow>=10.0",
 ]
+mpi = [
+    "mpi4py>=3.1",
+]
 docs = [
     "mkdocs>=1.5",
     "mkdocs-material>=9.0",

@@ -5,7 +5,7 @@ This module contains python wrappers for Hadrons modules.
 """
 
 
-def xml_wrapper(runid: str, sched: str, cfg: str) -> dict:
+def xml_wrapper(runid: str, sched: str, cfg: str, mpi_split: str | None = None) -> dict:
     params = {
         "grid": {
             "parameters": {
@@ -29,6 +29,9 @@ def xml_wrapper(runid: str, sched: str, cfg: str) -> dict:
             "modules": {},
         },
     }
+
+    if mpi_split is not None:
+        params["grid"]["parameters"]["split"] = {"mpiSplit": mpi_split}
 
     return params
 
@@ -297,8 +300,9 @@ def quark_prop(
     gammas: str,
     gauge: str,
     apply_g5: str,
+    subgrid: int | None = None,
 ) -> t.Dict:
-    return {
+    module = {
         "id": {
             "name": name,
             "type": "MFermion::StagGaugeProp",
@@ -310,6 +314,9 @@ def quark_prop(
             "spinTaste": {"gammas": gammas, "gauge": gauge, "applyG5": apply_g5},
         },
     }
+    if subgrid is not None:
+        module["subgrid"] = subgrid
+    return module
 
 
 def prop_contract(
@@ -323,8 +330,9 @@ def prop_contract(
     gauge: str,
     output: str,
     apply_g5: str,
+    subgrid: int | None = None,
 ) -> t.Dict:
-    return {
+    module = {
         "id": {
             "name": name,
             "type": "MContraction::StagMeson",
@@ -343,6 +351,9 @@ def prop_contract(
             "output": output,
         },
     }
+    if subgrid is not None:
+        module["subgrid"] = subgrid
+    return module
 
 
 def meson_field(

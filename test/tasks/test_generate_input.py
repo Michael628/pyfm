@@ -1,4 +1,5 @@
 import copy
+import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
@@ -205,3 +206,116 @@ class TestEmptyOpListGuards:
         result = build_input_params(config)
         # No noise modules since run_tsources is empty
         assert all("noise_t" not in name for name in result.schedule)
+
+
+def _set_split_grid(params, *, mpi_layout=None, subgrid_ranks=None, cross_terms=None):
+    """Configure split-grid on the high_modes task slice (opt-in fields)."""
+    hm = params["job_setup"]["high_modes"]["tasks"]["high_modes"]
+    if mpi_layout is not None:
+        hm["split_mpi_layout"] = mpi_layout
+    if subgrid_ranks is not None:
+        hm["subgrid_ranks"] = subgrid_ranks
+    if cross_terms is not None:
+        hm["cross_terms"] = cross_terms
+    return params
+
+
+def _modules_by_name(xml_path):
+    """Parse the hadrons input XML -> {module_name: subgrid_text_or_None}."""
+    root = ET.parse(xml_path).getroot()
+    result = {}
+    for module in root.findall(".//module"):
+        name = module.find("id/name").text
+        subgrid = module.find("subgrid")
+        result[name] = subgrid.text if subgrid is not None else None
+    return result
+
+
+def test_generate_hadrons_split_grid_input(tmp_path, monkeypatch, hadrons_params):
+    """Both split-grid fields set: global <split> present, CG quarks tagged, ranLL not."""
+    monkeypatch.chdir(tmp_path)
+    _set_split_grid(hadrons_params, mpi_layout="1 1 1 2", subgrid_ranks=2)
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    xml_path = tmp_path / "in" / "high-modes-a.20.xml"
+    root = ET.parse(xml_path).getroot()
+    mpi_split = root.find(".//parameters/split/mpiSplit")
+    assert mpi_split is not None and mpi_split.text == "1 1 1 2"
+
+    modules = _modules_by_name(xml_path)
+    ama = {n: s for n, s in modules.items() if n.startswith("quark_ama_")}
+    ranll = {n: s for n, s in modules.items() if n.startswith("quark_ranLL_")}
+    assert ama and ranll, "expected both CG (ama) and ranLL propagators"
+
+    for name, subgrid in ama.items():
+        tsource = int(name.rsplit("_t", 1)[1])
+        assert subgrid == str(tsource % 2), f"{name}: subgrid {subgrid!r} != {tsource % 2}"
+    for name, subgrid in ranll.items():
+        assert subgrid is None, f"{name}: ranLL must not carry a subgrid"
+
+
+def test_split_grid_tags_cross_term_contractions(tmp_path, monkeypatch, hadrons_params):
+    """Cross-term corr_*ama*ranLL* contractions are tagged; pure-ranLL are not."""
+    monkeypatch.chdir(tmp_path)
+    _set_split_grid(
+        hadrons_params, mpi_layout="1 1 1 2", subgrid_ranks=2, cross_terms="solve"
+    )
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+    contractions = {n: s for n, s in modules.items() if n.startswith("corr_")}
+    cross = {n: s for n, s in contractions.items() if "ama" in n and "ranLL" in n}
+    ranll_only = {n: s for n, s in contractions.items() if "ama" not in n and "ranLL" in n}
+
+    assert cross, "expected cross-term contractions (cross_terms=solve)"
+    for name, subgrid in cross.items():
+        assert subgrid is not None, f"cross-term {name} must carry a subgrid"
+    for name, subgrid in ranll_only.items():
+        assert subgrid is None, f"pure-ranLL {name} must not carry a subgrid"
+
+
+def test_split_grid_partial_config_strips_and_warns(
+    tmp_path, monkeypatch, caplog, hadrons_params
+):
+    """Partial config (only one field) strips both with a warning; no split/subgrid emitted."""
+    monkeypatch.chdir(tmp_path)
+    _set_split_grid(hadrons_params, mpi_layout="1 1 1 2")  # subgrid_ranks absent
+
+    with caplog.at_level(logging.WARNING):
+        write_input_file("high_modes", hadrons_params, "a", "20")
+
+    assert "split_mpi_layout" in caplog.text and "subgrid_ranks" in caplog.text
+
+    root = ET.parse(tmp_path / "in" / "high-modes-a.20.xml").getroot()
+    assert root.find(".//parameters/split") is None
+    assert root.find(".//subgrid") is None
+
+
+def test_split_grid_rejects_nonpositive_subgrid_ranks(
+    tmp_path, monkeypatch, hadrons_params
+):
+    """A non-positive subgrid_ranks is a hard misconfiguration; validate_config raises."""
+    monkeypatch.chdir(tmp_path)
+    _set_split_grid(hadrons_params, mpi_layout="1 1 1 2", subgrid_ranks=0)
+    with pytest.raises(ValueError, match="subgrid_ranks"):
+        write_input_file("high_modes", hadrons_params, "a", "20")
+
+
+def test_split_grid_preserves_schedule_ordering(
+    tmp_path, monkeypatch, hadrons_params
+):
+    """Module names are unchanged by the subgrid value, so the schedule order is invariant."""
+    monkeypatch.chdir(tmp_path)
+
+    split_params = copy.deepcopy(hadrons_params)
+    _set_split_grid(split_params, mpi_layout="1 1 1 2", subgrid_ranks=2)
+
+    split_task = create_task("high_modes", split_params, "a", "20")
+    split_schedule = split_task.handler.build_input_params(split_task.config).schedule
+
+    plain_task = create_task("high_modes", hadrons_params, "a", "20")
+    plain_schedule = plain_task.handler.build_input_params(plain_task.config).schedule
+
+    assert split_schedule == plain_schedule

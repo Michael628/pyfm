@@ -77,6 +77,8 @@ class HighModeConfig(SimpleConfig):
     overwrite: bool = False
     correlator_strategy: CorrelatorStrategy = CorrelatorStrategy.TWOPOINT
     residual: t.List[float] = Field(default=[1e-8])
+    split_mpi_layout: str | None = None
+    subgrid_ranks: int | None = None
 
     @property
     def tsource_range(self) -> t.List[int]:

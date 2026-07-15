@@ -23,6 +23,22 @@ def route_params(params: t.Dict) -> t.Dict:
     # Extract task configs (contains gamma, mass lists for OpList)
     preprocessor_params = params.pop("_preprocessor", {})
 
+    # Split-grid is opt-in and both-or-neither: a partial config (exactly one of
+    # `split_mpi_layout`/`subgrid_ranks` set) is meaningless -- Hadrons needs the
+    # global <split> to define the subgrids that <subgrid> tags reference. Strip
+    # both and warn so the job falls back to non-split behavior rather than
+    # emitting orphan <subgrid> tags or a stray <split>.
+    split_mpi_layout = preprocessor_params.get("split_mpi_layout")
+    subgrid_ranks = preprocessor_params.get("subgrid_ranks")
+    if (split_mpi_layout is None) != (subgrid_ranks is None):
+        utils.get_logger().warning(
+            "Split-grid requires both `split_mpi_layout` and `subgrid_ranks`; "
+            "only one was provided. Stripping both and falling back to "
+            "non-split behavior."
+        )
+        preprocessor_params.pop("split_mpi_layout", None)
+        preprocessor_params.pop("subgrid_ranks", None)
+
     # Get field names from HighModeConfig, excluding 'mass'
     # - 'mass' comes from top-level params (MassDict)
     # !NOTE: Don't squash params['mass']
@@ -294,4 +310,9 @@ def validate_config(config: HighModeConfig) -> None:
     if has_nonlocal_ops and config.shift_gauge_name is None:
         raise ValueError(
             "Non-local operators detected, but shift_gauge_name is not set."
+        )
+
+    if config.subgrid_ranks is not None and config.subgrid_ranks <= 0:
+        raise ValueError(
+            f"subgrid_ranks must be a positive integer; got {config.subgrid_ranks}."
         )
