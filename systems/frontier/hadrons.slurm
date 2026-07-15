@@ -9,6 +9,11 @@
 #SBATCH -S 16
 #SBATCH --exclusive
 
+# Replace with your python environment
+# with pyfm installed
+module load miniforge3/23.11.0-0
+source activate py313
+
 # Set run environment
 eval $(pyfm workspace env --system frontier)
 # source $PYFMTOPDIR/pyfm/scripts/source-system-env.sh --system frontier
@@ -26,6 +31,13 @@ executable=HadronsMILC
 
 echo "WORKDIR = $WORKDIR"
 cd $WORKDIR
+
+# Record the node list for this job
+#mkdir -p nodefiles
+#scontrol show hostnames "$SLURM_JOB_NODELIST" > nodefiles/nodes.${SLURM_JOB_ID}
+# Record the memory usage of this job
+#mkdir -p memfiles
+#${PYFM_GPUMEM_MONITOR_SCRIPT} >& memfiles/gpumem.${SLURM_JOB_ID} &
 
 OPT="--accelerator-threads 8 --shm 2048 --comms-overlap --shm-mpi 0"
 runargs=" --grid ${LATTICE} --mpi ${LAYOUT} $OPT"
@@ -48,9 +60,12 @@ do
 
   echo ${cmd} >> ${output}
   ${cmd} >> ${output} &
+  APP_PIDS+=" $!"
 done
 
-wait
+# Wait only for the application runs, then stop the GPU memory monitor
+wait ${APP_PIDS}
+kill ${GPUMEM_PID} 2>/dev/null
 
 popd
 exit 0

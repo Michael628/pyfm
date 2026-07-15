@@ -6,7 +6,6 @@ module load rocm/6.3.1
 module load cray-fftw
 module load craype-accel-amd-gfx90a
 module load cray-hdf5/1.12.2.11
-module load miniforge3/23.11.0-0
 
 if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
   # QUDA Tuning Directory: Change location as needed
@@ -14,7 +13,7 @@ if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
   # mkdir -p tunecache
   export LD_LIBRARY_PATH=/opt/gcc/mpfr/3.1.4/lib:$LD_LIBRARY_PATH
   export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:${CRAY_LD_LIBRARY_PATH}
-  export LD_LIBRARY_PATH=${LD_LIBRARY_PATH}:/lustre/orion/proj-shared/phy157/phy157_hisq/detar/quda/install/quda/lib
+  export PYFM_GPUMEM_MONITOR_SCRIPT=${PYFMTOPDIR}/pyfm/systems/${PYFM_SYSTEM_EXT#*-}/gpumem.sh
 
   export QUDA_ENABLE_GDR=1
   export QUDA_MILC_HISQ_RECONSTRUCT=13
@@ -28,8 +27,5 @@ if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
 
   export SLURM_CPU_BIND="cores"
   export OMP_PROC_BIND="spread, spread, spread"
-
-  source activate py313
-  export PATH=/ccs/home/mlynch/.conda/envs/py313/bin:${PATH}
 
 fi
