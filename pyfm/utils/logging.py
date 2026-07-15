@@ -1,6 +1,30 @@
 import logging
+import os
 import sys
 from typing import Optional
+
+
+def _detect_mpi_from_env() -> tuple[bool, int]:
+    """Detect ``(has_mpi, rank)`` from launcher env vars, without importing mpi4py.
+
+    Importing ``mpi4py.MPI`` runs ``MPI_Init``, which aborts the process on hosts
+    without an MPI fabric (e.g. HPC login nodes) -- and that abort is not a
+    catchable Python exception. MPI launchers export rank/size in the
+    environment before the process starts, so read those instead. Falls back to
+    single-rank when no launcher is detected.
+    """
+    for size_var, rank_var in (
+        ("PMI_SIZE", "PMI_RANK"),  # MPICH / Cray PALS / Intel MPI
+        ("OMPI_COMM_WORLD_SIZE", "OMPI_COMM_WORLD_RANK"),  # Open MPI
+    ):
+        if size_var in os.environ:
+            try:
+                size = int(os.environ[size_var])
+                rank = int(os.environ.get(rank_var, 0))
+            except ValueError:
+                continue
+            return size > 1, rank
+    return False, 0
 
 
 class RankFilter(logging.Filter):
@@ -29,17 +53,8 @@ class PyFMLogger:
             self._setup_logging("INFO")
 
     def _setup_logging(self, level: str) -> None:
-        # Try to detect MPI
-        try:
-            from mpi4py import MPI
-
-            comm = MPI.COMM_WORLD
-            comm_size = comm.Get_size()
-            rank = comm.Get_rank()
-            has_mpi = comm_size > 1
-        except (ImportError, AttributeError):
-            has_mpi = False
-            rank = 0
+        # Detect MPI from launcher env vars (never imports mpi4py; see helper).
+        has_mpi, rank = _detect_mpi_from_env()
 
         # Choose format based on MPI detection
         if has_mpi:

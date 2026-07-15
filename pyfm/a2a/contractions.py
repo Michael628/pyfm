@@ -11,17 +11,24 @@ try:
 except ImportError:
     import numpy as xp
 
-try:
-    from mpi4py import MPI
-
-    COMM = MPI.COMM_WORLD
-except ImportError:
-    pass
-
 from pyfm import utils
 from pyfm.a2a.types import DiagramConfig, ContractConfig
 from pyfm.a2a.mesonloader import iter_meson_fields, clear_meson_cache
 from pyfm.a2a.time_operations import convert_to_numpy
+
+
+def _reduce_sum_to_root(sendbuf, recvbuf):
+    """Sum ``sendbuf`` across all ranks onto ``recvbuf`` at rank 0.
+
+    Imports mpi4py lazily so this module can be imported without running
+    MPI_Init; callers only reach here when ``comm_size > 1``, i.e. under an
+    active MPI launch.
+    """
+    from mpi4py import MPI
+
+    comm = MPI.COMM_WORLD
+    comm.Barrier()
+    comm.Reduce(sendbuf, recvbuf, op=MPI.SUM, root=0)
 
 
 def contract(
@@ -146,8 +153,7 @@ def conn_2pt(
             temp = None
             if contract_config.rank == 0:
                 temp = xp.empty_like(cij)
-            COMM.Barrier()
-            COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
+            _reduce_sum_to_root(cij, temp)
 
             if contract_config.rank == 0:
                 corr[gamma] = convert_to_numpy(temp)
@@ -201,8 +207,7 @@ def sib_conn_3pt(
             temp = None
             if contract_config.rank == 0:
                 temp = xp.empty_like(cij)
-            COMM.Barrier()
-            COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
+            _reduce_sum_to_root(cij, temp)
 
             if contract_config.rank == 0:
                 corr[gamma] = convert_to_numpy(temp)
@@ -260,8 +265,7 @@ def qed_conn_4pt(
                 temp = None
                 if contract_config.rank == 0:
                     temp = xp.empty_like(cij)
-                COMM.Barrier()
-                COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
+                _reduce_sum_to_root(cij, temp)
 
                 if contract_config.rank == 0:
                     corr[gamma] = convert_to_numpy(temp)

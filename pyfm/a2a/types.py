@@ -5,12 +5,20 @@ from pyfm.domain import Outfile, MassDict, SerializableEnum, CompositeConfig, Si
 from pydantic.dataclasses import dataclass
 
 
-try:
-    from mpi4py import MPI
+def get_comm():
+    """Return the MPI communicator, or None if mpi4py is unavailable.
 
-    COMM = MPI.COMM_WORLD
-except ImportError:
-    COMM = None
+    Importing ``mpi4py.MPI`` runs ``MPI_Init``, which aborts on hosts without an
+    MPI fabric (e.g. HPC login nodes). Import it lazily here so that merely
+    importing this module -- as the task registry does on every CLI invocation
+    -- never initializes MPI. Initialization happens only when contraction code
+    first asks for the communicator.
+    """
+    try:
+        from mpi4py import MPI
+    except ImportError:
+        return None
+    return MPI.COMM_WORLD
 
 
 class ContractType(SerializableEnum):
@@ -119,12 +127,14 @@ class ContractConfig(CompositeConfig):
 
     @property
     def comm_size(self) -> int:
-        if COMM:
-            return COMM.Get_size()
+        comm = get_comm()
+        if comm:
+            return comm.Get_size()
         return 1
 
     @property
     def rank(self) -> int:
-        if COMM:
-            return COMM.Get_rank()
+        comm = get_comm()
+        if comm:
+            return comm.Get_rank()
         return 0
