@@ -290,7 +290,9 @@ def catalog_files(
 def get_processed_filename(filename: str, remove: t.List[str], suffix: str = "") -> str:
 
     subdir = "processed/{format}" + suffix
-    result: str = filename.replace("correlators", subdir)
+    prefix, sep, rest = filename.partition("correlators/")
+    _, _, name = rest.rpartition("/")
+    result: str = f"{prefix}{subdir}/{name}" if sep else filename.replace("correlators", subdir)
     for r in remove:
         result = re.sub(f"_[a-z]?{{{r}}}", "", result)
 

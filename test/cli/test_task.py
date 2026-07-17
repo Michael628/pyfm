@@ -46,7 +46,7 @@ def test_aggregate_dispatches_defaults(runner):
         mock_utils.io.load_param.return_value = FAKE_PARAMS
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False, max_workers=1)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_average_flag(runner):
@@ -57,7 +57,7 @@ def test_aggregate_average_flag(runner):
         mock_utils.io.load_param.return_value = FAKE_PARAMS
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--average"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=True, skip_existing=False, max_workers=1)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=True, skip_existing=False, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_skip_existing_flag(runner):
@@ -68,7 +68,7 @@ def test_aggregate_skip_existing_flag(runner):
         mock_utils.io.load_param.return_value = FAKE_PARAMS
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--skip-existing"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=True, max_workers=1)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=True, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_custom_format(runner):
@@ -79,7 +79,7 @@ def test_aggregate_custom_format(runner):
         mock_utils.io.load_param.return_value = FAKE_PARAMS
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "-f", "hdf5"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="hdf5", average=False, skip_existing=False, max_workers=1)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="hdf5", average=False, skip_existing=False, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_missing_job_fails(runner):
@@ -99,7 +99,7 @@ def test_aggregate_max_workers_flag(runner):
         )
         assert result.exit_code == 0, result.output
         mock_agg.assert_called_once_with(
-            "hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False, max_workers=4
+            "hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False, generate_manifest=False, max_workers=4
         )
 
 
@@ -114,3 +114,44 @@ def test_aggregate_max_workers_must_be_int(runner):
             cli, ["task", "aggregate", "-j", "hadrons_lmi", "--max-workers", "abc"]
         )
         assert result.exit_code != 0
+
+
+def test_aggregate_generate_manifest_flag(runner):
+    with (
+        patch("pyfm.cli.task.utils") as mock_utils,
+        patch("pyfm.cli.task.aggregator.aggregate_task_data") as mock_agg,
+    ):
+        mock_utils.io.load_param.return_value = FAKE_PARAMS
+        result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--generate-manifest"])
+        assert result.exit_code == 0, result.output
+        mock_agg.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, format="csv", average=False,
+            skip_existing=False, generate_manifest=True, max_workers=1,
+        )
+
+
+def test_aggregate_generate_manifest_with_average(runner):
+    with (
+        patch("pyfm.cli.task.utils") as mock_utils,
+        patch("pyfm.cli.task.aggregator.aggregate_task_data") as mock_agg,
+    ):
+        mock_utils.io.load_param.return_value = FAKE_PARAMS
+        result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--generate-manifest", "--average"])
+        assert result.exit_code == 0, result.output
+        mock_agg.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, format="csv", average=True,
+            skip_existing=False, generate_manifest=True, max_workers=1,
+        )
+
+
+def test_aggregate_generate_manifest_conflicts_with_skip_existing(runner):
+    with (
+        patch("pyfm.cli.task.utils") as mock_utils,
+        patch("pyfm.cli.task.aggregator.aggregate_task_data") as mock_agg,
+    ):
+        mock_utils.io.load_param.return_value = FAKE_PARAMS
+        result = runner.invoke(
+            cli, ["task", "aggregate", "-j", "hadrons_lmi", "--generate-manifest", "--skip-existing"]
+        )
+        assert result.exit_code != 0
+        mock_agg.assert_not_called()

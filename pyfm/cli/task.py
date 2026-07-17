@@ -29,6 +29,7 @@ def generate(param_file, job, series, cfg):
 @click.option("-f", "--format", "fmt", type=str, default="csv", help="Output file format (csv, hdf5).")
 @click.option("--average", is_flag=True, default=False, help="Average over configurations after aggregation.")
 @click.option("--skip-existing", is_flag=True, default=False, help="Skip configs whose output already exists.")
+@click.option("--generate-manifest", is_flag=True, default=False, help="Generate manifest sidecars from existing processed agg files instead of aggregating.")
 @click.option(
     "--max-workers",
     type=int,
@@ -39,8 +40,12 @@ def generate(param_file, job, series, cfg):
     ),
 )
 @click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
-def aggregate(param_file, job, fmt, average, skip_existing, max_workers, logging_level):
+def aggregate(param_file, job, fmt, average, skip_existing, generate_manifest, max_workers, logging_level):
     """Aggregate output data across configurations into a single file."""
+    if generate_manifest and skip_existing:
+        raise click.UsageError(
+            "--generate-manifest and --skip-existing are mutually exclusive."
+        )
     params = utils.io.load_param(param_file)
     utils.set_logging_level(logging_level)
     aggregator.aggregate_task_data(
@@ -48,5 +53,6 @@ def aggregate(param_file, job, fmt, average, skip_existing, max_workers, logging
         format=fmt,
         average=average,
         skip_existing=skip_existing,
+        generate_manifest=generate_manifest,
         max_workers=max_workers,
     )
