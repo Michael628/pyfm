@@ -109,6 +109,17 @@ def build_config(
                             f"_preprocessor[{subconfig_label!r}] must be a list for a "
                             f"LIST subconfig, got {type(raw_list).__name__}"
                         )
+                    if not raw_list and processed_params.get(subconfig_label):
+                        raise ValueError(
+                            f"{config_type.__name__}.{subconfig_label}: found unrouted "
+                            f"data under params[{subconfig_label!r}], but "
+                            f"_preprocessor[{subconfig_label!r}] is empty. LIST "
+                            f"subconfigs are only ever built from routed data, so this "
+                            f"field silently becomes empty when no build hooks are "
+                            f"registered for {config_type.__name__} (hooks={hooks!r}). "
+                            f"Check that the module calling register_task for this "
+                            f"config type has been imported."
+                        )
                     subconfigs[subconfig_label] = []
                     for sub_par in raw_list:
                         if not isinstance(sub_par, dict):

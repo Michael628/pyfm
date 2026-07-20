@@ -8,6 +8,7 @@ Covers:
 import importlib
 
 import pytest
+from pydantic_core import ValidationError
 
 from pyfm.domain import task_registry, build_hooks
 from pyfm.tasks.register import _config_to_task_key
@@ -114,27 +115,29 @@ class TestContractConfigValidate:
 
 class TestDiagramConfigValidate:
     def test_validate_raises_on_empty_mesons(self):
-        """validate_config raises ValueError when DiagramConfig.mesons is empty."""
+        """DiagramConfig raises ValidationError when mesons is empty.
+
+        Note: DiagramConfig is a Pydantic dataclass, so validation errors from
+        __post_init__ are wrapped in pydantic_core.ValidationError.
+        """
         _reload_contract_modules()
-        from pyfm.tasks.contract.diagram import validate_config
         from pyfm.a2a.types import DiagramConfig, ContractType
         from pyfm.domain import Outfile
 
         outfile = Outfile(filestem="out", ext=".h5", good_size=100)
 
-        config = DiagramConfig(
-            time=4,
-            contraction_type=ContractType.TWOPOINT,
-            mesons=[],
-            outfile=outfile,
-            gammas=["G5_G5"],
-            eig_range=DiagramConfig.MesonIndex(min=0, max=200),
-            formatting={},
-            logging_level="DEBUG",
-            runid="test",
-        )
-        with pytest.raises(ValueError, match="mesons"):
-            validate_config(config)
+        with pytest.raises(ValidationError, match="Expected 1 or 2 meson configs, got 0"):
+            DiagramConfig(
+                time=4,
+                contraction_type=ContractType.TWOPOINT,
+                mesons=[],
+                outfile=outfile,
+                gammas=["G5_G5"],
+                eig_range=DiagramConfig.MesonIndex(min=0, max=200),
+                formatting={},
+                logging_level="DEBUG",
+                runid="test",
+            )
 
     def test_validate_registered_as_hook(self):
         """validate_config is wired into build_hooks for DiagramConfig."""

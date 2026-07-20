@@ -100,6 +100,10 @@ class DiagramConfig(CompositeConfig):
         if self.contraction_type.npoint != len(self.mesons):
             if len(self.mesons) == 1:
                 _ = [self.mesons.append(self.mesons[0]) for _ in range(self.npoint - 1)]
+            else:
+                raise ValueError(
+                    f"Expected 1 or {self.npoint} meson configs, got {len(self.mesons)}"
+                )
 
     @property
     def npoint(self) -> int:
