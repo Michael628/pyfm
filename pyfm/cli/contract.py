@@ -158,7 +158,7 @@ def run(param_file, param_file_opt, do_time_average):
                         k: {g: time_average(v) for g, v in gamma_dict.items()}
                         for k, gamma_dict in corr.items()
                     }
-                    array_order = [f"t{i+1}" for i in range(1, nmesons - 1)] + ["dt"]
+                    array_order = [f"t{i+1}" for i in range(1, nmesons - 1)] + ["t"]
                 else:
                     array_order = [f"t{i+1}" for i in range(nmesons)]
                 data_config = LoadDictConfig.create(

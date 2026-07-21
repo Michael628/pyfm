@@ -40,16 +40,16 @@ def ndarray_to_frame(array: np.ndarray, array_config: LoadArrayConfig) -> pd.Dat
         of dimensions defined in array_params.order.
 
     Behavior:
-    - If the array_params.order contains only 'dt', the function generates
-      sequential labels for the 'dt' dimension.
+    - If the array_params.order contains only 't', the function generates
+      sequential labels for the 't' dimension.
     - Constructs a MultiIndex using the Cartesian product of the label sets
       specified in array_params.labels, adhering to the order in array_params.order.
     - Flattens the input array and pairs its values to the MultiIndex, creating
       a single-column DataFrame.
     """
 
-    if len(array_config.order) == 1 and array_config.order[0] == "dt":
-        array_config.labels["dt"] = list(range(np.prod(array.shape)))
+    if len(array_config.order) == 1 and array_config.order[0] == "t":
+        array_config.labels["t"] = list(range(np.prod(array.shape)))
 
     assert len(array_config.labels) == len(array_config.order)
 
