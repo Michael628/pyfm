@@ -1,7 +1,7 @@
 #! /bin/bash
 
 ml hdf5/1.14.6
-ml miniforge3
+# module load miniforge3
 # module reset 
 # module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/Core 
 # module use /opt/aurora/24.347.0/spack/unified/0.9.2/install/modulefiles/oneapi/2025.0.5 

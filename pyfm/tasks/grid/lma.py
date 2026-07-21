@@ -24,7 +24,7 @@ class GridLMAConfig(CompositeConfig):
     epack_config: epack.EpackConfig
     meson_config: meson.MesonConfig
     high_modes_config: HighModeConfig
-    series: str
+    series: str = ""
     skip_epack: bool = False
     skip_meson: bool = False
     skip_high_modes: bool = False
