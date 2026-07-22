@@ -50,23 +50,23 @@ def submit(param_file, input_file, job, logging_level):
 
 
 @nanny.command()
-@click.argument("series")
 @click.argument("steps", nargs=-1, required=True)
-@click.option("--cfg", "cfg_list", multiple=True, type=int, help="Individual configuration numbers to add.")
-@click.option("--cfg-range", "cfg_range", nargs=3, type=int, default=None, help="Config range as START STOP STEP (exclusive stop).")
+@click.option("-s", "--series", type=str, required=True, help="Gauge field series to add.")
+@click.option("-n","--config", "cfg_list", multiple=True, type=int, help="Individual configuration numbers to add.")
+@click.option("--config-range", "cfg_range", nargs=3, type=int, default=None, help="Config range as START STOP STEP (exclusive stop).")
 @click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
-def add(series, steps, cfg_list, cfg_range, param_file):
+def add(steps, series, cfg_list, cfg_range, param_file):
     """Add todo entries for SERIES and STEPS.
 
     SERIES is the gauge field series label.
     STEPS are one or more job step names to add.
-    Exactly one of --cfg or --cfg-range must be provided.
+    Exactly one of --config or --config-range must be provided.
     """
     if cfg_list and cfg_range:
-        click.echo("Error: --cfg and --cfg-range are mutually exclusive.", err=True)
+        click.echo("Error: --config and --config-range are mutually exclusive.", err=True)
         raise click.Abort()
     if not cfg_list and not cfg_range:
-        click.echo("Error: one of --cfg or --cfg-range is required.", err=True)
+        click.echo("Error: one of --config or --config-range is required.", err=True)
         raise click.Abort()
 
     yaml_params = utils.io.load_param(param_file)
