@@ -19,6 +19,11 @@ function add_common_install_paths() {
 
   export PYTHONPATH=${PYTHONPATH}:${PYFMTOPDIR}/pyfm
 
+  _PYFM_BIND_SCRIPT=${PYFMTOPDIR}/pyfm/systems/${PYFM_SYSTEM_EXT#*-}/bind-gpu.sh
+  if [ -f $_PYFM_BIND_SCRIPT ]; then
+    export PYFM_BIND_SCRIPT=$_PYFM_BIND_SCRIPT
+  fi
+
   return 
 }
 

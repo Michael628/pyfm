@@ -56,3 +56,4 @@ function hlma_configure() {
   --with-grid=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT} \
   --with-hadrons=${PYFMTOPDIR}/Hadrons/install${PYFM_SYSTEM_EXT}
 
+}

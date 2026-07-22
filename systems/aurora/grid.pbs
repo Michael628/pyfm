@@ -1,0 +1,152 @@
+#! /bin/bash
+
+####### -N (submit script)
+####### -n (submit script)
+####### -t (submit script)
+####### -J (submit script)
+##PBS -A 14440
+##PBS -A HadronicGMinus2::HISQ2
+#PBS -A LatticeFlavor::HISQ
+##PBS -q debug-scaling
+##PBS -q debug
+#PBS -q prod
+#PBS -l filesystems=flare
+#PBS -l place=scatter:excl
+#PBS -V
+
+echo "START_RUN `date`"
+echo "ENS          = ${ENS}"
+echo "INPUTLIST = ${INPUTLIST}"
+echo "BASENODES    = ${BASENODES}"
+echo "BASETASKS    = ${BASETASKS}"
+
+echo $PBS_O_WORKDIR
+cd $PBS_O_WORKDIR
+
+mkdir -p nodefiles
+cp $PBS_NODEFILE nodefiles/nodes.${PBS_JOBID_SHORT}
+
+mkdir -p memfiles
+./gpumem >& memfiles/gpumem.${PBS_JOBID_SHORT} &
+
+if ! command -v pyfm >/dev/null 2>&1; then
+  export NUMEXPR_NUM_THREADS=64
+  ml miniforge3
+  conda activate py313
+fi
+
+eval $(pyfm workspace env --system aurora)
+# source ${PYFMTOPDIR}/pyfm/scripts/source-system-env.sh --system aurora-mpi
+
+executable=grid_lma
+
+export OPT="--comms-overlap"
+#export OPT="$OPT --log Performance"
+runargs=" --grid $LATTICE --mpi ${LAYOUT} --shm-mpi 0 --shm 4096 --device-mem 48000 --accelerator-threads 16 $OPT"
+
+mkdir -p out/
+
+#set -euo pipefail
+
+# ---------- Validate inputs ------------------------------------
+for var in BASENODES INPUTLIST NP PPN; do
+    [[ -v $var ]] || { echo "ERROR: \$$var is not set"; exit 1; }
+done
+[[ -f "$PBS_NODEFILE" ]] || { echo "ERROR: PBS_NODEFILE not found"; exit 1; }
+
+# ---------- Build unique node array ----------------------------
+mapfile -t ALL_NODES < <(sort -u "$PBS_NODEFILE")
+TOTAL_NODES=${#ALL_NODES[@]}
+SLOTS=$(( TOTAL_NODES / BASENODES ))
+
+(( SLOTS > 0 )) || { echo "ERROR: BASENODES ($BASENODES) > available nodes ($TOTAL_NODES)"; exit 1; }
+
+# ---------- Read input list ------------------------------------
+read -ra INPUTS <<< $INPUTLIST
+TOTAL_INPUTS=${#INPUTS[@]}
+
+echo "==> Nodes: $TOTAL_NODES  |  BASENODES: $BASENODES  |  Slots: $SLOTS"
+echo "==> Inputs: $TOTAL_INPUTS  |  Batches: $(( (TOTAL_INPUTS + SLOTS - 1) / SLOTS ))"
+echo ""
+
+# ---------- Helpers --------------------------------------------
+TMPDIR_NODES=$(mktemp -d /tmp/mpi_nodes.XXXX)
+cleanup() { rm -rf "$TMPDIR_NODES"; }
+trap cleanup EXIT
+
+make_nodefile() {           # make_nodefile <slot> → prints path
+    local slot=$1
+    local start=$(( slot * BASENODES ))
+    local path="$TMPDIR_NODES/nodes_slot${slot}.txt"
+    # Repeat each node PPN times so mpiexec gets the right rank count
+    # without needing --ppn (which conflicts with --hostfile on PALS)
+    for node in "${ALL_NODES[@]:$start:$BASENODES}"; do
+        for (( r=0; r<PPN; r++ )); do
+            echo "$node"
+        done
+    done > "$path"
+    echo "$path"
+}
+
+# ---------- Main loop ------------------------------------------
+BATCH=0
+INPUT_IDX=0
+OVERALL_STATUS=0
+
+while (( INPUT_IDX < TOTAL_INPUTS )); do
+    (( ++BATCH ))
+    declare -a BATCH_PIDS=()
+    declare -a BATCH_INPUTS=()
+    SLOT=0
+
+    # Fill all slots (or as many inputs as remain)
+    while (( SLOT < SLOTS && INPUT_IDX < TOTAL_INPUTS )); do
+        INPUT="${INPUTS[$INPUT_IDX]}"
+        NODEFILE=$(make_nodefile "$SLOT")
+        OUTPUT=out/$(basename "${INPUT%.xml}").${PBS_JOBID_SHORT}
+
+        echo "Input file ${INPUT}"
+        echo "Output file ${OUTPUT}"
+        echo "Input = ${INPUT}" 
+        echo "START_RUN `date`" >> ${OUTPUT}
+        echo "RUNARGS = ${runargs}" >> ${OUTPUT}
+
+        date >> ${OUTPUT}
+        echo "Executable: $(which ${executable})" >> ${OUTPUT}
+        argstr="${INPUT} ${runargs}"
+        export APP="${executable} ${argstr}"
+        echo ${APP} >> ${OUTPUT}
+        echo "[Batch $BATCH | Slot $SLOT] $(basename "$INPUT") → nodes $(head -1 "$NODEFILE") .. $(tail -1 "$NODEFILE")"
+        cmd="mpiexec -np ${BASETASKS} --hostfile $NODEFILE --envall ./gpu_tile_compact.sh ${APP}"
+        echo ${cmd} >> ${OUTPUT}
+        ${cmd} >> ${OUTPUT} &
+        echo ${cmd}
+
+        BATCH_PIDS+=($!)
+        BATCH_INPUTS+=("$INPUT")
+
+        (( ++SLOT ))
+        (( ++INPUT_IDX ))
+    done
+
+    echo "[Batch $BATCH] Waiting for $SLOT job(s)..."
+
+    # Collect exit statuses
+    for i in "${!BATCH_PIDS[@]}"; do
+        PID=${BATCH_PIDS[$i]}
+        if wait "$PID"; then
+            STATUS=0
+            echo "  OK      PID=$PID  input=${BATCH_INPUTS[$i]}"
+        else
+            STATUS=$?
+            echo "  FAILED  PID=$PID  input=${BATCH_INPUTS[$i]}  exit=$STATUS"
+            OVERALL_STATUS=$STATUS
+        fi
+    done
+
+    echo ""
+    unset BATCH_PIDS BATCH_INPUTS
+done
+
+echo "==> All inputs processed. Overall exit status: $OVERALL_STATUS"
+exit $OVERALL_STATUS
