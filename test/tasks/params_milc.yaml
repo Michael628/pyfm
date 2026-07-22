@@ -23,7 +23,6 @@ job_setup:
     run: smear.slurm
     job_type: smear
     tasks:
-      unsmeared_file: "{home}/lat/v5/l{ens}{series}.{cfg}" # Location of unsmeared file
       node_geometry: "1 1 1 1"
     io: "smear"
     wall_time: "0:30:00"

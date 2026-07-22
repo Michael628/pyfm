@@ -113,7 +113,6 @@ job_setup:
     run: milc.PYFM_WORKSPACE_SCHEDULER
     job_type: smear
     tasks:
-      unsmeared_file: '/pscratch/sd/m/mlynch/l96192f211b672m0008m022m260/lat/v5/l{ens}{series}.{cfg}'
       node_geometry: "2 2 4 4"
     io: links
     wall_time: "2:00:00"
@@ -129,7 +128,7 @@ job_setup:
     wall_time: "8:00:00"
   hadrons_smear:
     run: hadrons.PYFM_WORKSPACE_SCHEDULER
-    io: "hadrons-smear-e{eigs}-n{noise}"
+    io: "hadrons-smear"
     wall_time: "02:00:00"
     job_type: hadrons
     task_type: lmi

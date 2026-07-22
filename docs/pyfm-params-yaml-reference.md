@@ -319,13 +319,11 @@ The registered handler key is `"{job_type}_{task_type}"` (e.g. `hadrons_lmi`, `c
 job_setup:
   smear:
     tasks:
-      unsmeared_file: "lat/v5/l{ens}{series}.{cfg}"
       node_geometry: "1 1 1 1"
 ```
 
 | Key | Role | Consumed as |
 |-----|------|-------------|
-| `unsmeared_file` | Path to the input unsmeared lattice (`{ens}{series}.{cfg}`) | `SmearConfig.unsmeared_file` (template) |
 | `node_geometry` | MILC node geometry string | `SmearConfig.node_geometry` |
 
 `SmearConfig` also pulls `time`, `space`, and the `gauge/long/fat_links` `Outfile`s from `shared_params` + `files`.
