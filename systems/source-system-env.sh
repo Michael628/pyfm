@@ -4,6 +4,7 @@ function add_common_install_paths() {
   QUDA_INSTALL=${PYFMTOPDIR}/quda/install${PYFM_SYSTEM_EXT}
   HADRONSMILC_INSTALL=${PYFMTOPDIR}/HadronsMILC/install${PYFM_SYSTEM_EXT}
   GRID_INSTALL=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
+  GRID_BUILD_TEST=${PYFMTOPDIR}/Grid/build${PYFM_SYSTEM_EXT}/GridMilc/tests/
   GRIDLMA_INSTALL=${PYFMTOPDIR}/grid-lma/install${PYFM_SYSTEM_EXT}
   MAKELINKSHISQ_INSTALL=${PYFMTOPDIR}/milc_qcd/install${PYFM_SYSTEM_EXT}
   DEPSINSTALL=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT}
@@ -16,6 +17,10 @@ function add_common_install_paths() {
       export PATH=${PATH}:${b}/bin
     fi
   done
+
+  if [ -d  $GRID_BUILD_TEST ]; then
+      export PATH=${PATH}:${GRID_BUILD_TEST}
+  fi
 
   export PYTHONPATH=${PYTHONPATH}:${PYFMTOPDIR}/pyfm
 
