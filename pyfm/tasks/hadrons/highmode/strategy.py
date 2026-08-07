@@ -3,34 +3,73 @@ import re
 import pandas as pd
 import itertools
 from pyrsistent import freeze, thaw
+from dataclasses import fields
 
-from pyfm.domain import (
-    HadronsInput,
-    OpList,
-    hadmods,
-)
-from pyfm.tasks.hadrons.highmode.domain import HighModeConfig, CorrelatorStrategy
+from pyfm.tasks.hadrons.types import HadronsInput, HighModeConfig, CorrelatorStrategy
+import pyfm.tasks.hadrons.modules as hadmods
+from pyfm.domain import OpList
 from pyfm.tasks.hadrons.highmode import sib, twopoint
 
 from pyfm import utils
 
 
-def create_file_catalog(config: HighModeConfig) -> pd.DataFrame:
+def route_params(params: t.Dict) -> t.Dict:
+    """Route task data to the 'operations' field of HighModeConfig.
+
+    Avoids a collision between MassDict (from params['mass']) and OpList mass
+    labels (from params['_preprocessor']['mass']). This is pure ``_preprocessor``
+    routing — there is nothing to normalize.
+    """
+    # Extract task configs (contains gamma, mass lists for OpList)
+    preprocessor_params = params.pop("_preprocessor", {})
+
+    # Split-grid is opt-in and both-or-neither: a partial config (exactly one of
+    # `split_mpi_layout`/`subgrid_ranks` set) is meaningless -- Hadrons needs the
+    # global <split> to define the subgrids that <subgrid> tags reference. Strip
+    # both and warn so the job falls back to non-split behavior rather than
+    # emitting orphan <subgrid> tags or a stray <split>.
+    split_mpi_layout = preprocessor_params.get("split_mpi_layout")
+    subgrid_ranks = preprocessor_params.get("subgrid_ranks")
+    if (split_mpi_layout is None) != (subgrid_ranks is None):
+        utils.get_logger().warning(
+            "Split-grid requires both `split_mpi_layout` and `subgrid_ranks`; "
+            "only one was provided. Stripping both and falling back to "
+            "non-split behavior."
+        )
+        preprocessor_params.pop("split_mpi_layout", None)
+        preprocessor_params.pop("subgrid_ranks", None)
+
+    # Get field names from HighModeConfig, excluding 'mass'
+    # - 'mass' comes from top-level params (MassDict)
+    # !NOTE: Don't squash params['mass']
+    config_fields = {f.name for f in fields(HighModeConfig) if f.name != "mass"}
+
+    return (
+        params
+        | {
+            "operations": {
+                k: v for k, v in preprocessor_params.items() if k not in config_fields
+            },
+        }
+        | {k: v for k, v in preprocessor_params.items() if k in config_fields}
+    )
+
+
+def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
     def generate_outfile_formatting():
-        res = {"tsource": list(map(str, config.tsource_range)), "dset": []}
-        if not config.skip_low_modes:
-            res["dset"].append("ranLL")
-        if not config.skip_cg:
-            res["dset"].append("ama")
+        solver_labels = config.get_solver_labels()
+        res = {"tsource": list(map(str, config.tsource_range)), "dset": solver_labels}
 
         for op in config.op_list:
             res["gamma_label"] = op.gamma.name.lower()
-            res["mass"] = [config.mass[m] for m in op.mass]
+            res["mass"] = config.get_mass_labels(op)
             yield res, config.high_modes
 
     outfile_generator = generate_outfile_formatting()
 
-    return utils.io.catalog_files(outfile_generator)
+    df = utils.io.catalog_files(outfile_generator)
+
+    return df
 
 
 def build_input_params(config: HighModeConfig) -> HadronsInput:
@@ -38,12 +77,15 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     schedule = []
 
     if not config.overwrite:
-        df = create_file_catalog(config)
-        missing_files = df[df["exists"] == False]
-        run_tsources = []
-        for tsource in config.tsource_range:
-            if any(missing_files["tsource"] == str(tsource)):
-                run_tsources.append(str(tsource))
+        df = create_outfile_catalog(config)
+        if df.empty:
+            run_tsources = []
+        else:
+            missing_files = df[df["exists"] == False]
+            run_tsources = []
+            for tsource in config.tsource_range:
+                if any(missing_files["tsource"] == str(tsource)):
+                    run_tsources.append(str(tsource))
     else:
         run_tsources = list(map(str, config.tsource_range))
 
@@ -73,24 +115,35 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
             )
             schedule.append(name)
 
-        cg_solver_labels: t.List = [s for s in config.get_solver_labels() if "ama" in s]
+        cg_solver_labels: t.List = [
+            s for s in config.get_solver_labels(skip_cross=True) if "ama" in s
+        ]
         for resid, sl in zip(map(str, config.residual), cg_solver_labels):
             name = config.solver_name.format(solver=sl, mass=mass_label)
 
-            if config.solver == "rb":
-                modules[name] = hadmods.rb_cg(
-                    name=name,
-                    action=action,
-                    residual=resid,
-                )
-            else:
-                inner_action = f"i{action}"
-                modules[name] = hadmods.mixed_precision_cg(
-                    name=name,
-                    outer_action=action,
-                    inner_action=inner_action,
-                    residual=resid,
-                )
+            match config.solver:
+                case "rb":
+                    modules[name] = hadmods.rb_cg(
+                        name=name,
+                        action=action,
+                        residual=resid,
+                    )
+                case "cg":
+                    modules[name] = hadmods.cg(
+                        name=name,
+                        action=action,
+                        residual=resid,
+                    )
+                case "mpcg":
+                    inner_action = f"i{action}"
+                    modules[name] = hadmods.mixed_precision_cg(
+                        name=name,
+                        outer_action=action,
+                        inner_action=inner_action,
+                        residual=resid,
+                    )
+                case _:
+                    raise ValueError(f"Unknown high-mode CG solver: {config.solver}")
             schedule.append(name)
 
     quark_inputs = build_quark_strategy(config, run_tsources)
@@ -107,7 +160,7 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
 
 
 def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[str]:
-    gammas = ["pion_local", "vec_local", "vec_onelink"]
+    gammas = ["pion_local", "scalar_local", "vec_local", "vec_onelink"]
 
     def gamma_order(name):
         for i, gamma in enumerate(gammas):
@@ -118,6 +171,13 @@ def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[s
     def mass_order(name):
         for i, mass in enumerate(config.mass.keys()):
             if f"mass_{mass}" in name:
+                return i
+        return -1
+
+    def mixed_solvers_last(name):
+        # Assumes get_solver_labels appends cross_terms to the end of the list
+        for i, label in reversed(list(enumerate(config.get_solver_labels()))):
+            if label in name:
                 return i
         return -1
 
@@ -134,6 +194,7 @@ def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[s
     sorted_modules = sorted(module_names, key=gamma_order)
     sorted_modules = sorted(sorted_modules, key=mass_order)
     sorted_modules = sorted(sorted_modules, key=mixed_mass_last)
+    sorted_modules = sorted(sorted_modules, key=mixed_solvers_last)
     sorted_modules = sorted(sorted_modules, key=tslice_order)
 
     return sorted_modules
@@ -165,23 +226,6 @@ def build_contract_strategy(
             raise ValueError(
                 f"Unknown correlator_strategy: {config.correlator_strategy}"
             )
-
-
-def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
-    def generate_outfile_formatting():
-        solver_labels = config.get_solver_labels()
-        res = {"tsource": list(map(str, config.tsource_range)), "dset": solver_labels}
-
-        for op in config.op_list:
-            res["gamma_label"] = op.gamma.name.lower()
-            res["mass"] = [config.mass.to_string(m, True) for m in op.mass]
-            yield res, config.high_modes
-
-    outfile_generator = generate_outfile_formatting()
-
-    df = utils.io.catalog_files(outfile_generator)
-
-    return df
 
 
 def build_aggregator_params(
@@ -249,3 +293,26 @@ def build_aggregator_params(
     agg_params = agg_params.set("run", run_list)
 
     return dict(thaw(agg_params))
+
+
+def validate_config(config: HighModeConfig) -> None:
+    """Validate HighModeConfig after construction and postprocessing.
+
+    Validates that if non-local operators are used, shift_gauge_name must be set.
+    """
+    if config.solver not in {"mpcg", "rb", "cg"}:
+        raise ValueError(
+            "High-mode solver must be one of 'mpcg', 'rb', or 'cg'; "
+            f"got {config.solver!r}."
+        )
+
+    has_nonlocal_ops = any([not op.gamma.local for op in config.operations.op_list])
+    if has_nonlocal_ops and config.shift_gauge_name is None:
+        raise ValueError(
+            "Non-local operators detected, but shift_gauge_name is not set."
+        )
+
+    if config.subgrid_ranks is not None and config.subgrid_ranks <= 0:
+        raise ValueError(
+            f"subgrid_ranks must be a positive integer; got {config.subgrid_ranks}."
+        )

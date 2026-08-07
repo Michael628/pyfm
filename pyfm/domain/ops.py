@@ -2,6 +2,8 @@ import typing as t
 from enum import Enum, auto
 from pydantic.dataclasses import dataclass
 
+from pyfm import utils
+
 
 @dataclass(frozen=True)
 class MassDict:
@@ -39,48 +41,106 @@ class MassDict:
 
 class Gamma(Enum):
     G1_G1 = auto()
-    G5_G5 = auto()
     GX_GX = auto()
     GY_GY = auto()
     GZ_GZ = auto()
-    GX_G1 = auto()
-    GY_G1 = auto()
-    GZ_G1 = auto()
+    GT_GT = auto()
+    GXY_GXY = auto()
+    GXT_GXT = auto()
+    GYZ_GYZ = auto()
+    GYT_GYT = auto()
+    GZX_GZX = auto()
+    GZT_GZT = auto()
+    G5T_G5T = auto()
     G5X_G5X = auto()
     G5Y_G5Y = auto()
     G5Z_G5Z = auto()
+    G5_G5 = auto()
+    GX_G1 = auto()
+    GY_G1 = auto()
+    GZ_G1 = auto()
+    GT_G1 = auto()
+    GX_GXY = auto()
+    GX_GZX = auto()
+    GX_GXT = auto()
+    GY_GXY = auto()
+    GY_GYZ = auto()
+    GY_GYT = auto()
+    GZ_GZX = auto()
+    GZ_GYZ = auto()
+    GZ_GZT = auto()
+    GT_GXT = auto()
+    GT_GYT = auto()
+    GT_GZT = auto()
+    GXY_G5T = auto()
+    GXY_G5Z = auto()
+    GYZ_G5T = auto()
+    GYZ_G5X = auto()
+    GZX_G5T = auto()
+    GZX_G5Y = auto()
+    GXT_G5Z = auto()
+    GXT_G5Y = auto()
+    GYT_G5Z = auto()
+    GYT_G5X = auto()
+    GZT_G5Y = auto()
+    GZT_G5X = auto()
     G5X_G5 = auto()
     G5Y_G5 = auto()
     G5Z_G5 = auto()
+    G5T_G5 = auto()
     AXIAL_VEC_ONELINK = auto()
     AXIAL_VEC_LOCAL = auto()
+    AXIAL_FOURVEC_ONELINK = auto()
+    AXIAL_FOURVEC_LOCAL = auto()
+    FOURVEC_ONELINK = auto()
+    FOURVEC_LOCAL = auto()
     VEC_ONELINK = auto()
     VEC_LOCAL = auto()
     PION_LOCAL = auto()
-    IDENTITY = auto()
-    ONELINK = VEC_ONELINK
+    PSEUDO_SCALAR_LOCAL = PION_LOCAL
+    SCALAR_LOCAL = auto()
+    IDENTITY = SCALAR_LOCAL
     LOCAL = auto()
+    ONELINK = auto()
+    TWOLINK = auto()
+    THREELINK = auto()
+    FOURLINK = auto()
 
     @property
     def gamma_list(self) -> t.List[str]:
         match self:
-            case Gamma.ONELINK | Gamma.VEC_ONELINK:
+            case Gamma.VEC_ONELINK:
                 return ["GX_G1", "GY_G1", "GZ_G1"]
-            case Gamma.LOCAL:
-                return ["G5_G5", "GX_GX", "GY_GY", "GZ_GZ"]
+            case Gamma.FOURVEC_ONELINK:
+                return ["GX_G1", "GY_G1", "GZ_G1", "GT_G1"]
             case Gamma.AXIAL_VEC_LOCAL:
                 return ["G5X_G5X", "G5Y_G5Y", "G5Z_G5Z"]
+            case Gamma.AXIAL_FOURVEC_LOCAL:
+                return ["G5X_G5X", "G5Y_G5Y", "G5Z_G5Z", "G5T_G5T"]
             case Gamma.AXIAL_VEC_ONELINK:
                 return ["G5X_G5", "G5Y_G5", "G5Z_G5"]
+            case Gamma.AXIAL_FOURVEC_ONELINK:
+                return ["G5X_G5", "G5Y_G5", "G5Z_G5", "G5T_G5"]
             case Gamma.VEC_LOCAL:
                 return ["GX_GX", "GY_GY", "GZ_GZ"]
+            case Gamma.FOURVEC_LOCAL:
+                return ["GX_GX", "GY_GY", "GZ_GZ", "GT_GT"]
             case Gamma.IDENTITY:
-                return ["G5_G5"]
+                return ["G1_G1"]
             case Gamma.PION_LOCAL:
                 return ["G5_G5"]
+            case (
+                Gamma.LOCAL
+                | Gamma.ONELINK
+                | Gamma.TWOLINK
+                | Gamma.THREELINK
+                | Gamma.FOURLINK
+            ):
+                raise ValueError(
+                    f"{self.name} has no explicit gamma_list representation. See OpList.gamma_list instead."
+                )
             case _:
                 return [self.name]
-            # raise ValueError(f"Unexpected Gamma value: {self}")
 
     @property
     def gamma_string(self) -> str:
@@ -90,8 +150,8 @@ class Gamma(Enum):
         gammas = gammas.replace("_", " ")
         return gammas
 
-    @property
-    def _local_gammas(self) -> t.List:
+    @staticmethod
+    def _local_gammas() -> t.List:
         return [
             Gamma.LOCAL,
             Gamma.PION_LOCAL,
@@ -102,15 +162,97 @@ class Gamma(Enum):
             Gamma.GX_GX,
             Gamma.GY_GY,
             Gamma.GZ_GZ,
+            Gamma.GT_GT,
+            Gamma.GXY_GXY,
+            Gamma.GXT_GXT,
+            Gamma.GYZ_GYZ,
+            Gamma.GYT_GYT,
+            Gamma.GZX_GZX,
+            Gamma.GZT_GZT,
+            Gamma.G5T_G5T,
+            Gamma.G5X_G5X,
+            Gamma.G5Y_G5Y,
+            Gamma.G5Z_G5Z,
             Gamma.G5_G5,
+            Gamma.FOURVEC_LOCAL,
+            Gamma.AXIAL_FOURVEC_LOCAL,
         ]
+
+    @staticmethod
+    def _onelink_gammas() -> t.List:
+        return [
+            Gamma.ONELINK,
+            Gamma.VEC_ONELINK,
+            Gamma.AXIAL_VEC_ONELINK,
+            Gamma.GX_G1,
+            Gamma.GY_G1,
+            Gamma.GZ_G1,
+            Gamma.GT_G1,
+            Gamma.GX_GXY,
+            Gamma.GX_GZX,
+            Gamma.GX_GXT,
+            Gamma.GY_GXY,
+            Gamma.GY_GYZ,
+            Gamma.GY_GYT,
+            Gamma.GZ_GZX,
+            Gamma.GZ_GYZ,
+            Gamma.GZ_GZT,
+            Gamma.GT_GXT,
+            Gamma.GT_GYT,
+            Gamma.GT_GZT,
+            Gamma.GXY_G5T,
+            Gamma.GXY_G5Z,
+            Gamma.GYZ_G5T,
+            Gamma.GYZ_G5X,
+            Gamma.GZX_G5T,
+            Gamma.GZX_G5Y,
+            Gamma.GXT_G5Z,
+            Gamma.GXT_G5Y,
+            Gamma.GYT_G5Z,
+            Gamma.GYT_G5X,
+            Gamma.GZT_G5Y,
+            Gamma.GZT_G5X,
+            Gamma.G5X_G5,
+            Gamma.G5Y_G5,
+            Gamma.G5Z_G5,
+            Gamma.G5T_G5,
+            Gamma.FOURVEC_ONELINK,
+            Gamma.AXIAL_FOURVEC_ONELINK,
+        ]
+
+    @staticmethod
+    def _twolink_gammas() -> t.List:
+        return [Gamma.TWOLINK]
+
+    @staticmethod
+    def _threelink_gammas() -> t.List:
+        return [Gamma.THREELINK]
+
+    @staticmethod
+    def _fourlink_gammas() -> t.List:
+        return [Gamma.FOURLINK]
 
     @property
     def local(self) -> bool:
-        if self in self._local_gammas:
+        if self in self._local_gammas():
             return True
         else:
             return False
+
+    @property
+    def shift(self) -> int:
+        if self in self._local_gammas():
+            return 0
+        elif self in self._onelink_gammas():
+            return 1
+        elif self in self._twolink_gammas():
+            return 2
+        elif self in self._threelink_gammas():
+            return 3
+        elif self in self._fourlink_gammas():
+            return 4
+        else:
+            raise ValueError(f"Cannot determine shift for gamma: {self}")
 
 
 @dataclass
@@ -118,6 +260,11 @@ class OpList:
     class Op(t.NamedTuple):
         gamma: Gamma
         mass: t.Tuple[str, ...]
+
+        def __eq__(self, gamma: Gamma) -> bool:
+            if self.gamma == gamma:
+                return True
+            return False
 
     op_list: t.List[Op]
 
@@ -148,27 +295,34 @@ class OpList:
         }
 
         """
-        if "mass" not in kwargs:
-            op_list = []
-            for key, val in kwargs.items():
-                if isinstance(val, dict) and "mass" in val:
-                    mass = val["mass"]
-                    if isinstance(mass, str):
-                        mass = [mass]
-                    gamma = Gamma[key.upper()]
-                    op_list.append(cls.Op(gamma=gamma, mass=tuple(mass)))
-        else:
-            if "gamma" not in kwargs:
-                raise ValueError(
-                    "No gamma provided. Required for using OpList.from_dict."
-                )
-            gammas = kwargs["gamma"]
+        if "mass" in kwargs and "gamma" in kwargs:
+
             mass = kwargs["mass"]
             if isinstance(mass, str):
                 mass = [mass]
+            elif not isinstance(mass, list):
+                raise ValueError("Mass must be a string or list of strings.")
+
+            gammas = kwargs["gamma"]
             if isinstance(gammas, str):
                 gammas = [gammas]
+            elif not isinstance(gammas, list):
+                raise ValueError("Gammas must be a string or list of strings.")
+
             op_list = [cls.Op(gamma=Gamma[g.upper()], mass=tuple(mass)) for g in gammas]
+        else:
+            op_list = []
+            for gamma_enum in Gamma:
+                if val := kwargs.get(gamma_enum.name.lower(), None):
+                    if isinstance(val, dict) and "mass" in val:
+                        mass = val["mass"]
+                        if isinstance(mass, str):
+                            mass = [mass]
+                        op_list.append(cls.Op(gamma=gamma_enum, mass=tuple(mass)))
+
+        if len(op_list) == 0:
+            utils.get_logger().debug("Returning an empty Op List.")
+            # raise ValueError("Valid operations not found in provided parameters.")
 
         return cls(op_list=op_list)
 
@@ -180,6 +334,28 @@ class OpList:
                 res.add(m)
 
         return list(res)
+
+    def group_by_mass_and_shift(
+        self,
+    ) -> t.Generator[t.Tuple[Op, t.List[Gamma]], None, None]:
+        for m in self.mass:
+            ops_with_mass_m = list(filter(lambda x: m in x.mass, self.op_list))
+            for i, g in enumerate(
+                [
+                    Gamma.LOCAL,
+                    Gamma.ONELINK,
+                    Gamma.TWOLINK,
+                    Gamma.THREELINK,
+                    Gamma.FOURLINK,
+                ]
+            ):
+
+                if mass_m_shift_i := list(
+                    filter(lambda x: x.gamma.shift == i, ops_with_mass_m)
+                ):
+                    yield self.Op(gamma=g, mass=(m,)), [
+                        op.gamma for op in mass_m_shift_i
+                    ]
 
     def __iter__(self):
         return iter(self.op_list)

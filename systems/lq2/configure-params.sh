@@ -1,0 +1,38 @@
+#!/bin/bash
+# configure-params.sh - Machine-specific configuration for builds
+#
+# This script provides functions that set environment variables for configure calls.
+# It expects the following BUILD_* variables to be set by build.sh before sourcing:
+#   - PYFM_SYSTEM_EXT
+#   - BUILD_DEBUG
+#   - BUILD_MPI_REDUCTION
+
+function grid_configure() {
+  local INSTALLDIR=$1
+  local ext_flags=""
+
+  if [ "${BUILD_DEBUG}" = 'true' ]; then
+    ext_flags='--enable-tracing=nvtx'
+  fi
+  
+  if [ $OLD_RNG = 'true' ]; then
+    ext_flags='--enable-old-rng'
+  fi
+
+  ${PYFMTOPDIR}/Grid/configure \
+   --prefix=${INSTALLDIR} \
+	     --enable-comms=mpi-auto       \
+	     --enable-simd=GPU \
+       ${ext_flags} \
+	     --enable-shm=nvlink \
+	     --enable-gen-simd-width=64 \
+	     --enable-accelerator=cuda \
+	     --disable-fermion-reps \
+	     --disable-unified \
+	     --disable-gparity \
+       --with-lime=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT} \
+       CXX="nvcc" MPICXX="mpicxx" \
+	     LDFLAGS="-cudart shared" \
+       CXXFLAGS='-ccbin mpicxx -gencode arch=compute_80,code=sm_80 -std=c++17 -cudart shared -DEIGEN_DONT_VECTORIZE'
+}
+

@@ -21,6 +21,7 @@ class Outfile:
                 "cfg_h5": ".{cfg}.h5",
                 "cfg_gamma_h5": ".{cfg}/{gamma}_0_0_0.h5",
                 "cfg_pickle": ".{cfg}.p",
+                "raw": "",
             }
 
             name_keys = {
@@ -33,6 +34,7 @@ class Outfile:
                 "modes": "cfg_h5",
                 "eval": "cfg_h5",
                 "edir": "cfg_bin_multi",
+                "scidac": "raw",
             }
             key = None
             for k, v in name_keys.items():

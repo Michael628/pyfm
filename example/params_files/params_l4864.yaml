@@ -1,0 +1,281 @@
+#Parameters for LMI running
+shared_params:
+  home: PYFM_WORKSPACE_TOPDIR/l{ens} # Location of work directory
+  mass:
+    u: 0.00119
+    l: 0.001907
+    d: 0.002625
+  logging_level: DEBUG
+  ens: '4864f211b600m001907m05252m6382'
+  time: 64
+  space: 48
+  runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
+  dt: 1 # spacing between source time slices
+  noise: 1 # leave this as 1
+  eigs: 2000 # eigs <= sourceeigs. number of eigenvalues to use in calculation
+  lattice: [48, 48, 48, 64]
+
+contract_params:
+  hardware: "cpu"
+  diagram_params:
+    pion_local_u:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        - file: "meson" # Label given to location of meson field files (see 'files:' section below)
+          mass_original: "l" # Mass used in creating meson field file
+          mass_updated: "u" # Label for desired mass (from mass: list above)
+          evalfile: 'eval' # Label given to location of eigenvalue files (see 'files:' section below)
+        - file: "meson" # (Optional) second meson field to contract in 2pt function. If missing, assumes same as first
+          mass_original: "l"
+          mass_updated: "u"
+          evalfile: 'eval'
+      gammas:
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 4000 # Equal to 2 x eigs
+      outfile: contract # Label given to output files (see 'files:' section below)
+    vec_local_u:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass_original: "l"
+        mass_updated: "u"
+        evalfile: 'eval'
+      gammas:
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+    pion_local_u:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass_original: "l"
+        mass_updated: "u"
+        evalfile: 'eval'
+      gammas:
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+    pion_local_d:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass_original: "l"
+        mass_updated: "d"
+        evalfile: "eval"
+      gammas:
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+    vec_local_d:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass_original: "l"
+        mass_updated: "d"
+        evalfile: 'eval'
+      gammas:
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+    pion_local_l:
+      gamma_label: pion_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "G5_G5"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+    vec_local_l:
+      gamma_label: vec_local
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "GX_GX"
+        - "GY_GY"
+        - "GZ_GZ"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+    vec_onelink_l:
+      gamma_label: vec_onelink
+      symmetric: True
+      contraction_type: two_point
+      mesons:
+        file: "meson"
+        mass: "l"
+      gammas:
+        - "GX_G1"
+        - "GY_G1"
+        - "GZ_G1"
+      eig_range:
+        min: 0
+        max: 4000
+      outfile: contract
+
+hadrons_params:
+  tstart: 0 # first source time slice
+  tstop: 63 # tstop = time - 1
+  dt: 1 # spacing between source time slices
+  noise: 1 # leave this as 1
+  eigs: 2000 # eigs <= sourceeigs. number of eigenvalues to use in calculation
+  sourceeigs: 2000 # number of eigenvalues in source file
+  lanczos:
+    alpha: 0.009 # parameter for lanczos eigensolver
+    beta: 24 # parameter for lanczos eigensolver
+    npoly: 151 # parameter for lanczos eigensolver
+    nstop: 2000 # parameter for lanczos eigensolver
+    nk: 2030 # parameter for lanczos eigensolver
+    nm: 2600 # parameter for lanczos eigensolver
+    residual: 1e-8 # parameter for lanczos eigensolver
+  residual: 1e-8
+  blocksize: 500 # number of fields to contract in meson field kernel
+  overwrite: false # If true, skip CG solves if correlator already exists
+
+nanny:
+  todo_file: todo
+  max_queue: 200
+  wait: 5
+  check_interval: 30
+
+submit:
+  scheduler: PYFM_WORKSPACE_SCHEDULER
+  # scheduler: INTERACTIVE
+  job_name_pfx: LMI
+  resources:
+    ppn: 4
+    max_cases: 1 # Bundle up to N jobs together (global default; per-step override below)
+    smear:
+      nodes: 1
+      geom: [1, 1, 1, 1]
+    hadrons_smear:
+      nodes: 1
+      geom: [1, 1, 1, 1]
+    contract:
+      ppn: 1
+      nodes: 1
+      geom: [1, 1, 1, 1]
+    hadrons:
+      nodes: 1
+      geom: [1, 1, 2, 2] # geom list product should equal nodes*ppn
+
+# Template and I/O file name keys
+job_setup:
+  smear:
+    run: milc.PYFM_WORKSPACE_SCHEDULER
+    job_type: smear
+    tasks:
+      node_geometry: "1 1 1 1"
+    io: "smear"
+    wall_time: "00:10:00"
+  hadrons_smear:
+    run: grid.PYFM_WORKSPACE_SCHEDULER
+    io: "hadrons-smear"
+    wall_time: "00:10:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      gauge:
+        action_type: smearv5
+        save_ildg: true
+  contract:
+    run: contract.PYFM_WORKSPACE_SCHEDULER
+    job_type: contract
+    tasks:
+      diagrams:
+        - pion_local
+        - vec_local
+        - vec_onelink
+    io: "contract-e{eigs}-n{noise}"
+    wall_time: "0:10:00"
+  hadrons:
+    run: grid.PYFM_WORKSPACE_SCHEDULER
+    io: "lma-e{eigs}-n{noise}"
+    wall_time: "01:00:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      epack:
+        load: false
+        save_evals: true
+        save_eigs: true
+      meson: # List meson fields to generate and corresponding mass (usually just light quark mass. Can be shifted for other masses on contraction)
+        gamma:
+          - vec_local
+          - vec_onelink
+        mass:
+          - "l"
+      high_modes: # CG solves and eigenvector deflation (if eigenvectors are used in job) to perform
+        vec_onelink:
+          mass:
+            - "l"
+        vec_local:
+          mass:
+            - "l"
+        pion_local:
+          mass:
+            - "l"
+
+files:
+  fat_links:
+    filestem: lat/scidac/fat{ens}{series}.ildg
+    good_size: 76000
+  long_links:
+    filestem: lat/scidac/lng{ens}{series}.ildg
+    good_size: 76000
+  v5_links:
+    filestem: lat/v5/l{ens}{series}
+    good_size: 76000
+  ildg_links:
+    filestem: lat/scidac/l{ens}{series}.ildg
+    good_size: 76000
+  eig:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 866000
+  eigdir:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 4076866904
+  eval:
+    filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 4400
+  high_modes:
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
+    good_size: 3900
+  meson:
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
+    good_size: 1286000
+  contract:
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
+    good_size: 400

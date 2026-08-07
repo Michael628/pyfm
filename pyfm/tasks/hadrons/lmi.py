@@ -2,12 +2,14 @@ import typing as t
 import pandas as pd
 
 from pydantic.dataclasses import dataclass
-from dataclasses import replace
 
-from pyfm.domain import CompositeConfig, HadronsInput
+from pyfm import utils
+from pyfm.tasks.hadrons.types import HadronsInput
+from pyfm.domain import CompositeConfig
 from pyfm.tasks.register import register_task
 
-from pyfm.tasks.hadrons import gauge, meson, epack, highmode
+from . import gauge, meson, epack, highmode
+from .types import HighModeConfig
 
 
 @dataclass(frozen=True)
@@ -15,163 +17,192 @@ class LMIConfig(CompositeConfig):
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig
     meson_config: meson.MesonConfig
-    high_modes_config: highmode.HighModeConfig
+    high_modes_config: HighModeConfig
     skip_epack: bool = False
     skip_meson: bool = False
     skip_high_modes: bool = False
 
-    key: t.ClassVar[str] = "hadrons_lmi"
+    @property
+    def split_mpi_layout(self) -> str | None:
+        """Re-expose the split-grid MPI layout from the high-modes subconfig.
+
+        ``split_mpi_layout`` lives on :class:`HighModeConfig`; this property lets
+        ``inputgen.write_input_file`` read it uniformly from a composite
+        ``LMIConfig`` (standalone ``HighModeConfig`` exposes it as a direct field).
+        Always available -- ``high_modes_config`` is built for every subconfig
+        regardless of ``skip_high_modes``.
+        """
+        return self.high_modes_config.split_mpi_layout
 
 
-def __post_init__(self):
-    logger = utils.get_logger()
+_OPTIONAL_CONFIGS = ["meson", "high_modes", "epack"]
+
+
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize LMIConfig input: derive ``skip_*`` flags.
+
+    A subtask is skipped when the caller supplies no input for it. The incoming
+    ``_preprocessor`` slice is *inspected* (not consumed) here — ``route_params``
+    owns its consumption.
+    """
+    incoming = params.get("_preprocessor", {})
+    skip_flags = {
+        f"skip_{k}": True for k in _OPTIONAL_CONFIGS if k not in incoming
+    }
+    return params | skip_flags
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route per-subtask input to the child configs, layering in name defaults."""
+
+    ACTION_NAME = "stag_mass_{mass}"
+    SOLVER_NAME = "stag_{solver}_mass_{mass}"
+    LOW_MODES_NAME = "evecs_mass_{mass}"
+    SHIFT_GAUGE_NAME = "gauge_apbc"
+
+    # Incoming slice holds per-subtask input keyed by subtask name.
+    preprocessor_params = params.pop("_preprocessor", {})
+
+    # Set defaults for child configs
+    child_preprocessor = dict(
+        gauge_config=dict(action_name=ACTION_NAME),
+        epack_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        meson_config=dict(
+            action_name=ACTION_NAME,
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        high_modes_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+            solver_name=SOLVER_NAME,
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            skip_low_modes="epack" not in preprocessor_params,
+        ),
+    )
+
+    # Update child processor with corresponding params passed to parent
+    for k, v in preprocessor_params.items():
+        child_preprocessor[f"{k}_config"] |= v
+
+    return params | dict(_preprocessor=child_preprocessor)
+
+
+def validate_config(config: LMIConfig) -> None:
+    """Validate LMIConfig after construction and postprocessing.
+
+    Validates that if epack is skipped, meson must also be skipped.
+    """
+
     for k, skip in [
-        (k, getattr(self, f"skip_{k}")) for k in ["meson", "high_modes", "epack"]
+        (k, getattr(config, f"skip_{k}")) for k in ["meson", "high_modes", "epack"]
     ]:
         if skip:
-            logger.debug(f"Skipping {k} step")
+            utils.get_logger().debug(f"Skipping {k} step")
 
-    if self.skip_epack and not self.skip_meson:
+    if config.skip_epack and not config.skip_meson:
         raise ValueError("Epack parameters must be set to perform meson calculation")
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    """Perform any necessary modifications to task input parameters before they
-    are passed to the subtask constructor.
-    """
-
-    # preprocessing top-level config
-    if subconfig is None:
-        # Skip configs where user provides no input
-        optional_configs = ["meson", "high_modes", "epack"]
-        skip_optional = {f"skip_{k}": True for k in optional_configs if k not in params}
-        return params | skip_optional
-
-    key = subconfig.removesuffix("_config")
-
-    sub_params = params.get(key, {})
-
-    if key == "high_modes" or key == "meson" and "operations" not in sub_params:
-        sub_params = {"operations": sub_params}
-
-    action_name = "stag_mass_{mass}"
-    solver_name = "stag_{solver}_mass_{mass}"
-    low_modes_name = "evecs_mass_{mass}"
-    shift_gauge_name = "gauge"
-    if key == "meson":
-        return (
-            params
-            | {
-                "action_name": action_name,
-                "low_modes_name": low_modes_name,
-            }
-            | sub_params
-        )
-    elif key == "gauge":
-        return (
-            params
-            | {
-                "action_name": action_name,
-            }
-            | sub_params
-        )
-    elif key == "epack":
-        return (
-            params
-            | {
-                "action_name": action_name,
-                "low_modes_name": low_modes_name,
-            }
-            | sub_params
-        )
-    elif key == "high_modes":
-        return (
-            params
-            | {
-                "shift_gauge_name": shift_gauge_name,
-                "action_name": action_name,
-                "solver_name": solver_name,
-                "low_modes_name": low_modes_name,
-                "skip_low_modes": "epack" not in params,
-            }
-            | sub_params
-        )
-    else:
-        raise ValueError(f"Unknown subconfig: {subconfig}")
-
-
-def postprocess_config(config: LMIConfig) -> LMIConfig:
-    """Update the subtask config properties to reflect the needs of the other subtasks.
-
-    In this case,
-     - the epack_config gets updated with any masses used in meson or high_modes.
-     - the high gets updated with any masses used in meson or high_modes.
-
-    """
-
-    def update_single_precision(config: LMIConfig) -> LMIConfig:
-        new_config = config
-        if not config.skip_high_modes and config.high_modes_config.solver == "mpcg":
-            new_gauge_config = replace(
-                config.gauge_config, sp_masses=config.high_modes_config.masses
-            )
-            new_config = replace(new_config, gauge_config=new_gauge_config)
-
-        return new_config
-
-    def update_masses(config: LMIConfig) -> LMIConfig:
-        masses = set()
-        if not config.skip_meson:
-            masses |= set(config.meson_config.masses)
-        if not config.skip_high_modes:
-            masses |= set(config.high_modes_config.masses)
-        if not config.skip_epack:
-            masses |= set(config.epack_config.masses)
-        masses = list(masses)
-
-        gauge_with_masses = replace(config.gauge_config, action_masses=masses)
-        new_config = replace(config, gauge_config=gauge_with_masses)
-
-        if not config.skip_epack:
-            epack_with_masses = replace(new_config.epack_config, mass_shifts=masses)
-            new_config = replace(new_config, epack_config=epack_with_masses)
-
-        return new_config
-
-    new_config = update_masses(config)
-    new_config = update_single_precision(new_config)
-
-    return new_config
-
-
 def build_input_params(config: LMIConfig) -> HadronsInput:
-    modules, schedule = gauge.build_input_params(config.gauge_config)
-    if not config.skip_epack:
-        m, s = epack.build_input_params(config.epack_config)
-        modules |= m
-        schedule += s
-    if not config.skip_meson:
-        m, s = meson.build_input_params(config.meson_config)
-        modules |= m
-        schedule += s
-    if not config.skip_high_modes:
-        m, s = highmode.build_input_params(config.high_modes_config)
-        modules |= m
-        schedule += s
+    """Generate input parameters for the full LMI task.
 
-    return HadronsInput(modules=modules, schedule=schedule)
+    Orchestrates gauge module generation with submodule computation, ensuring that
+    gauge action modules are generated only when needed by the submodules that use them.
+    """
+    modules = {}
+    schedule = []
+
+    # 1. Always start with base gauge
+    base_gauge = gauge.build_base_gauge(config.gauge_config)
+    modules |= base_gauge.modules
+    schedule += base_gauge.schedule
+
+    # 2. EPACK section: generate actions then compute
+    if not config.skip_epack:
+        epack_masses = config.epack_config.masses
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=epack_masses
+        )
+        modules |= actions.modules
+        schedule += actions.schedule
+
+        epack_input = epack.build_input_params(config.epack_config)
+        modules |= epack_input.modules
+        schedule += epack_input.schedule
+
+        # Handle epack mass shifts for meson and highmode
+        epack_mass_shifts = []
+        if not config.skip_meson:
+            epack_mass_shifts.extend(config.meson_config.masses)
+        if not config.skip_high_modes:
+            epack_mass_shifts.extend(config.high_modes_config.masses)
+
+        if epack_mass_shifts:
+            mass_shifts_input = epack.build_epack_mass_shifts(
+                config.epack_config, epack_mass_shifts
+            )
+            modules |= mass_shifts_input.modules
+            schedule += mass_shifts_input.schedule
+
+    # 3. MESON section: generate actions then compute
+    if not config.skip_meson:
+        meson_masses = config.meson_config.masses
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=meson_masses
+        )
+        modules |= actions.modules
+        schedule += actions.schedule
+
+        meson_input = meson.build_input_params(config.meson_config)
+        modules |= meson_input.modules
+        schedule += meson_input.schedule
+
+    # 4. HIGHMODE section: generate actions then compute
+    if not config.skip_high_modes:
+        # Compute sp_masses if highmode uses mixed precision
+        highmode_sp_masses = []
+        if config.high_modes_config.solver == "mpcg":
+            highmode_sp_masses = config.high_modes_config.masses
+            sp_gauge = gauge.build_sp_gauge(config.gauge_config)
+            modules |= sp_gauge.modules
+            schedule += sp_gauge.schedule
+
+        highmode_masses = config.high_modes_config.masses
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=highmode_masses, sp_masses=highmode_sp_masses
+        )
+        modules |= actions.modules
+        schedule += actions.schedule
+
+        highmode_input = highmode.build_input_params(config.high_modes_config)
+        modules |= highmode_input.modules
+        schedule += highmode_input.schedule
+
+    # Deduplicate schedule: keep first occurrence of each module name
+    deduplicated_schedule = list(dict.fromkeys(schedule))
+
+    return HadronsInput(modules=modules, schedule=deduplicated_schedule)
 
 
 def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
     df = [
         m.create_outfile_catalog(c)
         for m, c in zip(
-            [epack, meson, highmode],
-            [config.epack_config, config.meson_config, config.high_modes_config],
+            [gauge, epack, meson, highmode],
+            [
+                config.gauge_config,
+                config.epack_config,
+                config.meson_config,
+                config.high_modes_config,
+            ],
         )
         if c is not None
     ]
-    return pd.concat(df)
+    return pd.concat(df, ignore_index=True)
 
 
 def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
@@ -182,12 +213,33 @@ def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
     )
 
 
-# Register SmearConfig as the config for 'smear' task type
+def compare_outputs(
+    config_a: LMIConfig, config_b: LMIConfig, *, rtol: float = 1e-9, atol: float = 1e-12
+) -> pd.DataFrame:
+    """Compare LMI outputs between two configs.
+
+    Currently delegates to the high-mode correlator comparison only (the primary
+    output). meson/epack comparison is deferred.
+    """
+    if config_a.skip_high_modes or config_b.skip_high_modes:
+        raise ValueError(
+            "compare_outputs requires both configs to compute high_modes "
+            "(skip_high_modes must be False on both sides)."
+        )
+    return highmode.compare_outputs(
+        config_a.high_modes_config, config_b.high_modes_config, rtol=rtol, atol=atol
+    )
+
+
+# Register LMIConfig with all handlers
 register_task(
+    "hadrons_lmi",
     LMIConfig,
     create_outfile_catalog,
     build_input_params,
     build_aggregator_params,
-    preprocess_params,
-    postprocess_config,
+    compare_outputs,
+    normalize_params,
+    route_params,
+    validate=validate_config,
 )

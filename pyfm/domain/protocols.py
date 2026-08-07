@@ -17,16 +17,98 @@ class FormattableProtocol(t.Protocol):
 
 
 @t.runtime_checkable
-class ConfigPreprocessorProtocol(t.Protocol):
-    def preprocess_params(self, params: t.Dict, subconfig: str | None = None) -> t.Dict:
-        """Perform any necessary modifications to config input parameters before they
-        are passed to the config constructor.
+class ConfigNormalizerProtocol(t.Protocol):
+    def normalize_params(self, params: t.Dict) -> t.Dict:
+        """Transform broad input parameters into canonical form before routing.
+
+        Skipped when the input is already canonical (``normalized=True``).
+        """
+        ...
+
+
+@t.runtime_checkable
+class ConfigRouterProtocol(t.Protocol):
+    def route_params(self, params: t.Dict) -> t.Dict:
+        """Absorb the incoming ``_preprocessor`` slice and emit the outgoing one
+        for child subconfigs. Always runs.
         """
         ...
 
 
 @t.runtime_checkable
 class ConfigPostprocessorProtocol(t.Protocol):
-    def postprocess_config(self) -> "ConfigPostProcessorProtocol":
+    def postprocess_config(self) -> "ConfigPostprocessorProtocol":
         """Perform any necessary modifications to subconfigs after they have been built."""
         ...
+
+
+@t.runtime_checkable
+class ConfigValidatorProtocol(t.Protocol):
+    def validate(self) -> None:
+        """Validate config after construction and postprocessing."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Task-handler protocols — config is an explicit first parameter in all methods
+# ---------------------------------------------------------------------------
+
+@t.runtime_checkable
+class InputBuilderProtocol(t.Protocol):
+    """Handler that can generate input parameters for an external program."""
+
+    def build_input_params(self, config: t.Any) -> t.Any:
+        """Generate input parameters; *config* is passed explicitly by the caller."""
+        ...
+
+
+@t.runtime_checkable
+class OutfileCatalogProtocol(t.Protocol):
+    """Handler that can enumerate expected output files."""
+
+    def create_outfile_catalog(self, config: t.Any) -> t.Any:
+        """Return a catalog of expected output files for *config*."""
+        ...
+
+
+@t.runtime_checkable
+class AggregatorProtocol(t.Protocol):
+    """Handler that can supply aggregation parameters."""
+
+    def build_aggregator_params(self, config: t.Any) -> t.Any:
+        """Return aggregation parameters for *config*."""
+        ...
+
+
+@t.runtime_checkable
+class OutputComparisonProtocol(t.Protocol):
+    """Handler that can compare the output data of two task configs.
+
+    ``config_a`` and ``config_b`` are two independently-built configs, each
+    carrying its own resolved output files. Implementations should accept
+    optional ``rtol`` / ``atol`` tolerances (np.allclose-style) and return a
+    comparison report. Note: ``@runtime_checkable`` does NOT enforce the
+    keyword-only tolerances or their defaults — they are a convention that
+    implementations honor; the structural check only verifies the method exists.
+    """
+
+    def compare_outputs(
+        self,
+        config_a: t.Any,
+        config_b: t.Any,
+        *,
+        rtol: float = 1e-9,
+        atol: float = 1e-12,
+    ) -> t.Any:
+        """Compare the outputs of *config_a* against *config_b*; return a report."""
+        ...
+
+
+@t.runtime_checkable
+class TaskHandlerProtocol(InputBuilderProtocol, OutfileCatalogProtocol, t.Protocol):
+    """Composite protocol: a fully standalone task handler.
+
+    Any handler satisfying this protocol has both ``build_input_params`` and
+    ``create_outfile_catalog``.  External code (scripts, CLI tools) should
+    only consume handlers that satisfy this protocol.
+    """

@@ -1,0 +1,157 @@
+# Scripts supporting job queue management
+# spawnjob.py and checkjobs.py
+
+# For Python 3 version
+
+import typing as t
+import sys
+import os
+import subprocess
+import time
+
+from pyfm import utils
+
+
+######################################################################
+def lock_file_name(todo_file):
+    """Directory entry"""
+    return todo_file + ".lock"
+
+
+######################################################################
+def wait_set_todo_lock(lock_file):
+    """Set lock file"""
+
+    while os.access(lock_file, os.R_OK):
+        utils.get_logger().warning("Lock file present. Sleeping.")
+        sys.stdout.flush()
+        time.sleep(600)
+
+    subprocess.call(["touch", lock_file])
+
+
+######################################################################
+def remove_todo_lock(lock_file):
+    """Remove lock file"""
+    subprocess.call(["rm", lock_file])
+
+
+######################################################################
+def read_todo(todo_file):
+    """Read the todo file"""
+
+    todo_list = dict()
+    try:
+        with open(todo_file) as todo:
+            todo_lines = todo.readlines()
+    except IOError:
+        utils.get_logger().error(f"Can't open {todo_file}")
+        sys.exit(1)
+
+    for line in todo_lines:
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        a = line.split()
+        for i in range(len(a)):
+            if isinstance(a[i], bytes):
+                a[i] = a[i].decode("ASCII")
+        key = a[0]
+        if key in todo_list:
+            utils.get_logger().warning(
+                f"Duplicate cfgno '{key}' in {todo_file} — keeping last occurrence"
+            )
+        todo_list[key] = a
+
+    todo.close()
+    return todo_list
+
+
+######################################################################
+def key_todo_entries(td):
+    """Sort key for todo entries with format x.nnnn"""
+
+    stream, cfg = td.split(".")
+    return "{0:s}{1:010d}".format(stream, int(cfg))
+
+
+######################################################################
+def write_todo(todo_file, todo_list):
+    """Write the todo file"""
+
+    # Back up the files
+    subprocess.call(["mv", todo_file, todo_file + ".bak"])
+
+    try:
+        todo = open(todo_file, "w")
+
+    except IOError:
+        utils.get_logger().error(f"Can't open {todo_file} for writing")
+        sys.exit(1)
+
+    for line in sorted(todo_list, key=key_todo_entries):
+        print(" ".join(todo_list[line]), file=todo)
+
+    todo.close()
+
+
+######################################################################
+def find_next_task(
+    line: list[str], condition_fn: t.Callable[[str], bool]
+) -> t.Tuple | None:
+    """Examine todo line to see if condition is met"""
+
+    # Format
+    # a.1170 SX 0 EX 2147965 LQ 2150955 A 0 H 0
+
+    cfgno = line[0]
+
+    for index, step in ((i, line[i]) for i in range(1, len(line), 2)):
+
+        if condition_fn(step):
+            return index, cfgno, step
+        elif step.endswith("Q") or step.endswith("XXfix"):
+            # Do not search past barrier designations.
+            # NB: the "cont" variants (Qcont, XXfixcont) intentionally do not
+            # match here, so the search continues past non-blocking tasks.
+            return None
+
+    return None
+
+
+def find_next_unfinished_task(
+    line: list[str], step_request: str | None = None
+) -> t.Tuple | None:
+    """Examine todo line looking for unfinished task that is ready to run.
+
+    ``step_request`` filters on the *next ready* task rather than searching
+    past it: the request is only honored when the requested step is genuinely
+    the next task to run. This prevents a requested step from being bundled
+    ahead of an incomplete predecessor (e.g. an unsubmitted task, which is not
+    a Q/XXfix barrier) when using ``pyfm nanny run -j <step>``.
+    """
+
+    # Format
+    # a.1170 SX 0 EX 2147965 LQ 2150955 A 0 H 0
+
+    skip_states = ["X", "XXfix", "XXfixcont", "Q", "Qcont", "C"]
+    cond = lambda x: not any(x.endswith(state) for state in skip_states)
+
+    result = find_next_task(line, cond)
+    if result is None or step_request is None:
+        return result
+
+    _, _, step = result
+    return result if step.startswith(step_request) else None
+
+
+######################################################################
+def find_next_queued_task(line: list[str]) -> t.Tuple | None:
+    """Examine todo line to see if there are any queued tasks"""
+
+    # Format
+    # a.1170 SX 0 EX 2147965 LQ 2150955 A 0 H 0
+
+    cond = lambda x: x.endswith("Q") or x.endswith("Qcont")
+
+    return find_next_task(line, cond)

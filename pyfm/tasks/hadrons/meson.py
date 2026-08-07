@@ -2,15 +2,16 @@ import typing as t
 from pyfm import utils
 import pandas as pd
 from pydantic.dataclasses import dataclass
+from dataclasses import fields
 
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import (
     SimpleConfig,
     Gamma,
     OpList,
     Outfile,
-    HadronsInput,
     MassDict,
-    hadmods,
 )
 from pyfm.tasks.register import register_task
 
@@ -25,8 +26,7 @@ class MesonConfig(SimpleConfig):
     meson: Outfile
     overwrite: bool = False
     apply_g5: bool = False
-
-    key: t.ClassVar[str] = "hadrons_meson"
+    shift_gauge_name: str | None = None
 
     @property
     def op_list(self) -> t.List[OpList.Op]:
@@ -54,20 +54,23 @@ def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
     return utils.io.catalog_files(outfile_generator)
 
 
-def check_files_complete(
-    config: MesonConfig, gammas: t.List[str], mass_label: str, bad_files: t.List[str]
+def get_incomplete_gammas(
+    config: MesonConfig, gammas: t.List[Gamma], mass_label: str, bad_files: t.List[str]
 ) -> bool:
     meson_files = [
-        config.meson.filename.format(
-            mass=config.mass.to_string(mass_label, remove_prefix=True),
-            gamma=g,
-        )
-        for g in gammas
+        [
+            config.meson.filename.format(
+                mass=config.mass.to_string(mass_label, remove_prefix=True),
+                gamma=g_str,
+            )
+            for g_str in gamma.gamma_list
+        ]
+        for gamma in gammas
     ]
 
-    if not any([mf in bad_files for mf in meson_files]):
-        return True
-    return False
+    return [
+        g for i, g in enumerate(gammas) if any(mf in bad_files for mf in meson_files[i])
+    ]
 
 
 def build_input_params(config: MesonConfig) -> HadronsInput:
@@ -80,63 +83,97 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
     if not config.overwrite:
         bad_files = utils.io.get_bad_files(create_outfile_catalog(config))
 
-    for op in config.op_list:
-        op_type = op.gamma.name.lower()
-        gauge = "" if op.gamma.local else "gauge"
+    for op_type, gammas in config.operations.group_by_mass_and_shift():
+        assert len(op_type.mass) == 1, "Grouped operations should each have only 1 mass"
+        op_label = op_type.gamma.name.lower()
+        mass_label = op_type.mass[0]
+        gauge = "" if op_type.gamma.local else config.shift_gauge_name
 
-        for mass_label in op.mass:
-            if not config.overwrite and check_files_complete(
-                config, op.gamma.gamma_list, mass_label, bad_files
-            ):
+        if gauge is None:
+            assert not op_type.gamma.local
+            raise ValueError(
+                "shift_gauge_name must be provided to meson config for non-local operations."
+            )
+
+        if not config.overwrite:
+            gammas = get_incomplete_gammas(config, gammas, mass_label, bad_files)
+            if not gammas:
                 continue
 
-            output = meson_template.format(
-                mass=config.mass.to_string(mass_label, remove_prefix=True)
-            )
+        gamma_string = " ".join([x.gamma_string for x in gammas])
 
-            module_name = f"mf_{op_type}_mass_{mass_label}"
+        output = meson_template.format(
+            mass=config.mass.to_string(mass_label, remove_prefix=True)
+        )
 
-            schedule.append(module_name)
-            modules[module_name] = hadmods.meson_field(
-                name=module_name,
-                action=config.action_name.format(mass=mass_label),
-                block=config.blocksize,
-                gammas=op.gamma.gamma_string,
-                apply_g5=str(config.apply_g5).lower(),
-                gauge=gauge,
-                low_modes=config.low_modes_name.format(mass=mass_label),
-                left="",
-                right="",
-                output=output,
-            )
+        module_name = f"mf_{op_label}_mass_{mass_label}"
+
+        schedule.append(module_name)
+        modules[module_name] = hadmods.meson_field(
+            name=module_name,
+            action=config.action_name.format(mass=mass_label),
+            block=config.blocksize,
+            gammas=gamma_string,
+            apply_g5=str(config.apply_g5).lower(),
+            gauge=gauge,
+            low_modes=config.low_modes_name.format(mass=mass_label),
+            left="",
+            right="",
+            output=output,
+        )
 
     return HadronsInput(modules=modules, schedule=schedule)
 
 
-def create_outfile_catalog(config: MesonConfig) -> pd.DataFrame:
-    def generate_outfile_formatting():
-        """
-        A generator function that yields file formatting details for different
-        components of the task configuration.
+def route_params(params: t.Dict) -> t.Dict:
+    """Route task data to the 'operations' field of MesonConfig.
 
-        Yields:
-            Tuple[Dict[str, Any], str]: A dictionary of replacements and the
-            corresponding output file path for each component.
-        """
+    Avoids a collision between MassDict (from params['mass']) and OpList mass
+    labels (from params['_preprocessor']['mass']). This is pure ``_preprocessor``
+    routing — there is nothing to normalize.
+    """
+    # Extract task configs (contains gamma, mass lists for OpList)
+    preprocessor_params = params.pop("_preprocessor", {})
 
-        for op in config.operations.op_list:
-            res = {
-                "gamma": op.gamma.gamma_list,
-                "mass": [config.mass.to_string(m, True) for m in op.mass],
-            }
-            yield res, config.meson
+    # Get field names from MesonConfig, excluding 'mass'
+    # - 'mass' comes from top-level params (MassDict)
+    # !NOTE: Don't squash params['mass']
+    config_fields = {f.name for f in fields(MesonConfig) if f.name != "mass"}
 
-    outfile_generator = generate_outfile_formatting()
+    return (
+        params
+        | {
+            "operations": {
+                k: v for k, v in preprocessor_params.items() if k not in config_fields
+            },
+        }
+        | {k: v for k, v in preprocessor_params.items() if k in config_fields}
+    )
 
-    df = utils.io.catalog_files(outfile_generator)
 
-    return df
+def postprocess_config(config: MesonConfig) -> MesonConfig:
+    # Backward compatibility. Convert local operation into pion_local and vec_local
+    try:
+        local_index = config.op_list.index(Gamma.LOCAL)
+    except ValueError:
+        return config
+
+    local_op = config.op_list.pop(local_index)
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.VEC_LOCAL, mass=local_op.mass)
+    )
+    config.op_list.insert(
+        local_index, OpList.Op(gamma=Gamma.PION_LOCAL, mass=local_op.mass)
+    )
+    return config
 
 
-# Register GaugeConfig as the config for 'hadrons_gauge' task type
-register_task(MesonConfig, build_input_params, create_outfile_catalog)
+# Register MesonConfig as the config for 'hadrons_meson' task type
+register_task(
+    "hadrons_meson",
+    MesonConfig,
+    build_input_params,
+    create_outfile_catalog,
+    route_params,
+    postprocess_config,
+)

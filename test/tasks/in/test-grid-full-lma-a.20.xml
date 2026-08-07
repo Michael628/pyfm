@@ -1,0 +1,469 @@
+<grid>
+  <parameters>
+    <a2a>
+      <elem>
+        <action>
+          <boundary>1 1 1 1</boundary>
+          <c1>1.0</c1>
+          <c2>1.0</c2>
+          <label>a2a</label>
+          <mass>0.002426</mass>
+          <tad>1.0</tad>
+          <twist>0 0 0</twist>
+        </action>
+        <block>200</block>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a</output>
+        <spinTaste>
+          <applyG5>false</applyG5>
+          <gammas>(G5 G5) (GX GX) (GY GY) (GZ GZ) (G5X G5X) (G5Y G5Y) (G5Z G5Z)</gammas>
+        </spinTaste>
+      </elem>
+      <elem>
+        <action>
+          <boundary>1 1 1 1</boundary>
+          <c1>1.0</c1>
+          <c2>1.0</c2>
+          <label>a2a</label>
+          <mass>0.002426</mass>
+          <tad>1.0</tad>
+          <twist>0 0 0</twist>
+        </action>
+        <block>200</block>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/mesons/m002426/mf_a</output>
+        <spinTaste>
+          <applyG5>false</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1) (G5X G5) (G5Y G5) (G5Z G5)</gammas>
+        </spinTaste>
+      </elem>
+    </a2a>
+    <corr>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G5 G5)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_local/ranLL/corr_axial_vec_local_ranLL_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_local/ranLL/corr_axial_vec_local_ranLL_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_local/ama/corr_axial_vec_local_ama_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_local/ama/corr_axial_vec_local_ama_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX GX) (GY GY) (GZ GZ)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5X) (G5Y G5Y) (G5Z G5Z)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_onelink/ranLL/corr_axial_vec_onelink_ranLL_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5) (G5Y G5) (G5Z G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>lma</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_onelink/ranLL/corr_axial_vec_onelink_ranLL_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>lma</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5) (G5Y G5) (G5Z G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>l</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/axial_vec_onelink/ama/corr_axial_vec_onelink_ama_m002426</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
+        </quark>
+        <quarkAction>l</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5) (G5Y G5) (G5Z G5)</gammas>
+        </sink>
+      </elem>
+      <elem>
+        <antiquark>
+          <applyG5>true</applyG5>
+          <gammas>(G1 G1)</gammas>
+        </antiquark>
+        <antiquarkAction>u</antiquarkAction>
+        <antiquarkSolver>mpcg</antiquarkSolver>
+        <output>
+          /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/axial_vec_onelink/ama/corr_axial_vec_onelink_ama_m001524</output>
+        <quark>
+          <applyG5>true</applyG5>
+          <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
+        </quark>
+        <quarkAction>u</quarkAction>
+        <quarkSolver>mpcg</quarkSolver>
+        <sink>
+          <applyG5>true</applyG5>
+          <gammas>(G5X G5) (G5Y G5) (G5Z G5)</gammas>
+        </sink>
+      </elem>
+    </corr>
+    <epack>
+      <action>
+        <boundary>1 1 1 1</boundary>
+        <c1>1.0</c1>
+        <c2>1.0</c2>
+        <label>irl</label>
+        <mass>0.0</mass>
+        <tad>1.0</tad>
+        <twist>0 0 0</twist>
+      </action>
+      <checker>odd</checker>
+      <evalSave>/home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a</evalSave>
+      <file>/home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eig4444nv100a</file>
+      <irl>
+        <evenEigen>false</evenEigen>
+        <lanczosParams>
+          <Cheby>
+            <Npoly>11</Npoly>
+            <alpha>0.009</alpha>
+            <beta>24.0</beta>
+          </Cheby>
+          <MaxIt>5000</MaxIt>
+          <MinRes>0</MinRes>
+          <Nk>120</Nk>
+          <Nm>160</Nm>
+          <Nstop>100</Nstop>
+          <betastp>0</betastp>
+          <resid>1e-08</resid>
+        </lanczosParams>
+      </irl>
+      <multiFile>false</multiFile>
+      <seed>epack</seed>
+      <size>100</size>
+      <type>solve</type>
+    </epack>
+    <gauge>
+      <fatlink>/home/mlynch/Work/pyfm/example/workspace/work-dir/lat/scidac/fat4444a.ildg</fatlink>
+      <link>/home/mlynch/Work/pyfm/example/workspace/work-dir/lat/scidac/l4444a.ildg</link>
+      <longlink>/home/mlynch/Work/pyfm/example/workspace/work-dir/lat/scidac/lng4444a.ildg</longlink>
+      <type>file</type>
+    </gauge>
+    <highModeActions>
+      <elem>
+        <boundary>1 1 1 1</boundary>
+        <c1>1.0</c1>
+        <c2>1.0</c2>
+        <label>u</label>
+        <mass>0.001524</mass>
+        <tad>1.0</tad>
+        <twist>0 0 0</twist>
+      </elem>
+      <elem>
+        <boundary>1 1 1 1</boundary>
+        <c1>1.0</c1>
+        <c2>1.0</c2>
+        <label>l</label>
+        <mass>0.002426</mass>
+        <tad>1.0</tad>
+        <twist>0 0 0</twist>
+      </elem>
+    </highModeActions>
+    <lma>
+      <eigStart>0</eigStart>
+      <nEigs>-1</nEigs>
+      <projector>false</projector>
+    </lma>
+    <mpcg>
+      <maxInnerIteration>10000</maxInnerIteration>
+      <maxOuterIteration>10000</maxOuterIteration>
+      <residual>1e-08</residual>
+      <mixedPrecision>true</mixedPrecision>
+    </mpcg>
+    <runSeed>LMI-RW-series-a-100-eigs-1-noise</runSeed>
+    <series>a</series>
+    <sources>
+      <elem>
+        <nSrc>1</nSrc>
+        <seed>noise_t0</seed>
+        <t0>0</t0>
+        <tStep>4</tStep>
+      </elem>
+      <elem>
+        <nSrc>1</nSrc>
+        <seed>noise_t1</seed>
+        <t0>1</t0>
+        <tStep>4</tStep>
+      </elem>
+      <elem>
+        <nSrc>1</nSrc>
+        <seed>noise_t2</seed>
+        <t0>2</t0>
+        <tStep>4</tStep>
+      </elem>
+      <elem>
+        <nSrc>1</nSrc>
+        <seed>noise_t3</seed>
+        <t0>3</t0>
+        <tStep>4</tStep>
+      </elem>
+    </sources>
+    <trajectory>20</trajectory>
+  </parameters>
+</grid>

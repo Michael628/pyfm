@@ -1,10 +1,8 @@
 import typing as t
 from pyrsistent import freeze, thaw
 
-from pyfm.domain import (
-    DiagramConfig,
-    PartialFormatter,
-)
+from pyfm.a2a.types import DiagramConfig
+from pyfm.utils.string import PartialFormatter
 
 from pyfm import utils
 
@@ -34,26 +32,42 @@ def build_input_params(config: DiagramConfig) -> t.Dict[str, t.Any]:
     return yaml_params
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    if subconfig is None:
-        return params
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize DiagramConfig input: canonicalize the meson list.
 
-    new_mesons = []
-    mesons = params.get("mesons", [])
+    Coerces ``mesons`` to a list and renames mass fields from broad
+    ``mass``/``new_mass`` to the ``mass_original``/``mass_updated`` names
+    MesonLoaderConfig expects.
+    """
+    combined_params = params | params.pop("_preprocessor", {})
+
+    mesons = combined_params.pop("mesons", [])
     if not isinstance(mesons, list):
         mesons = [mesons]
-    for m in mesons:
-        new_meson = freeze(m)
-        if "mass" in m:
-            new_meson = new_meson.remove("mass").update({"mass_original": m["mass"]})
-        if "new_mass" in m:
-            new_meson = new_meson.remove("new_mass").update(
-                {"mass_updated": m["new_mass"]}
-            )
+    new_mesons = [
+        thaw(
+            freeze(m)
+            .discard("mass")
+            .discard("new_mass")
+            .update({"mass_original": m["mass"]} if "mass" in m else {})
+            .update({"mass_updated": m["new_mass"]} if "new_mass" in m else {})
+        )
+        for m in mesons
+    ]
 
-        new_mesons.append(thaw(new_meson))
+    return combined_params | dict(mesons=new_mesons)
 
-    return params | {"mesons": new_mesons}
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route the canonical meson list to MesonLoaderConfig subconfigs.
+
+    ``mesons`` is a LIST subconfig, which the builder constructs from
+    ``_preprocessor["mesons"]`` — so the list must be moved there.
+    """
+    combined_params = params | params.pop("_preprocessor", {})
+
+    mesons = combined_params.pop("mesons", [])
+    return combined_params | dict(_preprocessor=dict(mesons=mesons))
 
 
 def build_aggregator_params(config: DiagramConfig, average: bool) -> t.Dict:
@@ -128,10 +142,18 @@ def create_outfile_catalog(config: DiagramConfig) -> pd.DataFrame:
     return utils.io.catalog_files(outfile_generator)
 
 
+def validate_config(config: DiagramConfig) -> None:
+    if len(config.mesons) == 0:
+        raise ValueError("DiagramConfig.mesons must not be empty")
+
+
 register_task(
+    "contract_diagram",
     DiagramConfig,
     build_input_params=build_input_params,
     create_outfile_catalog=create_outfile_catalog,
     build_aggregator_params=build_aggregator_params,
-    preprocess_params=preprocess_params,
+    normalize_params=normalize_params,
+    route_params=route_params,
+    validate=validate_config,
 )

@@ -7,6 +7,20 @@ import inspect
 from pyfm import utils
 
 
+class SerializableEnum(Enum):
+    @classmethod
+    def from_dict(cls, name: str) -> "SerializableEnum":
+        if not isinstance(name, str):
+            raise ValueError(
+                f"Parameter passed to serializable type must be string, received: {name}"
+            )
+        name = name.upper().replace("_", "")
+        if val := getattr(cls, name, None):
+            return val
+        raise ValueError(f"Invalid serializable type ({name}). options are: {list(cls)}")
+
+
+
 @dataclass(frozen=True)
 class ConfigBase:
     formatting: Dict
@@ -25,7 +39,7 @@ class SimpleConfig(ConfigBase):
 @dataclass(frozen=True)
 class CompositeConfig(ConfigBase):
     @classmethod
-    def get_subconfigs(cls) -> utils.ContainerType:
+    def get_subconfigs(cls) -> t.Dict[str, utils.ContainerType]:
         subconfigs = {}
 
         config_field_types = ((f.name, f.type) for f in fields(cls))

@@ -1,6 +1,6 @@
 import typing as t
 
-from pyfm.domain import ContractConfig
+from pyfm.a2a.types import ContractConfig
 
 from pyfm.tasks.register import register_task
 
@@ -9,9 +9,17 @@ import pandas as pd
 from pyfm.tasks.contract import diagram as dmod
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    diagrams = params.get("diagrams", [])
-    diagram_params = params.get("diagram_params", [])
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize ContractConfig input: select the requested diagrams.
+
+    Broad input supplies the full ``diagram_params`` catalog plus a ``diagrams``
+    list naming the subset to run. Canonical output replaces both with a single
+    ``diagrams`` map of the selected diagrams.
+    """
+    combined_params = params | params.pop("_preprocessor", {})
+
+    diagrams = combined_params.pop("diagrams", [])
+    diagram_params = combined_params.pop("diagram_params", {})
 
     if isinstance(diagrams, list) and len(diagrams) == 0:
         raise ValueError("No diagrams provided in config parameters")
@@ -21,9 +29,19 @@ def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
         if d not in diagram_params:
             raise ValueError(f"Diagram {d} not found in diagram_params")
 
-    return params | {
-        "diagrams": {k: v for k, v in diagram_params.items() if k in diagrams}
-    }
+    filtered_diagrams = {k: v for k, v in diagram_params.items() if k in diagrams}
+    return combined_params | dict(diagrams=filtered_diagrams)
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route the canonical ``diagrams`` map to per-diagram subconfigs."""
+    combined_params = params | params.pop("_preprocessor", {})
+
+    diagrams = combined_params.pop("diagrams", {})
+    return combined_params | dict(
+        diagrams={k: {} for k in diagrams},
+        _preprocessor=dict(diagrams=diagrams),
+    )
 
 
 def build_input_params(
@@ -54,14 +72,22 @@ def build_aggregator_params(config: ContractConfig, average: bool) -> t.Dict:
 
 def create_outfile_catalog(config: ContractConfig) -> pd.DataFrame:
     df = [dmod.create_outfile_catalog(d) for d in config.diagrams.values()]
-    return pd.concat(df)
+    return pd.concat(df, ignore_index=True)
+
+
+def validate_config(config: ContractConfig) -> None:
+    if len(config.diagrams) == 0:
+        raise ValueError("ContractConfig.diagrams must not be empty")
 
 
 # Register ContractConfig as the config for 'contract' task type
 register_task(
+    "contract",
     ContractConfig,
-    build_input_params=build_input_params,
-    build_aggregator_params=build_aggregator_params,
-    create_outfile_catalog=create_outfile_catalog,
-    preprocess_params=preprocess_params,
+    build_input_params,
+    build_aggregator_params,
+    create_outfile_catalog,
+    normalize_params,
+    route_params,
+    validate=validate_config,
 )

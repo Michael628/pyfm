@@ -1,45 +1,51 @@
 import sys
 import os
 import subprocess
-from pyfm import utils
+import typing as t
 
+from pyfm import utils
 from pyfm.nanny.validator import check_jobs
 from pyfm.nanny.inputgen import write_input_file
-from pyfm.nanny.setup import get_job_params, get_layout_params
+from pyfm.nanny.config import (
+    JobBundle,
+    JobConfig,
+    NannyConfig,
+    Scheduler,
+    build_job_configs,
+    get_nanny_config,
+)
+import pyfm.nanny.todo as todo
 
 from functools import reduce
 
 
 ######################################################################
-def count_queue(scheduler, myjob_name_pfx):
+def count_jobs_in_queue(scheduler, myjob_name_pfx):
     """Count my jobs in the queue"""
 
     user = os.environ["USER"]
 
-    if scheduler == "LSF":
-        cmd = " ".join(
-            ["bjobs -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "PBS":
-        cmd = " ".join(
-            ["qstat -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "SLURM":
-        cmd = " ".join(
-            ["squeue -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "INTERACTIVE":
-        cmd = " ".join(
-            ["squeue -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    elif scheduler == "Cobalt":
-        cmd = " ".join(
-            ["qstat -fu", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
-        )
-    else:
-        print("Don't recognize scheduler", scheduler)
-        print("Quitting")
-        sys.exit(1)
+    match scheduler:
+        case Scheduler.LSF:
+            cmd = " ".join(
+                ["bjobs -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case Scheduler.PBS:
+            cmd = " ".join(
+                ["qstat -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case Scheduler.SLURM | Scheduler.INTERACTIVE:
+            cmd = " ".join(
+                ["squeue -u", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case Scheduler.COBALT:
+            cmd = " ".join(
+                ["qstat -fu", user, "| grep", user, "| grep ", myjob_name_pfx, "| wc -l"]
+            )
+        case _:
+            print("Don't recognize scheduler", scheduler)
+            print("Quitting")
+            sys.exit(1)
 
     nqueued = int(subprocess.check_output(cmd, shell=True))
 
@@ -47,34 +53,47 @@ def count_queue(scheduler, myjob_name_pfx):
 
 
 ######################################################################
-def next_cfgno_steps(max_cases, todo_list):
-    """Get next sets of cfgnos / job steps from the to-do file"""
+def plan_submission(
+    todo_list,
+    job_configs: t.Dict[str, JobConfig],
+    step_request: str | None = None,
+) -> JobBundle | None:
+    """Select the next step from todo state and bundle its cfgnos into a JobBundle.
 
-    # Return a list of cfgnos and indices to be submitted in the next job
-    # All subjobs in a single job must do the same step
-
-    step = "none"
+    Walks the todo in priority order, latches the active step from the first
+    unfinished task, resolves its pre-built JobConfig, and bundles contiguous
+    same-step cfgnos up to ``job_config.max_cases`` (a config object, not a raw
+    int). Preserves the contiguity and ``step_request`` semantics of the old
+    step-selection/bundling pass it replaces. Returns None when no tasks are
+    ready.
+    """
+    current_step = None
+    job_config = None
     cfgno_steps = []
-    for line in sorted(todo_list, key=utils.todo.key_todo_entries):
+
+    for line in sorted(todo_list, key=todo.key_todo_entries):
         a = todo_list[line]
         if len(a) < 2:
             print("ERROR: bad todo line format")
             print(a)
             sys.exit(1)
 
-        index, cfgno, new_step = utils.todo.find_next_unfinished_task(a)
-        if index > 0:
-            if step == "none":
-                step = new_step
-            elif step != new_step:
-                # Ensure only one step per job
+        if n := todo.find_next_unfinished_task(a, step_request):
+            index, cfgno, new_step = n
+            if current_step is None:
+                current_step = new_step
+                if current_step not in job_configs:
+                    raise ValueError(
+                        f"No `job_setup` parameters provided for `{current_step}`."
+                    )
+                job_config = job_configs[current_step]
+            elif current_step != new_step:
+                # Ensure only one step type per bundled job
                 break
             cfgno_steps.append([cfgno, index])
-            # We don't bundle the S (links) or H (contraction) steps
-            if step in ["S", "H", "I"]:
-                break
+
         # Stop when we have enough for a bundle
-        if len(cfgno_steps) >= max_cases:
+        if job_config is not None and len(cfgno_steps) >= job_config.max_cases:
             break
 
     ncases = len(cfgno_steps)
@@ -83,7 +102,9 @@ def next_cfgno_steps(max_cases, todo_list):
         print("Found", ncases, "cases...", cfgno_steps)
         sys.stdout.flush()
 
-    return step, cfgno_steps
+    if current_step is None or job_config is None:
+        return None
+    return JobBundle(job_config=job_config, cfgno_steps=cfgno_steps)
 
 
 def make_inputs(param, step, cfgno_steps):
@@ -91,8 +112,8 @@ def make_inputs(param, step, cfgno_steps):
     input_files = []
 
     for i in range(ncases):
-        (cfgno_series, _) = cfgno_steps[i]
-        (series, cfgno) = cfgno_series.split(".")
+        cfgno_series, _ = cfgno_steps[i]
+        series, cfgno = cfgno_series.split(".")
 
         infile = write_input_file(step, param, series, cfgno)
 
@@ -103,37 +124,12 @@ def make_inputs(param, step, cfgno_steps):
     return input_files
 
 
-######################################################################
-def submit_job(yaml_params, step, cfgno_steps, max_cases):
-    """Submit the job"""
+def get_submit_command(
+    nanny_config: NannyConfig, job_config: JobConfig, job_name: str, nodes: int, np: int
+):
 
-    ncases = len(cfgno_steps)
-
-    job_params = get_job_params(step, yaml_params)
-    job_script = job_params["run"]
-    wall_time = job_params["wall_time"]
-
-    layout_params = get_layout_params(step, yaml_params)
-    basenodes = layout_params["nodes"]
-    ppj = reduce((lambda x, y: x * y), layout_params["geom"])
-    ppn = layout_params["ppn"]
-
-    jpn = int(ppn / ppj)
-    basetasks = basenodes * ppn if basenodes > 1 or jpn <= 1 else ppj
-    nodes = (
-        basenodes * ncases if jpn <= 1 else int((basenodes * ncases + jpn - 1) / jpn)
-    )
-    NP = str(nodes * ppn)
-    geom = ".".join([str(i) for i in layout_params["geom"]])
-
-    # Append the number of cases to the step tag, as in A -> A3
-    job_name = yaml_params["submit"]["job_name_pfx"] + "-" + step + str(ncases)
-    os.environ["NP"] = NP
-    os.environ["PPN"] = str(ppn)
-    os.environ["PPJ"] = str(ppj)
-    os.environ["BASETASKS"] = str(basetasks)
-    os.environ["BASENODES"] = str(basenodes)
-    os.environ["LAYOUT"] = geom
+    job_script = job_config.run
+    wall_time = job_config.wall_time
 
     # Check that the job script exists
     try:
@@ -144,27 +140,84 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
         sys.exit(1)
 
     # Job submission command depends on locale
-    scheduler = yaml_params["submit"]["scheduler"]
-    if scheduler == "LSF":
-        cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
-    elif scheduler == "PBS":
-        cmd = f"qsub -l nodes={str(nodes)} -N {job_name} {job_script}"
-    elif scheduler == "SLURM":
-        # NEEDS UPDATING
-        cmd = (
-            f"sbatch -N {str(nodes)} -n {NP} -J {job_name} -t {wall_time} {job_script}"
-        )
-    elif scheduler == "INTERACTIVE":
-        cmd = f"./{job_script}"
-    # elif scheduler == 'Cobalt':
-    # NEEDS UPDATING IF WE STILL USE Cobalt
-    # cmd = (f"qsub -n {str(nodes)} --jobname {job_name} {archflags}"
-    #       f"--mode script --env LATS={LATS}:NCASES={NCASES}"
-    #       f":NP={NP} {job_script}")
-    else:
-        print("Don't recognize scheduler", scheduler)
-        print("Quitting")
-        sys.exit(1)
+    scheduler = nanny_config.scheduler
+    match scheduler:
+        case Scheduler.LSF:
+            cmd = f"bsub -nnodes {str(nodes)} -J {job_name} {job_script}"
+        case Scheduler.PBS:
+            #cmd = f"qsub -l nodes={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
+            cmd = f"qsub -l select={str(nodes)} -l walltime={wall_time} -N {job_name} {job_script}"
+        case Scheduler.SLURM:
+            cmd = f"sbatch -N {str(nodes)} -n {str(np)} -J {job_name} -t {wall_time} {job_script}"
+        case Scheduler.INTERACTIVE:
+            cmd = f"./{job_script}"
+        case _:
+            print("Don't recognize scheduler", scheduler)
+            print("Quitting")
+            sys.exit(1)
+
+    return cmd
+
+
+def get_jobid(scheduler: Scheduler, reply: str):
+    # Get job ID
+    match scheduler:
+        case Scheduler.LSF:
+            # a.2100 Q Job <99173> is submitted to default queue <batch>
+            jobid = reply[0].split()[1].split("<")[1].split(">")[0]
+            if isinstance(jobid, bytes):
+                jobid = jobid.decode("ASCII")
+        case Scheduler.PBS:
+            # 3314170.kaon2.fnal.gov submitted
+            jobid = reply[0].split(".")[0]
+        case Scheduler.SLURM:
+            # Submitted batch job 10059729
+            jobid = reply[len(reply) - 1].split()[3]
+        case Scheduler.INTERACTIVE:
+            jobid = "0000"
+        case Scheduler.COBALT:
+            # ** Project 'semileptonic'; job rerouted to queue 'prod-short'
+            # ['1607897']
+            jobid = reply[-1]
+    if isinstance(jobid, bytes):
+        jobid = jobid.decode("ASCII")
+
+    return jobid
+
+
+######################################################################
+def submit_job(nanny_config: NannyConfig, job_config: JobConfig, ncases: int):
+    """Submit the job"""
+
+    basenodes = job_config.nodes
+    basetasks = reduce((lambda x, y: x * y), job_config.geom)
+    ppn = job_config.ppn
+
+    jpn = int(ppn / basetasks)
+    NP = str(basetasks * ncases)
+    nodes = max(basenodes, int((basetasks * ncases + ppn - 1) / ppn))
+    geom = ".".join(map(str, job_config.geom))
+    lattice = ".".join(map(str, job_config.lattice))
+
+    # Append the number of cases to the step tag, as in A -> A3
+    os.environ["WORKDIR"] = nanny_config.home
+    os.environ["NP"] = NP
+    os.environ["PPN"] = str(ppn)
+    os.environ["PPJ"] = str(basetasks)
+    os.environ["BASETASKS"] = str(basetasks)
+    os.environ["BASENODES"] = str(basenodes)
+    os.environ["LAYOUT"] = geom
+    os.environ["LATTICE"] = lattice
+
+    job_name = nanny_config.job_name_pfx + "-" + job_config.step + str(ncases)
+
+    job_nodes = (
+        nodes
+        if job_config.node_minimum is None
+        else max(nodes, job_config.node_minimum)
+    )
+
+    cmd = get_submit_command(nanny_config, job_config, job_name, job_nodes, int(NP))
 
     # Run the job submission command
     print(cmd)
@@ -179,49 +232,24 @@ def submit_job(yaml_params, step, cfgno_steps, max_cases):
 
     print("\n".join(reply))
 
-    # Get job ID
-    if scheduler == "LSF":
-        # a.2100 Q Job <99173> is submitted to default queue <batch>
-        jobid = reply[0].split()[1].split("<")[1].split(">")[0]
-        if isinstance(jobid, bytes):
-            jobid = jobid.decode("ASCII")
-    elif scheduler == "PBS":
-        # 3314170.kaon2.fnal.gov submitted
-        jobid = reply[0].split(".")[0]
-    elif scheduler == "SLURM":
-        # Submitted batch job 10059729
-        jobid = reply[len(reply) - 1].split()[3]
-    elif scheduler == "INTERACTIVE":
-        jobid = "0000"
-    elif scheduler == "Cobalt":
-        # ** Project 'semileptonic'; job rerouted to queue 'prod-short'
-        # ['1607897']
-        jobid = reply[-1]
-    if isinstance(jobid, bytes):
-        jobid = jobid.decode("ASCII")
-
-    cfgnos = ""
-    for cfgno, index in cfgno_steps:
-        cfgnos = cfgnos + cfgno
-    date = subprocess.check_output("date", shell=True).rstrip().decode()
-    print(date, "Submitted job", jobid, "for", cfgnos, "step", step)
-
-    return (0, jobid)
+    jobid = get_jobid(nanny_config.scheduler, reply)
+    return 0, jobid
 
 
 ######################################################################
-def mark_queued_todo_entries(step, cfgno_steps, jobid, todo_list):
+def mark_queued_todo_entries(step, cfgno_steps, jobid, todo_list, barrier: bool = True):
     """Update the todo_file, change status to "Q" and mark the job number"""
 
+    barrier_mark = "Q" if barrier else "Qcont"
     for k in range(len(cfgno_steps)):
         c, i = cfgno_steps[k]
 
-        todo_list[c][i] = step + "Q"
+        todo_list[c][i] = f"{step}_{barrier_mark}"
         todo_list[c][i + 1] = jobid
 
 
 ######################################################################
-def nanny_loop(YAML):
+def nanny_loop(YAML, require_step: str | None = None):
     """Check job periodically and submit to the queue"""
 
     date = subprocess.check_output("date", shell=True).rstrip().decode()
@@ -246,48 +274,74 @@ def nanny_loop(YAML):
             print("Spawn job process stopped because STOP file is present")
             break
 
-        todo_file = yaml_params["nanny"]["todo_file"]
-        max_cases = yaml_params["nanny"]["max_cases"]
-        job_name_pfx = yaml_params["submit"]["job_name_pfx"]
-        scheduler = yaml_params["submit"]["scheduler"]
+        nanny_config = get_nanny_config(yaml_params)
+        todo_file = os.path.join(nanny_config.home, nanny_config.todo_file)
+        job_name_pfx = nanny_config.job_name_pfx
+        scheduler = nanny_config.scheduler
 
-        lock_file = utils.todo.lock_file_name(todo_file)
+        lock_file = todo.lock_file_name(todo_file)
 
         # Count queued jobs with our job name
-        nqueued = count_queue(scheduler, job_name_pfx)
+        nqueued = count_jobs_in_queue(scheduler, job_name_pfx)
+
+        job_configs = build_job_configs(yaml_params)
+
+        # Check completion and purge scratch files for complete jobs.
+        # Runs on its own cadence, independent of queue fullness, so a
+        # persistently full queue can't starve completion checking.
+        if check_count <= 0:
+            check_jobs(
+                yaml_params,
+                nanny_config=nanny_config,
+                job_configs=job_configs,
+            )
+            check_count = nanny_config.check_interval
 
         # Submit until we have the desired number of jobs in the queue
-        if nqueued < yaml_params["nanny"]["max_queue"]:
-            utils.todo.wait_set_todo_lock(lock_file)
-            todo_list = utils.todo.read_todo(todo_file)
-            utils.todo.remove_todo_lock(lock_file)
+        if nqueued < nanny_config.max_queue:
+            todo.wait_set_todo_lock(lock_file)
+            todo_list = todo.read_todo(todo_file)
+            todo.remove_todo_lock(lock_file)
 
-            # List a set of cfgnos
-            step, cfgno_steps = next_cfgno_steps(max_cases, todo_list)
-            ncases = len(cfgno_steps)
+            # Plan the next submission from pre-built job configs (config-first)
+            bundle = plan_submission(todo_list, job_configs, require_step)
 
-            # Check completion and purge scratch files for complete jobs
-            if check_count == 0:
-                check_jobs(yaml_params)
-                check_count = int(yaml_params["nanny"]["check_interval"])
-
-            if ncases > 0:
+            if bundle and bundle.ncases > 0:
                 # Make input
-                make_inputs(yaml_params, step, cfgno_steps)
+                make_inputs(yaml_params, bundle.job_config.step, bundle.cfgno_steps)
 
                 # Submit the job
+                status, jobid = submit_job(
+                    nanny_config, bundle.job_config, bundle.ncases
+                )
 
-                status, jobid = submit_job(yaml_params, step, cfgno_steps, max_cases)
+                cfgnos = ", ".join(c[0] for c in bundle.cfgno_steps)
+                date = subprocess.check_output("date", shell=True).rstrip().decode()
+                print(
+                    date,
+                    "Submitted job",
+                    jobid,
+                    "for",
+                    cfgnos,
+                    "step",
+                    bundle.job_config.step,
+                )
 
                 # Job submissions succeeded
                 # Edit the todo_file, marking the lattice queued and
                 # indicating the jobid
                 if status == 0:
-                    utils.todo.wait_set_todo_lock(lock_file)
-                    todo_list = utils.todo.read_todo(todo_file)
-                    mark_queued_todo_entries(step, cfgno_steps, jobid, todo_list)
-                    utils.todo.write_todo(todo_file, todo_list)
-                    utils.todo.remove_todo_lock(lock_file)
+                    todo.wait_set_todo_lock(lock_file)
+                    todo_list = todo.read_todo(todo_file)
+                    mark_queued_todo_entries(
+                        bundle.job_config.step,
+                        bundle.cfgno_steps,
+                        jobid,
+                        todo_list,
+                        bundle.job_config.barrier,
+                    )
+                    todo.write_todo(todo_file, todo_list)
+                    todo.remove_todo_lock(lock_file)
                 else:
                     # Job submission failed
                     if status == 1:
@@ -295,11 +349,11 @@ def nanny_loop(YAML):
                         print("Quitting")
                         sys.exit(1)
                     else:
-                        print("Will retry submitting", cfgno_steps, "later")
+                        print("Will retry submitting", bundle.cfgno_steps, "later")
 
         sys.stdout.flush()
 
-        subprocess.call(["sleep", str(yaml_params["nanny"]["wait"])])
+        subprocess.call(["sleep", str(nanny_config.wait)])
         check_count -= 1
 
         # Reload parameters in case of hot changes

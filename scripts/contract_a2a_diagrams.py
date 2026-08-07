@@ -6,18 +6,17 @@ import argparse
 
 from sympy.utilities.iterables import multiset_permutations
 
-from pyfm.domain import ContractConfig, LoadDictConfig
-from pyfm.builder import build_config
+from pyfm.a2a.types import ContractConfig
+from pyfm.domain import LoadDictConfig
+from pyfm.core.builder import build_config
 from pyfm.dataio import data_to_frame, write_files
-
-from pyfm.a2a import get_a2a_handler, execute
+from pyfm.a2a import execute, time_average
 from pyfm import utils
 from time import perf_counter
 
 
-def make_contraction_key(contraction: t.Tuple[str]):
-    con_key = "_".join(contraction)
-    return con_key
+def _make_contraction_key(contraction: t.Tuple[str]):
+    return "_".join(contraction)
 
 
 def main():
@@ -33,17 +32,26 @@ def main():
         required=True,
         help="Contraction input parameter file location",
     )
+    parser.add_argument(
+        "--time-average",
+        action="store_true",
+        help="Group and average by time separation",
+        default=False,
+    )
+
     args = parser.parse_args()
     params = utils.io.load_param(args.param_file)
 
-    config: ContractConfig = build_config(
-        ContractConfig, params, get_handler=get_a2a_handler
-    )
+    config: ContractConfig = build_config(ContractConfig, params, normalize=True)
 
     logging_level = getattr(config, "logging_level", "INFO")
-    utils.set_logging_level(logging_level)
+    logger = utils.set_logging_level(logging_level)
 
-    logger = utils.get_logger()
+    logger.info(
+        f"Starting A2A contractions with {config.comm_size} MPI rank(s) "
+        f"(current rank: {config.rank}, hardware: {config.hardware})"
+    )
+
     if config.hardware == "cpu":
         import numpy as xp
 
@@ -126,14 +134,8 @@ def main():
 
             corr = dict(
                 zip(
-                    map(
-                        make_contraction_key,
-                        contraction_list,
-                    ),
-                    map(
-                        lambda x: execute(x, diagram_config, config),
-                        contraction_list,
-                    ),
+                    map(_make_contraction_key, contraction_list),
+                    map(lambda x: execute(x, diagram_config, config), contraction_list),
                 )
             )
 
@@ -149,14 +151,21 @@ def main():
             if config.rank < 1:
                 os.makedirs(os.path.dirname(outfile), exist_ok=True)
 
-                array_order = [f"t{i+1}" for i in range(diagram_config.npoint)]
+                if args.time_average:
+                    corr = {
+                        k: {g: time_average(v) for g, v in gamma_dict.items()}
+                        for k, gamma_dict in corr.items()
+                    }
+                    array_order = [f"t{i+1}" for i in range(1, nmesons - 1)] + ["t"]
+                else:
+                    array_order = [f"t{i+1}" for i in range(nmesons)]
                 data_config = LoadDictConfig.create(
                     dict_labels=["perm", "gamma"],
                     array_order=array_order,
                     array_labels={o: f"0..{config.time-1}" for o in array_order},
                 )
                 df = data_to_frame(corr, data_config)
-                write_files(df, "hdf5", outfile)
+                write_files(df, outfile, format="hdf5")
                 # pickle.dump(corr, open(outfile, "wb"))
 
 

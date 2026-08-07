@@ -21,7 +21,6 @@ Functions:
     clear_meson_cache: Clear the global cache
 """
 
-import logging
 import typing as t
 from time import perf_counter
 
@@ -32,8 +31,8 @@ try:
 except ImportError:
     import numpy as xp
 
-from pyfm.domain import DiagramConfig, MesonLoaderConfig
-
+from pyfm import utils
+from pyfm.a2a.types import DiagramConfig, MesonLoaderConfig
 
 _MESON_CACHE: dict[tuple[str, slice], tuple[slice, xp.ndarray]] = {}
 
@@ -45,6 +44,7 @@ def get_meson_cache() -> dict:
 
 def clear_meson_cache() -> None:
     """Clear the global meson matrix cache."""
+    utils.get_logger().debug("Clearing meson cache")
     global _MESON_CACHE
     _MESON_CACHE.clear()
 
@@ -129,70 +129,9 @@ def load_meson(
     wmax_index: int | None,
     time: slice = slice(None),
 ) -> xp.ndarray:
-    """
-    Load meson field data from an HDF5 file with optional mass shifting.
-
-    This function reads a 3-dimensional meson field array from an HDF5 file,
-    applying time slicing and optional mass shifting. The data is automatically
-    promoted from single to double precision for numerical accuracy in
-    subsequent calculations.
-
-    Parameters
-    ----------
-    file : str
-        Path to the HDF5 file containing meson field data.
-        The file should contain a group with an 'a2aMatrix' dataset.
-    meson_config : MesonLoaderConfig
-        Configuration containing mass shift and file parameters.
-    vmax_index : int | None
-        Maximum v-index to load (None = load all).
-    wmax_index : int | None
-        Maximum w-index to load (None = load all).
-    time : slice, optional, default=slice(None)
-        Time slice object specifying which time slices to load.
-        Default loads all available time slices.
-
-    Returns
-    -------
-    xp.ndarray
-        3-dimensional complex array with shape (time, w_index, v_index).
-        Data type is complex128 (double precision complex).
-        The array contains the meson field data for the specified time range.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the specified HDF5 file cannot be found or opened.
-    KeyError
-        If the expected 'a2aMatrix' dataset is not found in the file.
-    ValueError
-        If the data cannot be properly converted or shaped.
-
-    Notes
-    -----
-    - Input data is assumed to be single precision complex (complex64)
-    - Output is promoted to double precision complex (complex128)
-    - Time slicing is applied first, followed by w/v index slicing
-    - If mass_shift is configured, mass shifting is applied after loading
-    - Loading time is logged at debug level for performance monitoring
-    - The method handles the HDF5 file structure automatically
-
-    Performance Notes
-    -----------------
-    - Loading time is measured and logged for performance analysis
-    - Memory usage scales with the size of the requested time slice
-    - For GPU backends, data is loaded directly to GPU memory when possible
-
-    File Format Requirements
-    ------------------------
-    The HDF5 file should have the following structure:
-    - Root level contains one or more groups
-    - Each group contains an 'a2aMatrix' dataset
-    - The dataset should have shape (time, w_max, v_max)
-    - Data should be stored as complex64 (single precision complex)
-    """
     t1 = perf_counter()
 
+    logger = utils.get_logger()
     with h5py.File(file, "r") as f:
         a_group_key = list(f.keys())[0]
 
@@ -203,14 +142,14 @@ def load_meson(
         )
 
     t2 = perf_counter()
-    logging.debug(f"Loaded array {temp.shape} in {t2 - t1} sec")
+    logger.debug(f"Loaded array {temp.shape} in {t2 - t1} sec")
 
     shift_mass = meson_config.mass_shift.updated is not None
     if shift_mass:
         fact = "2*" if meson_config.mass_shift.milc_mass else ""
         oldmass = meson_config.mass[meson_config.mass_shift.original]
         newmass = meson_config.mass[meson_config.mass_shift.updated]
-        logging.info(f"Shifting mass from {fact}{oldmass:f} to {fact}{newmass:f}")
+        logger.info(f"Shifting mass from {fact}{oldmass:f} to {fact}{newmass:f}")
         meson_mass_alter(temp, meson_config)
 
     return temp
@@ -307,39 +246,49 @@ def iter_meson_fields(
     """
     cache = get_meson_cache()
 
+    logger = utils.get_logger()
     for iter_idx in range(len(times[0])):
         current_times = [times[i][iter_idx] for i in range(len(mesonfiles))]
         result = []
 
         for i, (time, file) in enumerate(zip(current_times, mesonfiles)):
-            cache_key = (file, time)
+            meson_idx = i % len(diagram_config.mesons)
+            meson_config = diagram_config.mesons[meson_idx]
+
+            cache_key = (file, time, meson_config.mass_shift)
 
             if cache_key in cache:
-                logging.debug(f"Using cached {time} from {file}")
+                logger.debug(f"Using cached {time} from {file}")
                 result.append(cache[cache_key])
                 continue
 
             found = False
             for j in range(i):
-                if current_times[j] == time and mesonfiles[j] == file:
-                    cache_key_j = (mesonfiles[j], current_times[j])
+                meson_config_j = diagram_config.mesons[j % len(diagram_config.mesons)]
+                if (
+                    current_times[j] == time
+                    and mesonfiles[j] == file
+                    and meson_config_j.mass_shift == meson_config.mass_shift
+                ):
+                    cache_key_j = (
+                        mesonfiles[j],
+                        current_times[j],
+                        meson_config_j.mass_shift,
+                    )
                     if cache_key_j in cache:
-                        logging.debug(f"Found {time} at index {j}")
+                        logger.debug(f"Found {time} at index {j}")
                         result.append(cache[cache_key_j])
                         found = True
                         break
 
             if not found:
-                meson_idx = i % len(diagram_config.mesons)
-                meson_config = diagram_config.mesons[meson_idx]
-
                 w_idx_str = contraction[i * 2]
                 v_idx_str = contraction[i * 2 + 1]
 
                 wmax_index = get_index_range(w_idx_str, diagram_config)
                 vmax_index = get_index_range(v_idx_str, diagram_config)
 
-                logging.debug(
+                logger.debug(
                     f"Loading {time} from {file} (wmax={wmax_index}, vmax={vmax_index})"
                 )
                 data = load_meson(file, meson_config, vmax_index, wmax_index, time)

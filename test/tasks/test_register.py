@@ -1,0 +1,306 @@
+"""Tests for pyfm/tasks/register.py using the task_registry and build_hooks singletons."""
+import pytest
+
+from pyfm.domain import task_registry, build_hooks
+from pyfm.domain.task_registry import TaskHandler
+from pyfm.domain.protocols import TaskHandlerProtocol
+from pyfm.tasks.register import (
+    _config_to_task_key,
+    get_task_handler,
+    get_task_key,
+    list_registered_types,
+    register_task,
+)
+
+
+# ---------------------------------------------------------------------------
+# Minimal config stub with key ClassVar so register_task can derive the key
+# ---------------------------------------------------------------------------
+
+class FakeConfig:
+    key = "fake_task"
+
+
+class OtherConfig:
+    key = "other_task"
+
+
+class NoKeyConfig:
+    pass
+
+
+class ExplicitKeyConfig:
+    """Config class with no key ClassVar — key passed explicitly to register_task."""
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Stub callables with the exact names used by the routing logic
+# ---------------------------------------------------------------------------
+
+def build_input_params(config):
+    return {"input": True}
+
+
+def create_outfile_catalog(config):
+    return ["out.h5"]
+
+
+def build_aggregator_params(config):
+    return {"agg": True}
+
+
+def normalize_params(params):
+    return params
+
+
+def route_params(params):
+    return params
+
+
+def postprocess_config(config):
+    return config
+
+
+def validate_config(config):
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Fixtures — reset both registries before/after every test
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def reset_registries():
+    # Snapshot the real populated registries before wiping for test isolation.
+    # Restored after the test so later test modules see a fully registered state.
+    saved_handlers = dict(task_registry._handlers)
+    saved_hooks = dict(build_hooks._registry)
+    saved_config_to_task_key = dict(_config_to_task_key)
+    task_registry.clear()
+    build_hooks.clear()
+    _config_to_task_key.clear()
+    yield
+    task_registry.clear()
+    build_hooks.clear()
+    _config_to_task_key.clear()
+    task_registry._handlers.update(saved_handlers)
+    build_hooks._registry.update(saved_hooks)
+    _config_to_task_key.update(saved_config_to_task_key)
+
+
+# ---------------------------------------------------------------------------
+# get_task_key
+# ---------------------------------------------------------------------------
+
+class TestGetTaskKey:
+    def test_job_type_only(self):
+        key = get_task_key(job_type="hadrons")
+        assert key == "nanny_hadrons"
+
+    def test_job_type_and_task_type(self):
+        key = get_task_key(job_type="hadrons", task_type="lmi")
+        assert key == "nanny_hadrons_lmi"
+
+    def test_config_with_key_classvar(self):
+        key = get_task_key(config=FakeConfig)
+        assert key == "nanny_fake_task"
+
+    def test_config_without_key_classvar_returns_none(self):
+        key = get_task_key(config=NoKeyConfig)
+        assert key is None
+
+    def test_no_args_raises(self):
+        with pytest.raises(ValueError):
+            get_task_key()
+
+
+# ---------------------------------------------------------------------------
+# register_task — happy path
+# ---------------------------------------------------------------------------
+
+class TestRegisterTask:
+    def test_register_minimal_no_funcs(self):
+        register_task(FakeConfig)
+        handler = task_registry.get("nanny_fake_task")
+        assert handler.config_type is FakeConfig
+
+    def test_register_with_all_three_positional_funcs(self):
+        register_task(FakeConfig, build_input_params, create_outfile_catalog, build_aggregator_params)
+        handler = task_registry.get("nanny_fake_task")
+        assert handler.build_input_params is build_input_params
+        assert handler.create_outfile_catalog is create_outfile_catalog
+        assert handler.build_aggregator_params is build_aggregator_params
+
+    def test_positional_order_does_not_matter(self):
+        # Same as lmi.py: outfile first, then input, then aggregator
+        register_task(FakeConfig, create_outfile_catalog, build_input_params, build_aggregator_params)
+        handler = task_registry.get("nanny_fake_task")
+        assert handler.build_input_params is build_input_params
+        assert handler.create_outfile_catalog is create_outfile_catalog
+        assert handler.build_aggregator_params is build_aggregator_params
+
+    def test_register_with_normalize_and_route_positional(self):
+        register_task(FakeConfig, build_input_params, normalize_params, route_params)
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks is not None
+        assert hooks.normalize is normalize_params
+        assert hooks.route is route_params
+
+    def test_register_with_postprocess_positional(self):
+        register_task(FakeConfig, build_input_params, postprocess_config)
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks.postprocess is postprocess_config
+
+    def test_register_with_validate_keyword(self):
+        register_task(FakeConfig, build_input_params, validate=validate_config)
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks.validate is validate_config
+
+    def test_register_with_route_keyword(self):
+        register_task(FakeConfig, route_params=route_params)
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks.route is route_params
+
+    def test_register_with_all_keyword_hooks(self):
+        register_task(
+            FakeConfig,
+            build_input_params,
+            create_outfile_catalog,
+            normalize_params=normalize_params,
+            route_params=route_params,
+            validate=validate_config,
+        )
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks.normalize is normalize_params
+        assert hooks.route is route_params
+        assert hooks.validate is validate_config
+
+    def test_default_route_added_when_none_supplied(self):
+        register_task(FakeConfig, build_input_params)
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks is not None
+        # normalize is genuinely optional; route gets a default
+        assert hooks.normalize is None
+        assert hooks.route is not None
+        # The default merges _preprocessor into params
+        result = hooks.route({"a": 1, "_preprocessor": {"b": 2}})
+        assert result == {"a": 1, "b": 2}
+
+    def test_explicit_route_overrides_default(self):
+        register_task(FakeConfig, route_params)
+        hooks = build_hooks.get(FakeConfig)
+        assert hooks.route is route_params
+
+    def test_register_config_without_key_is_silent_no_op(self):
+        # Should not raise; silently skips
+        register_task(NoKeyConfig)
+        assert NoKeyConfig not in build_hooks._registry
+        assert not any(
+            True for k in task_registry._handlers if "NoKeyConfig" in k
+        )
+
+    def test_duplicate_registration_is_idempotent(self):
+        # Calling register_task twice with the same config must not raise
+        register_task(FakeConfig, build_input_params)
+        register_task(FakeConfig, create_outfile_catalog)  # second call silently skipped
+        handler = task_registry.get("nanny_fake_task")
+        # First registration wins
+        assert hasattr(handler, "build_input_params")
+        assert not hasattr(handler, "create_outfile_catalog")
+
+    def test_unknown_positional_func_name_is_ignored(self):
+        def format_string(config, s):
+            return s
+
+        # nanny/taskbuilder.py pattern — should not raise
+        register_task(FakeConfig, format_string)
+        handler = task_registry.get("nanny_fake_task")
+        assert handler.config_type is FakeConfig
+
+    def test_explicit_key_registers_correctly(self):
+        register_task("explicit_task", ExplicitKeyConfig, build_input_params)
+        handler = task_registry.get("nanny_explicit_task")
+        assert handler.config_type is ExplicitKeyConfig
+        assert handler.build_input_params is build_input_params
+
+    def test_explicit_key_populates_reverse_mapping(self):
+        register_task("explicit_task", ExplicitKeyConfig)
+        assert ExplicitKeyConfig in _config_to_task_key
+        assert _config_to_task_key[ExplicitKeyConfig] == "explicit_task"
+
+    def test_explicit_key_enables_config_lookup_via_get_task_key(self):
+        register_task("explicit_task", ExplicitKeyConfig, build_input_params)
+        key = get_task_key(config=ExplicitKeyConfig)
+        assert key == "nanny_explicit_task"
+
+    def test_explicit_key_with_hooks(self):
+        register_task(
+            "explicit_task",
+            ExplicitKeyConfig,
+            build_input_params,
+            route_params=route_params,
+            validate=validate_config,
+        )
+        hooks = build_hooks.get(ExplicitKeyConfig)
+        assert hooks.route is route_params
+        assert hooks.validate is validate_config
+
+
+# ---------------------------------------------------------------------------
+# get_task_handler
+# ---------------------------------------------------------------------------
+
+class TestGetTaskHandler:
+    def test_returns_task_handler_for_full_registration(self):
+        register_task(FakeConfig, build_input_params, create_outfile_catalog)
+        handler = get_task_handler(job_type="fake", task_type="task")
+        assert isinstance(handler, TaskHandler)
+        assert handler.config_type is FakeConfig
+
+    def test_returns_none_for_missing_key(self):
+        handler = get_task_handler(job_type="no", task_type="such")
+        assert handler is None
+
+    def test_strict_mode_returns_none_for_incomplete_handler(self):
+        # GaugeConfig-style: no task callables, not a full TaskHandlerProtocol
+        register_task(FakeConfig)
+        handler = get_task_handler(job_type="fake", task_type="task", strict=True)
+        assert handler is None
+
+    def test_non_strict_mode_returns_incomplete_handler(self):
+        register_task(FakeConfig)
+        handler = get_task_handler(job_type="fake", task_type="task", strict=False)
+        assert handler is not None
+        assert handler.config_type is FakeConfig
+
+    def test_returns_handler_by_config(self):
+        register_task(FakeConfig, build_input_params, create_outfile_catalog)
+        handler = get_task_handler(config=FakeConfig, strict=False)
+        assert handler is not None
+        assert handler.config_type is FakeConfig
+
+    def test_returns_none_for_config_without_key(self):
+        handler = get_task_handler(config=NoKeyConfig)
+        assert handler is None
+
+
+# ---------------------------------------------------------------------------
+# list_registered_types
+# ---------------------------------------------------------------------------
+
+class TestListRegisteredTypes:
+    def test_empty_when_nothing_registered(self):
+        assert list_registered_types() == []
+
+    def test_lists_all_registered_keys(self):
+        register_task(FakeConfig)
+        register_task(OtherConfig)
+        keys = list_registered_types()
+        assert "nanny_fake_task" in keys
+        assert "nanny_other_task" in keys
+
+    def test_count_matches_number_of_registrations(self):
+        register_task(FakeConfig)
+        register_task(OtherConfig)
+        assert len(list_registered_types()) == 2

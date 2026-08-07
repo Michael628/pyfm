@@ -5,17 +5,15 @@ from pydantic.dataclasses import dataclass
 from pydantic import Field
 
 from pyfm import utils
-
+from pyfm.tasks.hadrons.types import HadronsInput
+import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import (
     SimpleConfig,
     Outfile,
-    HadronsInput,
     MassDict,
-    LanczosParams,
-    hadmods,
 )
-
 from pyfm.tasks.register import register_task
+from pyfm.tasks.hadrons.types import LanczosParams
 
 
 @dataclass(frozen=True)
@@ -32,29 +30,10 @@ class EpackConfig(SimpleConfig):
     multifile: bool = False
     save_eigs: bool = False
     save_evals: bool = True
-    mass_shifts: t.List[str] = Field(default_factory=list)
-
-    key: t.ClassVar[str] = "hadrons_epack"
 
     @property
     def masses(self) -> t.List[str]:
         return [] if self.load == True else ["zero"]
-
-    def __post_init__(self):
-        if not self.load:
-            if self.lanczos is None:
-                raise ValueError(
-                    "No Lanczos parameters provided. Required for using IRL solver."
-                )
-            if self.action_name is None:
-                raise ValueError(
-                    "No action_name parameter provided. Required for using IRL solver."
-                )
-        if len(self.mass_shifts) != 0:
-            if self.low_modes_name is None:
-                raise ValueError(
-                    "No low_modes_name parameter provided. Required for shifting mass of eigenvalues."
-                )
 
 
 def build_input_params(config: EpackConfig) -> HadronsInput:
@@ -87,21 +66,37 @@ def build_input_params(config: EpackConfig) -> HadronsInput:
         )
     schedule.append("epack")
 
-    # Shift mass of eigenvalues
-    for mass_label in config.mass_shifts:
-        if mass_label == "zero":
-            continue
-        mass = config.mass.to_string(mass_label)
-        name = config.low_modes_name.format(mass=mass_label)
-        modules[name] = hadmods.epack_modify(name=name, eigen_pack="epack", mass=mass)
-        schedule.append(name)
-
     if config.save_evals:
         eval_path = config.eval.filestem
         modules["eval_save"] = hadmods.eval_save(
             name="eval_save", eigen_pack="epack", output=eval_path
         )
         schedule.append("eval_save")
+    return HadronsInput(modules=modules, schedule=schedule)
+
+
+def build_epack_mass_shifts(
+    config: EpackConfig,
+    mass_shifts: t.List[str],
+) -> HadronsInput:
+    """Build epack mass shift modules for specified mass labels.
+
+    Args:
+        config: EpackConfig with mass definitions and low_modes_name template
+        mass_shifts: List of mass labels to shift eigenvalues for
+
+    Returns:
+        HadronsInput with modules and schedule for mass shifts
+    """
+    modules = {}
+    schedule = []
+
+    for mass_label in mass_shifts:
+        mass = config.mass.to_string(mass_label)
+        name = config.low_modes_name.format(mass=mass_label)
+        modules[name] = hadmods.epack_modify(name=name, eigen_pack="epack", mass=mass)
+        schedule.append(name)
+
     return HadronsInput(modules=modules, schedule=schedule)
 
 
@@ -131,5 +126,29 @@ def create_outfile_catalog(config: EpackConfig) -> pd.DataFrame:
     return df
 
 
-# Register GaugeConfig as the config for 'hadrons_gauge' task type
-register_task(EpackConfig, build_input_params, create_outfile_catalog)
+def validate_config(config: EpackConfig) -> None:
+    """Validate EpackConfig after construction and postprocessing.
+
+    Validates:
+    - If not loading, requires Lanczos parameters and action_name
+    - If mass_shifts are provided, requires low_modes_name
+    """
+    if not config.load:
+        if config.lanczos is None:
+            raise ValueError(
+                "No Lanczos parameters provided. Required for using IRL solver."
+            )
+        if config.action_name is None:
+            raise ValueError(
+                "No action_name parameter provided. Required for using IRL solver."
+            )
+
+
+# Register EpackConfig with all handlers
+register_task(
+    "hadrons_epack",
+    EpackConfig,
+    build_input_params,
+    create_outfile_catalog,
+    validate=validate_config,
+)

@@ -1,20 +1,27 @@
 import typing as t
 
-from pyfm.domain import (
-    MesonLoaderConfig,
-    PartialFormatter,
-)
+from pyfm.utils.string import PartialFormatter
+from pyfm.a2a.types import MesonLoaderConfig
 
 from pyfm.tasks.register import register_task
 
 
-def preprocess_params(params: t.Dict, subconfig: str | None = None) -> t.Dict:
-    mass_shift = {}
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize MesonLoaderConfig input: assemble the ``mass_shift`` field.
 
-    for key in ["mass_original", "mass_updated", "milc_mass"]:
-        if key in params:
-            mass_shift[key.removeprefix("mass_")] = params[key]
-    return params | {"mass_shift": mass_shift}
+    Collapses the loose ``mass_original``/``mass_updated``/``milc_mass`` keys into
+    the single ``mass_shift`` mapping the config expects. (Routing is the default
+    ``_preprocessor`` absorb — no custom ``route`` hook needed for this leaf.)
+    """
+    combined_params = params | params.pop("_preprocessor", {})
+
+    mass_shift = {
+        key.removeprefix("mass_"): combined_params[key]
+        for key in ["mass_original", "mass_updated", "milc_mass"]
+        if key in combined_params
+    }
+
+    return combined_params | dict(mass_shift=mass_shift)
 
 
 def build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.Any]:
@@ -31,7 +38,8 @@ def build_input_params(config: MesonLoaderConfig) -> t.Dict[str, t.Any]:
 
 
 register_task(
+    "contract_mesonloader",
     MesonLoaderConfig,
     build_input_params=build_input_params,
-    preprocess_params=preprocess_params,
+    normalize_params=normalize_params,
 )

@@ -1,7 +1,6 @@
 """Core contraction operations for A2A calculations."""
 
 import itertools
-import logging
 import typing as t
 
 import opt_einsum as oe
@@ -12,16 +11,24 @@ try:
 except ImportError:
     import numpy as xp
 
-try:
+from pyfm import utils
+from pyfm.a2a.types import DiagramConfig, ContractConfig
+from pyfm.a2a.mesonloader import iter_meson_fields, clear_meson_cache
+from pyfm.a2a.time_operations import convert_to_numpy
+
+
+def _reduce_sum_to_root(sendbuf, recvbuf):
+    """Sum ``sendbuf`` across all ranks onto ``recvbuf`` at rank 0.
+
+    Imports mpi4py lazily so this module can be imported without running
+    MPI_Init; callers only reach here when ``comm_size > 1``, i.e. under an
+    active MPI launch.
+    """
     from mpi4py import MPI
 
-    COMM = MPI.COMM_WORLD
-except ImportError:
-    pass
-
-from pyfm.domain import DiagramConfig, ContractConfig
-from pyfm.a2a.mesonloader import iter_meson_fields
-from pyfm.a2a.time_operations import convert_to_numpy
+    comm = MPI.COMM_WORLD
+    comm.Barrier()
+    comm.Reduce(sendbuf, recvbuf, op=MPI.SUM, root=0)
 
 
 def contract(
@@ -114,7 +121,10 @@ def conn_2pt(
 
     times = generate_time_sets(diagram_config, contract_config)
 
+    logger = utils.get_logger()
+
     for gamma in diagram_config.gammas:
+        clear_meson_cache()
         mesonfiles = tuple(
             meson_outfile.file.filename.format(
                 w_index=contraction[i],
@@ -131,20 +141,19 @@ def conn_2pt(
         for (t1, m1), (t2, m2) in iter_meson_fields(
             diagram_config, mesonfiles, times, contraction
         ):
-            logging.info(f"Contracting {gamma}: {t1},{t2}")
+            logger.info(f"Contracting {gamma}: {t1},{t2}")
 
             cij[t1, t2] = contract(m1, m2)
             if diagram_config.symmetric and t1 != t2:
                 cij[t2, t1] = cij[t1, t2].T
 
-        logging.debug("Contraction completed")
+        logger.debug("Contraction completed")
 
         if contract_config.comm_size > 1:
             temp = None
             if contract_config.rank == 0:
                 temp = xp.empty_like(cij)
-            COMM.Barrier()
-            COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
+            _reduce_sum_to_root(cij, temp)
 
             if contract_config.rank == 0:
                 corr[gamma] = convert_to_numpy(temp)
@@ -165,6 +174,7 @@ def sib_conn_3pt(
 
     times = generate_time_sets(diagram_config, contract_config)
 
+    logger = utils.get_logger()
     for gamma in diagram_config.gammas:
         mesonfiles = tuple(
             m_path.format(
@@ -185,20 +195,19 @@ def sib_conn_3pt(
         for (t1, m1), (t2, m2), (t3, m3) in iter_meson_fields(
             diagram_config, mesonfiles, times, contraction
         ):
-            logging.info(f"Contracting {gamma}: {t1},{t2},{t3}")
+            logger.info(f"Contracting {gamma}: {t1},{t2},{t3}")
             cij[t1, t2, t3] = contract(m1, m2, m3, open_indices=[0, 1, 2])
 
             if diagram_config.symmetric:
                 raise Exception("Symmetric 3dim optimization not implemented.")
 
-        logging.debug("Contraction completed.")
+        logger.debug("Contraction completed.")
 
         if contract_config.comm_size > 1:
             temp = None
             if contract_config.rank == 0:
                 temp = xp.empty_like(cij)
-            COMM.Barrier()
-            COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
+            _reduce_sum_to_root(cij, temp)
 
             if contract_config.rank == 0:
                 corr[gamma] = convert_to_numpy(temp)
@@ -218,6 +227,7 @@ def qed_conn_4pt(
 
     times = generate_time_sets(diagram_config, contract_config)
 
+    logger = utils.get_logger()
     for gamma in diagram_config.gammas:
         for i in range(diagram_config.n_em):
             emlabel = f"{diagram_config.emseedstring}_{i}"
@@ -241,7 +251,7 @@ def qed_conn_4pt(
             for (t1, m1), (t2, m2), (t3, m3), (t4, m4) in iter_meson_fields(
                 diagram_config, mesonfiles, times, contraction
             ):
-                logging.info(f"Contracting ({gamma},{emlabel}): {t1}, {t2}, {t3}, {t4}")
+                logger.info(f"Contracting ({gamma},{emlabel}): {t1}, {t2}, {t3}, {t4}")
                 cij[t1, t2, t3, t4] = contract(
                     m1, m2, m3, m4, open_indices=[0, 1, 2, 3]
                 )
@@ -249,14 +259,13 @@ def qed_conn_4pt(
                 if diagram_config.symmetric:
                     raise Exception("Symmetric 4dim optimization not implemented.")
 
-            logging.debug("Contraction completed.")
+            logger.debug("Contraction completed.")
 
             if contract_config.comm_size > 1:
                 temp = None
                 if contract_config.rank == 0:
                     temp = xp.empty_like(cij)
-                COMM.Barrier()
-                COMM.Reduce(cij, temp, op=MPI.SUM, root=0)
+                _reduce_sum_to_root(cij, temp)
 
                 if contract_config.rank == 0:
                     corr[gamma] = convert_to_numpy(temp)

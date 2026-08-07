@@ -1,0 +1,73 @@
+#!/bin/bash -l
+
+####### -N (submit script)
+####### -n (submit script)
+####### -t (submit script)
+####### -J (submit script)
+#SBATCH -A <account-id>
+##SBATCH -q debug
+#SBATCH -S 16
+#SBATCH --exclusive
+
+# Replace with your python environment
+# with pyfm installed
+module load miniforge3/23.11.0-0
+source activate py313
+
+# Set run environment
+eval $(pyfm workspace env --system frontier)
+# source $PYFMTOPDIR/pyfm/scripts/source-system-env.sh --system frontier
+if [ $? -ne 0 ]; then
+  echo "Error: failed to source system env for 'frontier'" >&2
+  exit 1
+fi
+
+module list
+
+echo $PATH
+executable=HadronsMILC
+# Replace with line below if running grid executable instead
+# executable=grid_lma
+
+echo "WORKDIR = $WORKDIR"
+cd $WORKDIR
+
+# Record the node list for this job
+#mkdir -p nodefiles
+#scontrol show hostnames "$SLURM_JOB_NODELIST" > nodefiles/nodes.${SLURM_JOB_ID}
+# Record the memory usage of this job
+#mkdir -p memfiles
+#${PYFM_GPUMEM_MONITOR_SCRIPT} >& memfiles/gpumem.${SLURM_JOB_ID} &
+
+OPT="--accelerator-threads 8 --shm 2048 --comms-overlap --shm-mpi 0"
+runargs=" --grid ${LATTICE} --mpi ${LAYOUT} $OPT"
+
+for input in ${INPUTLIST}
+do
+  output=out/$(basename "${input%.xml}").${SLURM_JOB_ID}
+  echo "Input file ${input}"
+  echo "Output file ${output}"
+  echo "Input = ${input}" 
+  echo "START_RUN `date`" >> ${output}
+  echo "RUNARGS = ${runargs}" >> ${output}
+
+  date >> ${output}
+  echo "Executable: $(which $executable)" >> ${output}
+  argstr="${input} ${runargs}"
+  export APP="${executable} ${argstr}"
+  echo ${APP} >> ${output}
+  cmd="srun -N ${BASENODES} -n ${BASETASKS} --ntasks-per-node=${BASETASKS} --gpus-per-task=1 --cpus-per-task=${OMP_NUM_THREADS} --gpu-bind=closest ${APP}"
+
+  echo ${cmd} >> ${output}
+  ${cmd} >> ${output} &
+  APP_PIDS+=" $!"
+done
+
+# Wait only for the application runs, then stop the GPU memory monitor
+wait ${APP_PIDS}
+kill ${GPUMEM_PID} 2>/dev/null
+
+popd
+exit 0
+
+

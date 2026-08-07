@@ -1,11 +1,14 @@
 import os
 import typing as t
-from collections import namedtuple
 
-from concurrent.futures import ThreadPoolExecutor
 import h5py
 import numpy as np
 import pandas as pd
+
+try:
+    import pyarrow.parquet as pq
+except ImportError:
+    pq = None
 
 from pyfm.domain import LoadDictConfig, LoadH5Config
 
@@ -13,8 +16,8 @@ from pyfm.dataio.converter import data_to_frame
 from pyfm.domain import WrappedDataPipe
 from pyfm import utils
 
+from concurrent.futures import ThreadPoolExecutor
 from functools import partial
-
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
@@ -31,6 +34,20 @@ def get_pickle_loader(filename: str, _: t.Dict, **kwargs):
     return data_to_frame(data, pickle_config)
 
 
+def get_csv_loader(filename: str, _: t.Dict[str, str], **kwargs):
+
+    return pd.read_csv(filename)
+
+
+def get_parquet_loader(filename: str, _: t.Dict[str, str], **kwargs):
+    if pq is None:
+        raise NotImplementedError(
+            "Parquet support requires pyarrow. Install with: pip install pyfm[parquet]"
+        )
+
+    return pq.read_table(filename, use_threads=True).to_pandas()
+
+
 def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
     """
     Loads data from an HDF5 file and returns it as a DataFrame.
@@ -44,68 +61,88 @@ def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
         pd.DataFrame: The loaded data as a pandas DataFrame.
 
     """
+
+    data = None
     try:
         return pd.read_hdf(filename)
     except (ValueError, NotImplementedError):
+        pass
+
+    with h5py.File(filename) as file:
         h5_config = LoadH5Config.create(**kwargs).format_data_strings(repl)
+        try:
+            data = data_to_frame(file, h5_config)
+        except ValueError as e:
+            utils.get_logger().debug(f"Error loading HDF5 file: {e}")
+            raise
+            # h5_config = h5_config.search_for_dataset_label(file)
+            # data = data_to_frame(file, h5_config)
 
-        file = h5py.File(filename)
+    if data is not None:
+        return data
+    else:
+        raise ValueError(f"File {filename} could not be loaded.")
 
-        return data_to_frame(file, h5_config)
 
-
-def get_file_loader(filestem: str):
-    ext = os.path.splitext(filestem)[1]
+def get_file_loader(file_path: str):
+    ext = os.path.splitext(file_path)[1]
 
     match ext:
         case ".p" | ".npy":
             return get_pickle_loader
         case ".h5":
             return get_hdf5_loader
+        case ".csv":
+            return get_csv_loader
+        case ".parquet":
+            return get_parquet_loader
         case _:
-            raise ValueError("File must have extension '.p' or '.h5'")
+            raise ValueError(
+                "File must have extension '.p', '.h5', '.csv', or '.parquet'"
+            )
 
 
 def load_files(
-    filestem: str,
+    filestem: str | t.List[str],
     replacements: t.Dict | None = None,
     regex: t.Dict | None = None,
     wildcard_fill: bool = False,
+    aggregate: bool = False,
+    skip_file_set: t.List[str] | None = None,
     **kwargs,
-) -> WrappedDataPipe:
-    def file_loader_wrapper(file_loader, filename: str, repl: t.Dict) -> pd.DataFrame:
-        utils.get_logger().debug(f"Loading file: {filename}")
-        new_data: pd.DataFrame = file_loader(filename, repl)
-
-        if len(repl) != 0:
-            new_data[list(repl.keys())] = tuple(repl.values())
-
-        return repl, new_data
-
+) -> WrappedDataPipe | pd.DataFrame:
     def file_factory():
-        def get_filename(filename, reps):
-            return filename, reps
-
         file_repls = utils.io.process_files(
-            filestem, get_filename, replacements, regex, wildcard_fill
+            filestem, lambda f, r: (f, r), replacements, regex, wildcard_fill
         )
 
-        file_loader = partial(get_file_loader(filestem), **kwargs)
-        flw = partial(file_loader_wrapper, file_loader)
+        if skip_file_set:
+            file_repls = [f for f in file_repls if f[0] not in skip_file_set]
 
-        group_cols = []
-        if len(file_repls) > 0:
-            group_cols = file_repls[0][1].keys()
+        if not file_repls:
+            file0 = filestem if isinstance(filestem, str) else filestem[0] + ", ..."
+            raise ValueError(f"No files found for file search pattern: {file0}")
 
-        GroupTuple = namedtuple("GroupTuple", group_cols)
+        max_workers = min(kwargs.pop("max_workers", 1), len(file_repls))
 
-        def temp(*args):
-            fname, rep = args[0]
-            return flw(fname, rep)
+        file_loader = partial(get_file_loader(file_repls[0][0]), **kwargs)
+        group_cols = list(file_repls[0][1].keys())
+        GroupTuple = utils.create_group_tuple(*group_cols)
 
-        with ThreadPoolExecutor(max_workers=1) as executor:
-            results = executor.map(temp, file_repls)
+        def load_one(filename, repl):
+            utils.get_logger().debug(f"Loading file: {filename}")
+            df = file_loader(filename, repl)
+            if repl:
+                df[list(repl.keys())] = tuple(repl.values())
+            return repl, df
 
-        yield from ((GroupTuple(**g), r) for g, r in results)
+        with ThreadPoolExecutor(max_workers=max_workers) as pool:
+            futures = [pool.submit(load_one, fn, r) for fn, r in file_repls]
+            for fut in futures:
+                repl, df = fut.result()
+                yield GroupTuple(**repl), df
 
-    return WrappedDataPipe(file_factory)
+    if aggregate:
+        return WrappedDataPipe(file_factory).agg()
+    else:
+        return WrappedDataPipe(file_factory)

@@ -22,8 +22,9 @@ if __name__ == "__main__":
     parser.add_argument(
         "--logging-level", type=str, default="INFO", help="Set logging level"
     )
+    parser.add_argument("-j", "--job", type=str, help="Job name", default=None)
     args = parser.parse_args()
 
     utils.set_logging_level(args.logging_level)
 
-    nanny_loop(args.param_file)
+    nanny_loop(args.param_file, require_step=args.job)
