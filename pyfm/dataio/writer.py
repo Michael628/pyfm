@@ -124,7 +124,7 @@ def write_files(
         out_filestem = stem + ".parquet"
         fn = lambda data, fname: data.to_parquet(fname)
     elif format == "dict":
-        dict_depth = kwargs.pop("dict_depth")
+        dict_depth = kwargs.pop("dict_depth", 1)
         out_filestem = stem
         def fn(data, fname):
             np.save(fname, frame_to_dict(data, dict_depth))

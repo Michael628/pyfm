@@ -4,12 +4,13 @@
 > Each section is scoped to one command and separated by `---` so it can be split into slides.
 > All commands are invoked as `pyfm <group> <command> [options]`.
 
-The CLI is organized into six command groups:
+The CLI is organized into seven command groups:
 
 | Group | Purpose |
 |-------|---------|
 | `nanny` | Automated HPC job submission via todo files |
-| `task` | Generate input files & aggregate task output |
+| `export` | Format-based data export (`export corr`) |
+| `task` | Deprecated aliases: `nanny generate`, `export corr` |
 | `contract` | Run A2A all-to-all contraction calculations |
 | `audit` | Audit runtime performance output logs |
 | `build` | Compile lattice QCD software components |
@@ -59,15 +60,15 @@ Adds todo entries for a gauge-field series and one or more job steps, expanding 
 
 **2. Configuration it pulls from**
 - `--param-file` → `nanny.todo_file` (where entries are written) and `job_setup` (valid step names, used by `validate_steps`).
-- `SERIES` (positional) → gauge field series label.
+- `-s/--series` (required) → gauge field series label.
 - `STEPS` (positional, one or more) → job steps to add.
 - Config selection (exactly one required, mutually exclusive):
-  - `--cfg` → individual config numbers (repeatable).
-  - `--cfg-range START STOP STEP` → range, exclusive stop.
+  - `--config` → individual config numbers (repeatable).
+  - `--config-range START STOP STEP` → range, exclusive stop.
 
 **3. The command**
 ```bash
-pyfm nanny add SERIES STEP [STEP ...] (--cfg N [--cfg N ...] | --cfg-range START STOP STEP) [-p params.yaml]
+pyfm nanny add -s SERIES STEP [STEP ...] (--config N [--config N ...] | --config-range START STOP STEP) [-p params.yaml]
 ```
 
 ---
@@ -92,7 +93,7 @@ pyfm nanny check -j JOB -s SERIES -n CONFIG [-v] [-p params.yaml]
 
 ---
 
-## `pyfm task generate`
+## `pyfm nanny generate`
 
 **1. What it does**
 Generates the input file(s) for a specific job / series / config combination by calling `write_input_file`, then logs the path of the written input.
@@ -103,12 +104,12 @@ Generates the input file(s) for a specific job / series / config combination by 
 
 **3. The command**
 ```bash
-pyfm task generate -j JOB -s SERIES -n CONFIG [-p params.yaml]
+pyfm nanny generate -j JOB -s SERIES -n CONFIG [-p params.yaml]
 ```
 
 ---
 
-## `pyfm task aggregate`
+## `pyfm export corr`
 
 **1. What it does**
 Aggregates a job step's output data across all configurations into a single file, optionally averaging over configs and skipping configs whose output already exists.
@@ -122,8 +123,20 @@ Aggregates a job step's output data across all configurations into a single file
 
 **3. The command**
 ```bash
-pyfm task aggregate -j JOB [-f csv|hdf5] [--average] [--skip-existing] [-p params.yaml] [--logging-level INFO]
+pyfm export corr -j JOB [-f csv|hdf5] [--average] [--skip-existing] [-p params.yaml] [--logging-level INFO]
 ```
+
+---
+
+## `pyfm task generate`
+
+Deprecated alias for `pyfm nanny generate`; see that command.
+
+---
+
+## `pyfm task aggregate`
+
+Deprecated alias for `pyfm export corr`; see that command.
 
 ---
 
@@ -238,5 +251,5 @@ eval "$(pyfm workspace env --system NAME [--ext TAG] [--runtime-env true])"
 - **Slide grouping:** Consider a divider/title slide before each group (`nanny`, `task`, `contract`, `audit`, `build`, `workspace`) so related commands cluster together.
 - **Shared convention:** Almost every data command shares the `-p/--param-file` → `params.yaml` and `--logging-level` pattern. A single "common options" slide up front would let you omit repeating it on each command.
 - **Mode-dependent commands:** `nanny check` and `contract run` behave differently based on which flags are present — a small "before/after" or two-column slide works well for these.
-- **End-to-end flow:** A workflow slide showing the typical lifecycle (`workspace setup` → `build run` → `nanny add` → `nanny run` → `task aggregate` → `audit runtime`) would tie the commands together narratively.
+- **End-to-end flow:** A workflow slide showing the typical lifecycle (`workspace setup` → `build run` → `nanny add` → `nanny run` → `export corr` → `audit runtime`) would tie the commands together narratively.
 - **Worth confirming:** I documented behavior from the source; the exact contents of each `params.yaml` section (e.g. the full `ContractConfig`/`job_setup` schema) could be expanded into appendix slides if your audience needs the config detail.

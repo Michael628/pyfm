@@ -8,9 +8,9 @@ The following scripts have direct CLI equivalents. Prefer `pyfm` for new work â€
 
 | Script | CLI equivalent |
 |--------|---------------|
-| `generate_input.py` | `pyfm task generate -j JOB -s SERIES -n CONFIG` |
+| `generate_input.py` | `pyfm nanny generate -j JOB -s SERIES -n CONFIG` |
 | `check_task_completion.py` | `pyfm nanny check -j JOB -s SERIES -n CONFIG` |
-| `aggregate_task_data.py` | `pyfm task aggregate -j JOB` |
+| `aggregate_task_data.py` | `pyfm export corr -j JOB` |
 | `contract_a2a_diagrams.py` | `pyfm contract run PARAM_FILE` |
 | `run_nanny.py` | `pyfm nanny run` |
 | `submit_job.py` | `pyfm nanny submit -i INPUT -j JOB` |

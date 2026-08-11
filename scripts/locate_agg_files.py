@@ -1,6 +1,6 @@
-"""Locate the aggregated output files produced by ``pyfm task aggregate``.
+"""Locate the aggregated output files produced by ``pyfm export corr``.
 
-For a given job step this reports where ``pyfm task aggregate`` writes (or has
+For a given job step this reports where ``pyfm export corr`` writes (or has
 written) its aggregated data, by reconstructing the same ``out_files`` filestems
 the aggregator uses and globbing the filesystem for the resolved paths.
 
@@ -8,7 +8,7 @@ Optionally the located data can be re-emitted: ``--combine`` merges every run
 key into a single table, ``--format`` controls the output file format, and
 ``--output`` sets the output filename.
 
-``--average`` mirrors ``pyfm task aggregate --average`` but operates on the
+``--average`` mirrors ``pyfm export corr --average`` but operates on the
 *existing* (non-averaged) agg files: it loads them, applies the averaging actions
 in-process, and writes the averaged result to the ``_avg`` output locations.
 """
@@ -135,7 +135,7 @@ def load_run_data(run_params, input_format, data_col="corr"):
 def main():
     parser = argparse.ArgumentParser(
         description=(
-            "Locate the aggregated output files produced by `pyfm task aggregate` "
+            "Locate the aggregated output files produced by `pyfm export corr` "
             "for a job step, and optionally re-emit them in another format."
         )
     )
@@ -166,7 +166,7 @@ def main():
         default="csv",
         choices=list(INPUT_EXTENSIONS),
         help="Format of the aggregated files to locate/load (default: csv, "
-        "matching `pyfm task aggregate`).",
+        "matching `pyfm export corr`).",
     )
     parser.add_argument(
         "--format",
