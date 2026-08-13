@@ -43,3 +43,39 @@ def corr(param_file, job, fmt, average, skip_existing, logging_level):
     aggregator.aggregate_task_data(
         job, params, format=fmt, average=average, skip_existing=skip_existing
     )
+
+
+@export.command()
+@param_file_option()
+@job_option(required=True, help="Job step whose aggregated output to convert.")
+@format_option(choices=("csv", "hdf5", "dict", "parquet"))
+@click.option(
+    "--input-format",
+    "input_fmt",
+    type=click.Choice(["csv", "hdf5", "dict", "parquet"]),
+    default="csv",
+    show_default=True,
+    help="Format of the existing aggregated files to read.",
+)
+@click.option(
+    "--output",
+    type=str,
+    default=None,
+    help="Output path (exact stem for a single run key; base directory for "
+    "multi-run-key steps).",
+)
+@logging_level_option()
+def convert(param_file, job, fmt, input_fmt, output, logging_level):
+    """Convert a prior run's aggregated output to a different file format."""
+    from pyfm import utils
+    from pyfm.nanny import aggregator
+
+    params = utils.io.load_param(param_file)
+    utils.set_logging_level(logging_level)
+    aggregator.convert_task_data(
+        job,
+        params,
+        input_format=input_fmt,
+        output_format=fmt,
+        output=output,
+    )
