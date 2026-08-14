@@ -1,5 +1,9 @@
 import os
+import tarfile
 import typing as t
+from datetime import datetime
+
+from pyfm.nanny.config import get_nanny_config
 from pyfm.nanny.taskbuilder import create_task
 import pyfm.dataio as dio
 from pyfm.dataio import processor as pc
@@ -247,3 +251,96 @@ def convert_task_data(
             filestem=stem,
             format=output_format,
         )
+
+
+def _collect_source_files(agg_params: t.Dict[str, t.Any]) -> t.List[str]:
+    """Collect the raw source files (aggregation inputs) for every run key.
+
+    Globs each run key's ``load_files["filestem"]`` -- the per-config input files
+    that ``export corr`` aggregates -- with the same ``process_files`` primitive the
+    loader uses, forwarding the handler's ``load_files["regex"]`` hints and setting
+    ``wildcard_fill`` so every remaining ``{placeholder}`` (series, cfg, mass,
+    gamma_label, ...) is expanded. Multi-run-key handlers that share one filestem
+    (e.g. highmode) glob overlapping sets, so results are deduplicated by absolute
+    path. Returns absolute paths of files on disk.
+    """
+    files: t.List[str] = []
+    seen: t.Set[str] = set()
+    for key in agg_params["run"]:
+        load_files = agg_params[key].get("load_files", {})
+        filestem = load_files.get("filestem")
+        if not filestem:
+            continue
+        regex = load_files.get("regex", {})
+        for filename, _ in utils.io.process_files(
+            filestem,
+            lambda f, r: (f, r),
+            replacements={},
+            regex=regex,
+            wildcard_fill=True,
+        ):
+            if os.path.exists(filename):
+                abspath = os.path.abspath(filename)
+                if abspath not in seen:
+                    seen.add(abspath)
+                    files.append(abspath)
+    return files
+
+
+def tar_task_data(
+    job_step: str | None,
+    yaml_data: t.Dict,
+    include_dirs: t.Tuple[str, ...] = (),
+    output: str | None = None,
+) -> str:
+    """Archive a job step's raw source files and/or extra directories into a tar.
+
+    Locates the raw per-config source files for ``job_step`` (the inputs to
+    ``export corr`` aggregation) via ``create_task`` ->
+    ``build_aggregator_params(average=False)`` -> ``_collect_source_files``, adds
+    any ``include_dirs``, and writes an uncompressed tar into the params ``home``
+    directory. ``output`` names the tar file under ``home`` (default
+    ``<ens>_<YYYYMMDD-%H%M%S>.tar``). At least one of ``job_step`` or
+    ``include_dirs`` must be supplied; raises ``ValueError`` if there is nothing
+    to archive. Returns the absolute tar path.
+    """
+    logger = utils.get_logger()
+
+    home = os.path.expanduser(get_nanny_config(yaml_data).home)
+    ens = yaml_data.get("shared_params", {}).get("ens", "export")
+
+    if output is None:
+        tar_name = f"{ens}_{datetime.now().strftime('%Y%m%d-%H%M%S')}.tar"
+    else:
+        tar_name = output
+
+    os.makedirs(home, exist_ok=True)
+    tar_path = os.path.join(home, tar_name)
+
+    source_files: t.List[str] = []
+    if job_step is not None:
+        task = create_task(job_step, yaml_data)
+        agg_params = task.handler.build_aggregator_params(task.config, average=False)
+        if agg_params:
+            source_files = _collect_source_files(agg_params)
+
+    if not source_files and not include_dirs:
+        raise ValueError(
+            "Nothing to archive: no source files found and no --include "
+            "directories given."
+        )
+
+    logger.info(
+        f"Writing tar: {tar_path} "
+        f"({len(source_files)} source file(s), {len(include_dirs)} include dir(s))"
+    )
+    with tarfile.open(tar_path, "w") as tf:
+        if source_files:
+            root = os.path.commonpath([os.path.dirname(f) for f in source_files])
+            for f in source_files:
+                tf.add(f, arcname=os.path.relpath(f, root))
+        for d in include_dirs:
+            tf.add(os.path.expanduser(d), arcname=os.path.basename(os.path.normpath(d)))
+
+    logger.info(f"Tar written: {tar_path}")
+    return tar_path

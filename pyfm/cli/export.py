@@ -3,8 +3,9 @@
 ``export`` is the home for format-based data export. Its first member,
 ``export corr``, aggregates the correlator (``corr``) output produced by a job
 step across configurations into a single file — the operation previously
-exposed as ``pyfm task aggregate``. Future siblings (e.g. ``export tar``) are
-documented but not yet implemented.
+exposed as ``pyfm task aggregate``. Its sibling ``export tar`` archives a job
+step's raw source files and/or extra directories into a single uncompressed
+``.tar``.
 
 The module is import-light (only ``click`` + the shared option decorators):
 ``utils`` and ``aggregator`` are imported inside the ``corr`` callback so that
@@ -79,3 +80,37 @@ def convert(param_file, job, fmt, input_fmt, output, logging_level):
         output_format=fmt,
         output=output,
     )
+
+
+@export.command()
+@param_file_option()
+@job_option(required=False, help="Job step whose raw source files to archive.")
+@click.option(
+    "--include",
+    "include_dirs",
+    multiple=True,
+    type=click.Path(exists=True, file_okay=False),
+    help="Extra directory to add to the archive (repeatable).",
+)
+@click.option(
+    "-o",
+    "--output",
+    type=str,
+    default=None,
+    help="Name of the tar file, written under the params home dir. "
+    "Default: <ensemble>_<timestamp>.tar.",
+)
+@logging_level_option()
+def tar(param_file, job, include_dirs, output, logging_level):
+    """Archive a job step's raw source files and/or extra directories into a tar."""
+    from pyfm import utils
+    from pyfm.nanny import aggregator
+
+    if not job and not include_dirs:
+        raise click.UsageError(
+            "Nothing to archive: provide -j/--job and/or --include."
+        )
+
+    params = utils.io.load_param(param_file)
+    utils.set_logging_level(logging_level)
+    aggregator.tar_task_data(job, params, include_dirs=include_dirs, output=output)

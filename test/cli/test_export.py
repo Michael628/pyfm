@@ -141,3 +141,75 @@ def test_convert_rejects_invalid_output_format(runner):
 def test_convert_missing_job_fails(runner):
     result = runner.invoke(cli, ["export", "convert"])
     assert result.exit_code != 0
+
+
+def test_tar_dispatches_job(runner):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.tar_task_data") as mock_tar,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(cli, ["export", "tar", "-j", "hadrons_lmi"])
+        assert result.exit_code == 0, result.output
+        mock_tar.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, include_dirs=(), output=None
+        )
+
+
+def test_tar_output_flag(runner):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.tar_task_data") as mock_tar,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli, ["export", "tar", "-j", "hadrons_lmi", "-o", "myrun.tar"]
+        )
+        assert result.exit_code == 0, result.output
+        mock_tar.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, include_dirs=(), output="myrun.tar"
+        )
+
+
+def test_tar_include_dirs(runner, tmp_path):
+    d1 = tmp_path / "data1"
+    d2 = tmp_path / "data2"
+    d1.mkdir()
+    d2.mkdir()
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.tar_task_data") as mock_tar,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["export", "tar", "-j", "hadrons_lmi",
+             "--include", str(d1), "--include", str(d2)],
+        )
+        assert result.exit_code == 0, result.output
+        mock_tar.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, include_dirs=(str(d1), str(d2)), output=None
+        )
+
+
+def test_tar_include_only(runner, tmp_path):
+    d = tmp_path / "extras"
+    d.mkdir()
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.tar_task_data") as mock_tar,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli, ["export", "tar", "--include", str(d), "-o", "bundle.tar"]
+        )
+        assert result.exit_code == 0, result.output
+        mock_tar.assert_called_once_with(
+            None, FAKE_PARAMS, include_dirs=(str(d),), output="bundle.tar"
+        )
+
+
+def test_tar_missing_both_fails(runner):
+    result = runner.invoke(cli, ["export", "tar"])
+    assert result.exit_code != 0
+    assert "Nothing to archive" in result.output
