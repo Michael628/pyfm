@@ -118,9 +118,6 @@ def group_apply(
         df.reset_index().groupby(by=grouped, dropna=False)[ungrouped].apply(apply_fn)
     )
 
-    # while None in df_out.index.names:
-    #     df_out = df_out.droplevel(df_out.index.names.index(None))
-
     return df_out
 
 
@@ -212,6 +209,12 @@ def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:
             df_out = df_out.set_index(cols_to_set, append=True)
 
         # Group by all index levels except the one being averaged
+        unnamed = [i for i, name in enumerate(df_out.index.names) if name is None]
+        if unnamed:
+            utils.get_logger().warning(
+                f"Excluding unnamed index level(s) at position(s) {unnamed} "
+                f"from average groupby keys for '{col}'"
+            )
         levels_to_keep = [
             name for name in df_out.index.names if name not in [None, col]
         ]
@@ -295,11 +298,43 @@ def permkey_average(
 def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
     """Averages `data_col` column in `df` over columns or indices specified in `avg_indices`,
     one at a time.
+
+    If the data already carries a time-averaged ``t`` column (as an index level
+    or a regular column), the time-average operation is skipped and the input
+    DataFrame is returned unchanged. This lets the contract ``--average`` path
+    consume data that has already been time-averaged instead of assuming the
+    ``t1``/``t2`` columns used by the raw two-point array still exist.
     """
+    if "dt" in df.index.names or "dt" in df.columns:
+        df = df.rename_axis(
+            index={"dt": "t"} if "dt" in df.index.names else None
+        ).rename(columns={"dt": "t"})
+
+    # Rename None-named index levels whose unique values are sequential
+    # integers 0..n-1 to 't'.  This catches pre-averaged data from
+    # mixed-naming concatenations (some files had 't', others 'dt' —
+    # pandas resolves the conflict as None).
+    if "t" not in df.columns:
+        names = list(df.index.names)
+        renamed = False
+        for i, name in enumerate(names):
+            if name is None:
+                unique_vals = df.index.get_level_values(i).unique()
+                n = len(unique_vals)
+                if n > 0 and list(unique_vals) == list(range(n)):
+                    names[i] = "t"
+                    renamed = True
+                    break
+        if renamed:
+            df.index = df.index.set_names(names)
+
+    if "t" in df.index.names or "t" in df.columns:
+        utils.get_logger().debug(
+            "time_average skipped: 't' column already present in data"
+        )
+        return df
+
     assert len(avg_indices) == 2
-    # tvar = "t" if "t" in df.index.names else "dt"
-    # Old mysterious line of code above. Just in case this makes sense in some world, assert that it doesn't make sense.
-    assert "t" not in df.index.names
     tvar = "t"
 
     def apply_fn(x):
@@ -312,29 +347,15 @@ def time_average(df: pd.DataFrame, data_col: str, *avg_indices) -> pd.DataFrame:
 
     df_out = group_apply(df, apply_fn, data_col, list(avg_indices))
 
+    # Normalize innermost index name to 't' — handles pandas groupby().apply()
+    # silently dropping the name to None (version-dependent) or legacy 'dt'.
+    # Position-agnostic: works for both flat Index and MultiIndex.
+    if df_out.index.names[-1] != "t":
+        names = list(df_out.index.names)
+        names[-1] = "t"
+        df_out.index = df_out.index.set_names(names)
+
     return df_out
-
-
-# def fold(df: pd.DataFrame, apply_fold: bool = True) -> pd.DataFrame:
-#
-#     if not apply_fold:
-#         return df
-#
-#     assert len(df.columns) == 2
-#
-#     data_col = df.columns[-1]
-#
-#     array = df.sort_values('dt')[data_col].to_numpy()
-#     nt = len(array)
-#     folded_len = nt // 2 + 1
-#     array[1:nt // 2] = (array[1:nt // 2] + array[-1:nt // 2:-1]) / 2.0
-#
-#     return pd.DataFrame(
-#         array[:folded_len],
-#         index=pd.Index(range(folded_len), name='dt'),
-#         columns=[data_col]
-#     )
-#
 
 
 def call(df, fn_name, data_col, *args, **kwargs):

@@ -7,6 +7,30 @@ from pyfm.domain import OpList, Gamma, MassDict
 from pyfm.tasks.hadrons.types import CrossTerms, HighModeConfig
 
 
+_AXIAL_GAMMAS = frozenset(
+    {
+        Gamma.AXIAL_VEC_ONELINK,
+        Gamma.AXIAL_VEC_LOCAL,
+        Gamma.AXIAL_FOURVEC_ONELINK,
+        Gamma.AXIAL_FOURVEC_LOCAL,
+    }
+)
+
+# G5 hermiticity for connected two-point functions
+# -----------------------------------------------
+# Every propagator here is solved with apply_g5=True, so the requested
+# op.gamma is effectively multiplied by gamma5. The contract partner (the
+# "antiquark" side of a TwoPointOp) is chosen to exploit this:
+#   * PION_LOCAL (= G5_G5) becomes the identity once gamma5 is applied.
+#   * IDENTITY (= G1_G1) becomes gamma5 once applied.
+# Pairing a non-axial operator with a PION_LOCAL antiquark therefore yields the
+# standard g5-hermitic contraction. Axial operators instead pair with an
+# IDENTITY antiquark, and because the quark side reuses the same non-axial
+# VEC/FOURVEC propagator (see quark_gen / contraction_gen), a single VEC solve
+# produces both the vector and the axial correlators depending on which
+# antiquark it is contracted against.
+
+
 class TwoPointOp(t.NamedTuple):
     class Op(t.NamedTuple):
         gamma: Gamma
@@ -36,8 +60,11 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
     """Generates required propagators for the requested two-point functions
 
     Note:
-    - PION_LOCAL requires only the identity gamm operation (equivalent to G5_G5 with apply_g5=True)
+    - PION_LOCAL requires only the identity gamma operation (equivalent to G5_G5 with apply_g5=True)
     - (AXIAL_)VEC and (AXIAL_)FOURVEC operations require a vector/four-vector gamma solve paired with a (identity)G5_G5 solve
+    - Axial gammas contract against IDENTITY and reuse the non-axial VEC/FOURVEC
+      solve; every other gamma contracts against PION_LOCAL. See the module-level
+      G5_HERMITICITY note.
     """
     solver_labels = config.get_solver_labels(skip_cross=True)
     guess_solver_labels = solver_labels[:-1].copy()
@@ -52,44 +79,43 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
                 solver=slabel,
                 precon=slabel_guess,
             )
-            match op.gamma:
-                case Gamma.PION_LOCAL:
-                    yield TwoPointOp.Op(gamma=op.gamma, **common)
-                case (
-                    Gamma.AXIAL_VEC_ONELINK
-                    | Gamma.AXIAL_VEC_LOCAL
-                    | Gamma.AXIAL_FOURVEC_ONELINK
-                    | Gamma.AXIAL_FOURVEC_LOCAL
-                ):
-                    yield TwoPointOp.Op(gamma=Gamma.IDENTITY, **common)
-                case (
-                    Gamma.VEC_ONELINK
-                    | Gamma.VEC_LOCAL
-                    | Gamma.FOURVEC_ONELINK
-                    | Gamma.FOURVEC_LOCAL
-                ):
-                    yield TwoPointOp.Op(gamma=Gamma.PION_LOCAL, **common)
-                case _:
-                    raise ValueError(f"Unexpected Gamma value: {op.gamma}")
+            # Only axial gammas are *translated*: they contract against
+            # IDENTITY (instead of PION_LOCAL) and their vector solve uses the
+            # non-axial counterpart gamma. Every other gamma contracts with
+            # PION_LOCAL and solves its own gamma.
+            is_axial = op.gamma in _AXIAL_GAMMAS
 
+            # First (contract) solve: IDENTITY for axial gammas, PION_LOCAL
+            # otherwise.
+            yield TwoPointOp.Op(
+                gamma=Gamma.IDENTITY if is_axial else Gamma.PION_LOCAL, **common
+            )
+
+            # Second solve: axial gammas are translated to their non-axial
+            # counterpart; every other gamma solves its own gamma.
             match op.gamma:
-                case Gamma.VEC_LOCAL | Gamma.AXIAL_VEC_LOCAL:
+                case Gamma.AXIAL_VEC_LOCAL:
                     yield TwoPointOp.Op(gamma=Gamma.VEC_LOCAL, **common)
-                case Gamma.FOURVEC_LOCAL | Gamma.AXIAL_FOURVEC_LOCAL:
+                case Gamma.AXIAL_FOURVEC_LOCAL:
                     yield TwoPointOp.Op(gamma=Gamma.FOURVEC_LOCAL, **common)
-                case Gamma.AXIAL_VEC_ONELINK | Gamma.VEC_ONELINK:
+                case Gamma.AXIAL_VEC_ONELINK:
                     yield TwoPointOp.Op(gamma=Gamma.VEC_ONELINK, **common)
-                case Gamma.AXIAL_FOURVEC_ONELINK | Gamma.FOURVEC_ONELINK:
+                case Gamma.AXIAL_FOURVEC_ONELINK:
                     yield TwoPointOp.Op(gamma=Gamma.FOURVEC_ONELINK, **common)
                 case _:
-                    pass
+                    yield TwoPointOp.Op(gamma=op.gamma, **common)
 
 
 def contraction_gen(
     config: HighModeConfig,
 ) -> t.Iterator[t.Tuple[OpList.Op, TwoPointOp]]:
-    """Generates required contractions for the requested two-point functions
-    See get_quark_list notes for additional information
+    """Generates required contractions for the requested two-point functions.
+
+    Defaults to g5 hermiticity by pairing each operator with a PION_LOCAL
+    antiquark; axial gammas are the exception and pair with IDENTITY. The quark
+    side reuses the non-axial VEC/FOURVEC propagator so a single solve serves
+    both axial and non-axial correlators. See the module-level G5_HERMITICITY
+    note and quark_gen for the matching propagator set.
     """
     solver_labels = config.get_solver_labels(skip_cross=True)
     for op in config.operations:
@@ -124,39 +150,29 @@ def contraction_gen(
                 mass=mlabel2,
                 solver=slabel2,
             )
-            # Set antiquark
+            # Set antiquark: the g5-hermiticity contract partner. Axial gammas
+            # pair with IDENTITY (which is gamma5 once apply_g5 is applied);
+            # everything else pairs with PION_LOCAL (the identity under g5).
+            # See the module-level G5_HERMITICITY note.
+            is_axial = op.gamma in _AXIAL_GAMMAS
+            antiquark = TwoPointOp.Op(
+                gamma=Gamma.IDENTITY if is_axial else Gamma.PION_LOCAL, **common1
+            )
+            # Set quark: axial gammas reuse the non-axial counterpart
+            # propagator. Paired with the IDENTITY antiquark above this yields
+            # the axial correlator from the very same VEC/FOURVEC solve used for
+            # the non-axial correlator. Every other gamma solves its own gamma.
             match op.gamma:
-                case (
-                    Gamma.PION_LOCAL
-                    | Gamma.VEC_ONELINK
-                    | Gamma.VEC_LOCAL
-                    | Gamma.FOURVEC_ONELINK
-                    | Gamma.FOURVEC_LOCAL
-                ):
-                    antiquark = TwoPointOp.Op(gamma=Gamma.PION_LOCAL, **common1)
-                case (
-                    Gamma.AXIAL_VEC_ONELINK
-                    | Gamma.AXIAL_VEC_LOCAL
-                    | Gamma.AXIAL_FOURVEC_ONELINK
-                    | Gamma.AXIAL_FOURVEC_LOCAL
-                ):
-                    antiquark = TwoPointOp.Op(gamma=Gamma.IDENTITY, **common1)
-                case _:
-                    raise ValueError(f"Unexpected Gamma value: {op.gamma}")
-            # Set quark
-            match op.gamma:
-                case Gamma.PION_LOCAL:
-                    quark = TwoPointOp.Op(gamma=Gamma.PION_LOCAL, **common2)
-                case Gamma.VEC_LOCAL | Gamma.AXIAL_VEC_LOCAL:
+                case Gamma.AXIAL_VEC_LOCAL:
                     quark = TwoPointOp.Op(gamma=Gamma.VEC_LOCAL, **common2)
-                case Gamma.FOURVEC_LOCAL | Gamma.AXIAL_FOURVEC_LOCAL:
+                case Gamma.AXIAL_FOURVEC_LOCAL:
                     quark = TwoPointOp.Op(gamma=Gamma.FOURVEC_LOCAL, **common2)
-                case Gamma.AXIAL_VEC_ONELINK | Gamma.VEC_ONELINK:
+                case Gamma.AXIAL_VEC_ONELINK:
                     quark = TwoPointOp.Op(gamma=Gamma.VEC_ONELINK, **common2)
-                case Gamma.AXIAL_FOURVEC_ONELINK | Gamma.FOURVEC_ONELINK:
+                case Gamma.AXIAL_FOURVEC_ONELINK:
                     quark = TwoPointOp.Op(gamma=Gamma.FOURVEC_ONELINK, **common2)
                 case _:
-                    pass
+                    quark = TwoPointOp.Op(gamma=op.gamma, **common2)
             # Set sink
             sink = TwoPointOp.Op(gamma=op.gamma, **common2)
 

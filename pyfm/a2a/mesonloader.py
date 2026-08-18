@@ -252,7 +252,10 @@ def iter_meson_fields(
         result = []
 
         for i, (time, file) in enumerate(zip(current_times, mesonfiles)):
-            cache_key = (file, time)
+            meson_idx = i % len(diagram_config.mesons)
+            meson_config = diagram_config.mesons[meson_idx]
+
+            cache_key = (file, time, meson_config.mass_shift)
 
             if cache_key in cache:
                 logger.debug(f"Using cached {time} from {file}")
@@ -261,8 +264,17 @@ def iter_meson_fields(
 
             found = False
             for j in range(i):
-                if current_times[j] == time and mesonfiles[j] == file:
-                    cache_key_j = (mesonfiles[j], current_times[j])
+                meson_config_j = diagram_config.mesons[j % len(diagram_config.mesons)]
+                if (
+                    current_times[j] == time
+                    and mesonfiles[j] == file
+                    and meson_config_j.mass_shift == meson_config.mass_shift
+                ):
+                    cache_key_j = (
+                        mesonfiles[j],
+                        current_times[j],
+                        meson_config_j.mass_shift,
+                    )
                     if cache_key_j in cache:
                         logger.debug(f"Found {time} at index {j}")
                         result.append(cache[cache_key_j])
@@ -270,9 +282,6 @@ def iter_meson_fields(
                         break
 
             if not found:
-                meson_idx = i % len(diagram_config.mesons)
-                meson_config = diagram_config.mesons[meson_idx]
-
                 w_idx_str = contraction[i * 2]
                 v_idx_str = contraction[i * 2 + 1]
 

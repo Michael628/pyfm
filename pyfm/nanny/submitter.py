@@ -61,12 +61,20 @@ def plan_submission(
     """Select the next step from todo state and bundle its cfgnos into a JobBundle.
 
     Walks the todo in priority order, latches the active step from the first
-    unfinished task, resolves its pre-built JobConfig, and bundles contiguous
-    same-step cfgnos up to ``job_config.max_cases`` (a config object, not a raw
-    int). Preserves the contiguity and ``step_request`` semantics of the old
-    step-selection/bundling pass it replaces. Returns None when no tasks are
+    unfinished task, resolves its pre-built JobConfig, and bundles same-step
+    cfgnos up to ``job_config.max_cases`` (a config object, not a raw int),
+    skipping entries whose next ready task is a different step so the scan
+    covers the whole todo list. Applies ``step_request`` as an exact-name
+    filter on each entry's next ready task. Returns None when no tasks are
     ready.
+    Raises ValueError when ``step_request`` names a step with no ``job_setup``
+    config.
     """
+    if step_request is not None and step_request not in job_configs:
+        raise ValueError(
+            f"No `job_setup` parameters provided for `{step_request}`."
+        )
+
     current_step = None
     job_config = None
     cfgno_steps = []
@@ -88,8 +96,9 @@ def plan_submission(
                     )
                 job_config = job_configs[current_step]
             elif current_step != new_step:
-                # Ensure only one step type per bundled job
-                break
+                # Skip entries not ready for the bundled step; keep scanning
+                # the whole todo so gaps don't truncate the bundle.
+                continue
             cfgno_steps.append([cfgno, index])
 
         # Stop when we have enough for a bundle

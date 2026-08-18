@@ -4,6 +4,7 @@ function add_common_install_paths() {
   QUDA_INSTALL=${PYFMTOPDIR}/quda/install${PYFM_SYSTEM_EXT}
   HADRONSMILC_INSTALL=${PYFMTOPDIR}/HadronsMILC/install${PYFM_SYSTEM_EXT}
   GRID_INSTALL=${PYFMTOPDIR}/Grid/install${PYFM_SYSTEM_EXT}
+  GRID_BUILD_TEST=${PYFMTOPDIR}/Grid/build${PYFM_SYSTEM_EXT}/GridMilc/tests/
   GRIDLMA_INSTALL=${PYFMTOPDIR}/grid-lma/install${PYFM_SYSTEM_EXT}
   MAKELINKSHISQ_INSTALL=${PYFMTOPDIR}/milc_qcd/install${PYFM_SYSTEM_EXT}
   DEPSINSTALL=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT}
@@ -16,6 +17,10 @@ function add_common_install_paths() {
       export PATH=${PATH}:${b}/bin
     fi
   done
+
+  if [ -d  $GRID_BUILD_TEST ]; then
+      export PATH=${PATH}:${GRID_BUILD_TEST}
+  fi
 
   export PYTHONPATH=${PYTHONPATH}:${PYFMTOPDIR}/pyfm
 
@@ -54,16 +59,54 @@ PYFM_SYSTEM_EXT="-${CONFIG_SYSTEM}${_EXT_SUFFIX}"
 
 add_common_install_paths
 
-if [ -f "$(pwd)/env${PYFM_SYSTEM_EXT}.sh" ]; then
-  echo "Loading: $(pwd)/env${PYFM_SYSTEM_EXT}.sh"
-  source "$(pwd)/env${PYFM_SYSTEM_EXT}.sh"
-elif [ -f "${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh" ]; then
-  echo "Loading: ${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh"
-  source "${PYFMTOPDIR}/env${PYFM_SYSTEM_EXT}.sh"
-elif [ -f "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env${_EXT_SUFFIX}.sh" ]; then
-  echo "Loading: ${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env${_EXT_SUFFIX}.sh"
-  source "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}/env${_EXT_SUFFIX}.sh"
-else
-  echo "No env.sh found for system '${CONFIG_SYSTEM}'"
+# Resolve the system env script via an ordered search. Candidates are listed
+# from LOWEST to HIGHEST precedence; each existing file overwrites
+# PYFM_ENV_SCRIPT, so once the loop exits it holds the highest-precedence
+# match. This reproduces the original if/else precedence (cwd > topdir >
+# system dir) and, within any single directory, lets an env-<ext>.sh variant
+# supersede a plain env.sh (e.g. systems/<name>/env-milc.sh over env.sh).
+# Each entry is "<kind>|<path>", where <kind> is "ext" or "fallback" so the
+# chosen file's kind is tracked alongside its path.
+_CANDIDATES=(
+  "${PYFMTOPDIR}/pyfm/systems/${CONFIG_SYSTEM}"
+  "${PYFMTOPDIR}"
+  "$(pwd)"
+)
+
+PYFM_ENV_SCRIPT=''
+PYFM_BIND_SCRIPT=''
+for _path in "${_CANDIDATES[@]}"; do
+  # Set env script
+  if [ -f "${_path}/env.sh" ]; then
+    PYFM_ENV_SCRIPT="${_path}/env.sh"
+  fi
+  if [ -f "${_path}/env${PYFM_SYSTEM_EXT}.sh" ]; then
+    PYFM_ENV_SCRIPT="${_path}/env${PYFM_SYSTEM_EXT}.sh"
+  fi
+
+  # Set gpu bind script
+  if [ -f "${_path}/bind-gpu.sh" ]; then
+    PYFM_BIND_SCRIPT="${_path}/bind-gpu.sh"
+  fi
+  if [ -f "${_path}/bind-gpu${PYFM_SYSTEM_EXT}.sh" ]; then
+    PYFM_BIND_SCRIPT="${_path}/bind-gpu${PYFM_SYSTEM_EXT}.sh"
+  fi
+done
+unset _path
+
+if [ -z "${PYFM_ENV_SCRIPT}" ]; then
+  echo "ERROR: No env.sh found for system '${PYFM_SYSTEM_EXT}'"
   return 1
 fi
+echo "Loading: ${PYFM_ENV_SCRIPT}"
+source "${PYFM_ENV_SCRIPT}"
+
+if [ -f "${PYFM_BIND_SCRIPT}" ]; then
+  echo "Found bind script: ${PYFM_BIND_SCRIPT}"
+  export PYFM_BIND_SCRIPT
+else
+  echo "WARNING: No bind-gpu.sh found for system '${PYFM_SYSTEM_EXT}'"
+fi
+
+
+unset _CANDIDATES

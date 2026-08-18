@@ -180,6 +180,9 @@ submit:
     smear:
       nodes: 1
       geom: [1, 1, 1, 1]
+    hadrons_smear:
+      nodes: 1
+      geom: [1, 1, 1, 1]
     contract:
       ppn: 1
       nodes: 1
@@ -194,10 +197,19 @@ job_setup:
     run: milc.PYFM_WORKSPACE_SCHEDULER
     job_type: smear
     tasks:
-      unsmeared_file: "lat/v5/l{ens}{series}.{cfg}" # Location of unsmeared file
       node_geometry: "1 1 1 1"
     io: "smear"
     wall_time: "00:10:00"
+  hadrons_smear:
+    run: grid.PYFM_WORKSPACE_SCHEDULER
+    io: "hadrons-smear"
+    wall_time: "00:10:00"
+    job_type: hadrons
+    task_type: lmi
+    tasks:
+      gauge:
+        action_type: smearv5
+        save_ildg: true
   contract:
     run: contract.PYFM_WORKSPACE_SCHEDULER
     job_type: contract

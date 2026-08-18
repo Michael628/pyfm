@@ -160,7 +160,7 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
 
 
 def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[str]:
-    gammas = ["pion_local", "vec_local", "vec_onelink"]
+    gammas = ["pion_local", "scalar_local", "vec_local", "vec_onelink"]
 
     def gamma_order(name):
         for i, gamma in enumerate(gammas):

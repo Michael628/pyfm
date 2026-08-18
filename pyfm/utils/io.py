@@ -193,6 +193,8 @@ def get_file_ext_from_format(format: str) -> str:
             return ".h5"
         case "csv":
             return ".csv"
+        case "parquet":
+            return ".parquet"
         case "dict":
             return ".npy"
         case _:

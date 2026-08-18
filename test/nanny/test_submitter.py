@@ -197,6 +197,76 @@ class TestPlanSubmission:
         bundle = plan_submission(todo_list, {"smear": _job_config("smear", 3)})
         assert len(bundle.cfgno_steps) == 3
 
+    def test_step_request_gathers_past_not_ready_gap(self):
+        # Regression (bug report): with max_cases > 1, a not-ready entry must
+        # not truncate the scan — later ready entries are still bundled.
+        # d.2484's next ready task is grid_smear, so -j grid skips it.
+        todo_list = {
+            "d.2292": ["d.2292", "grid_smear_X", "8763080", "grid", "0", "contract", "0"],
+            "d.2484": ["d.2484", "grid_smear", "0", "grid", "0", "contract", "0"],
+            "d.2500": ["d.2500", "grid_smear_X", "8763081", "grid", "0", "contract", "0"],
+        }
+        bundle = plan_submission(
+            todo_list,
+            {
+                "grid": _job_config("grid", 2),
+                "grid_smear": _job_config("grid_smear", 2),
+            },
+            step_request="grid",
+        )
+        assert bundle.job_config.step == "grid"
+        assert [c[0] for c in bundle.cfgno_steps] == ["d.2292", "d.2500"]
+
+    def test_no_request_gathers_same_step_past_gap(self):
+        # Without a step request, mismatched entries are skipped and the scan
+        # continues across the gap (old behavior: break at first mismatch).
+        todo_list = {
+            "a.60": ["a.60", "smear", "0"],
+            "a.100": ["a.100", "hadrons", "0"],
+            "a.140": ["a.140", "smear", "0"],
+        }
+        bundle = plan_submission(
+            todo_list,
+            {"smear": _job_config("smear", 10), "hadrons": _job_config("hadrons", 10)},
+        )
+        assert bundle.job_config.step == "smear"
+        assert [c[0] for c in bundle.cfgno_steps] == ["a.60", "a.140"]
+
+    def test_no_request_respects_max_cases_across_gap(self):
+        # The max_cases cap still terminates the scan after skips.
+        todo_list = {
+            "a.60": ["a.60", "smear", "0"],
+            "a.100": ["a.100", "hadrons", "0"],
+            "a.140": ["a.140", "smear", "0"],
+            "a.180": ["a.180", "smear", "0"],
+        }
+        bundle = plan_submission(
+            todo_list,
+            {"smear": _job_config("smear", 2), "hadrons": _job_config("hadrons", 2)},
+        )
+        assert bundle.job_config.step == "smear"
+        assert [c[0] for c in bundle.cfgno_steps] == ["a.60", "a.140"]
+
+    def test_step_request_unknown_step_raises(self):
+        # A -j value with no job_setup config fails fast (typo protection)
+        # instead of idling the nanny loop forever.
+        todo_list = {"a.60": ["a.60", "smear", "0"]}
+        with pytest.raises(ValueError, match="gird"):
+            plan_submission(
+                todo_list,
+                {"smear": _job_config("smear", 10)},
+                step_request="gird",
+            )
+
+    def test_step_request_known_step_still_plans(self):
+        # A known step request passes the guard and plans normally.
+        todo_list = {"a.60": ["a.60", "smear", "0"]}
+        bundle = plan_submission(
+            todo_list, {"smear": _job_config("smear", 10)}, step_request="smear"
+        )
+        assert bundle.job_config.step == "smear"
+        assert [c[0] for c in bundle.cfgno_steps] == ["a.60"]
+
 
 class TestMarkQueuedTodoEntries:
     def test_marks_with_barrier(self):

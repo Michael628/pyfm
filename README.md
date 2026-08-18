@@ -59,7 +59,7 @@ All commands read a YAML parameter file (default `params.yaml`). See [`docs/pyfm
 
 ```bash
 # Add todo entries for series 'a', configs 1000–2000 (step 10), steps hadrons and contract
-pyfm nanny add a hadrons contract --cfg-range 1000 2010 10
+pyfm nanny add -s a hadrons contract --config-range 1000 2010 10
 
 # Run the nanny loop (submit and monitor jobs)
 pyfm nanny run [-j hadrons]
@@ -76,10 +76,10 @@ pyfm nanny check -j hadrons -s a -n 1000 -v
 
 ```bash
 # Generate input file for a specific job/series/config
-pyfm task generate -j hadrons -s a -n 1000
+pyfm nanny generate -j hadrons -s a -n 1000
 
 # Aggregate outputs across all configs
-pyfm task aggregate -j hadrons [-f hdf5] [--average] [--skip-existing]
+pyfm export corr -j hadrons [-f hdf5] [--average] [--skip-existing]
 ```
 
 ### A2A contractions

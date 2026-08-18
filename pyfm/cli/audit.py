@@ -5,6 +5,7 @@ import click
 from pyfm import utils
 from pyfm.performance import analyze_file, benchmark_lmi_performance
 from pyfm.nanny.validator import compare_task_outputs
+from pyfm.cli._options import job_option, param_file_option
 
 
 @click.group()
@@ -26,7 +27,7 @@ def runtime(output_file):
 
 
 @audit.command(name="benchmark")
-@click.option("-j", "--job", type=str, required=True, help="Job step name.")
+@job_option(required=True, help="Job step name.")
 @click.option(
     "--log",
     "log_file",
@@ -34,13 +35,7 @@ def runtime(output_file):
     required=True,
     help="Hadrons/Grid performance log file.",
 )
-@click.option(
-    "-p",
-    "--param-file",
-    type=str,
-    default="params.yaml",
-    help="Path to YAML parameter file.",
-)
+@param_file_option()
 def benchmark(job, log_file, param_file):
     """Emit component-first JSON benchmark data for a configured Hadrons/Grid LMI LOG."""
     try:
@@ -52,13 +47,7 @@ def benchmark(job, log_file, param_file):
 
 
 @audit.command(name="output")
-@click.option(
-    "-p",
-    "--param-file",
-    type=str,
-    default="params.yaml",
-    help="Path to YAML parameter file.",
-)
+@param_file_option()
 @click.option(
     "-j",
     "--job",

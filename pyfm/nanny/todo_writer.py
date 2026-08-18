@@ -10,16 +10,16 @@ def parse_cfgs(cfg: t.Sequence[int] | None, cfg_range: t.Sequence[int] | None) -
     if cfg_range is not None:
         if len(cfg_range) != 3:
             raise ValueError(
-                f"--cfg-range requires exactly 3 integers (start, stop, step), got {len(cfg_range)}"
+                f"--config-range requires exactly 3 integers (start, stop, step), got {len(cfg_range)}"
             )
         start, stop, step = cfg_range
         cfgs = list(range(start, stop + 1, step))
         if not cfgs:
             raise ValueError(
-                f"--cfg-range {start} {stop} {step} produces an empty range"
+                f"--config-range {start} {stop} {step} produces an empty range"
             )
         return [str(c) for c in cfgs]
-    raise ValueError("Either --cfg or --cfg-range must be provided")
+    raise ValueError("Either --config or --config-range must be provided")
 
 
 def validate_steps(steps: t.Sequence[str], job_setup: dict[str, t.Any]) -> None:
