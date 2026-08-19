@@ -37,13 +37,17 @@ class ResolvedHdf5Context:
     """Per-batch HDF5 context, resolved ONCE and shared across all files.
 
     Built by `_resolve_load_context`. Carries the build-once index template
-    (D1, for raw Grid files), the PyTables flag (D2), and the resolved
-    `LoadH5Config` so every file reuses the same index and config object.
+    (D1, for raw Grid files), the PyTables flag (D2), the resolved
+    `LoadH5Config` so every file reuses the same index and config object, and
+    the per-open HDF5 locking mode (D3 guard): ``False`` when the batch loads
+    concurrently (a writer holding any file cannot serialize the pool), ``None``
+    (HDF5 default) otherwise.
     """
 
     is_pytables: bool
     h5_config: t.Optional[LoadH5Config]
     template: t.Optional[Hdf5FrameTemplate]
+    locking: bool | None = None
 
 
 @dataclasses.dataclass(frozen=True)
@@ -60,7 +64,9 @@ class ResolvedLoadContext:
     h5_context: t.Optional[ResolvedHdf5Context] = None
 
 
-def _detect_hdf5_format(filename: str) -> t.Literal["pytables", "raw"]:
+def _detect_hdf5_format(
+    filename: str, *, locking: bool | None = None
+) -> t.Literal["pytables", "raw"]:
     """Detect the internal format of an HDF5 file via a single O(1) root probe.
 
     PyTables output (`writer.py:116` `to_hdf(key="corr", mode="w")`, default
@@ -71,8 +77,10 @@ def _detect_hdf5_format(filename: str) -> t.Literal["pytables", "raw"]:
     PyTables PRESENCE, not attribute absence (a naive "has attrs" check would
     falsely classify raw Grid as PyTables). Returns "pytables" if either marker
     is found, else "raw".
+
+    `locking` is forwarded to the probe open (see `_resolve_load_context`).
     """
-    with h5py.File(filename) as file:
+    with h5py.File(filename, locking=locking) as file:
         if _PYTABLES_ROOT_ATTR in file.attrs:
             return "pytables"
         # Fallback: top-level group carrying a pandas_type attribute.
@@ -113,6 +121,7 @@ def get_hdf5_loader(
     repl: t.Dict[str, str],
     *,
     is_pytables: bool | None = None,
+    locking: bool | None = None,
     **kwargs,
 ) -> pd.DataFrame:
     """Loads data from an HDF5 file and returns it as a DataFrame.
@@ -130,18 +139,22 @@ def get_hdf5_loader(
         is_pytables: Optional pre-resolved format hint. When ``None`` the file is
             probed individually. When truthy, routes straight to ``pd.read_hdf``.
             When falsy, skips the probe and opens via ``h5py.File``.
+        locking: HDF5 open-time locking mode forwarded to ``h5py.File``. ``None``
+            (default) uses HDF5's own default; ``False`` skips locking (used when
+            the batch loads concurrently). Ignored on the PyTables branch
+            (``pd.read_hdf`` has no such kwarg).
         **kwargs: Additional keyword arguments passed to ``LoadH5Config``.
 
     Returns:
         pd.DataFrame: The loaded data.
     """
     if is_pytables is None:
-        is_pytables = _detect_hdf5_format(filename) == "pytables"
+        is_pytables = _detect_hdf5_format(filename, locking=locking) == "pytables"
 
     if is_pytables:
         return pd.read_hdf(filename)
 
-    with h5py.File(filename) as file:
+    with h5py.File(filename, locking=locking) as file:
         h5_config = LoadH5Config.create(**kwargs).format_data_strings(repl)
         return data_to_frame(file, h5_config)
 
@@ -166,6 +179,7 @@ def get_file_loader(file_path: str):
 
 def _resolve_load_context(
     file_repls: t.List[t.Tuple[str, t.Dict]],
+    max_workers: int = 1,
     **kwargs,
 ) -> ResolvedLoadContext:
     """Resolve per-batch load context once: format probe + build-once template.
@@ -175,13 +189,24 @@ def _resolve_load_context(
     reuse a single index/config object across all files. For non-HDF5 formats
     (`h5_context is None`) the legacy partial is returned unchanged.
 
-    `max_workers` is popped by the caller before reaching here (top-level kwarg,
-    never a dict entry — baking it into `LoadArrayConfig.create` would TypeError).
+    `max_workers` derives the HDF5 locking mode (D3 guard): concurrent batches
+    (>1 worker) open raw files with `locking=False` so a writer holding any
+    file cannot serialize the pool; single-worker batches keep HDF5's default
+    locking (fail-fast on held files). An environment-variable guard is NOT an
+    alternative here — HDF5 reads `HDF5_USE_FILE_LOCKING` at library init,
+    which precedes any set this process could make after `import h5py`.
+
+    `max_workers` must be passed positionally-or-by-name here, never inside
+    `kwargs` (top-level kwarg, never a dict entry — baking it into
+    `LoadArrayConfig.create` would TypeError).
     """
     file_loader_fn = get_file_loader(file_repls[0][0])
+    h5_locking: bool | None = False if max_workers > 1 else None
     h5_context = None
     if file_loader_fn is get_hdf5_loader:
-        is_pytables = _detect_hdf5_format(file_repls[0][0]) == "pytables"
+        is_pytables = (
+            _detect_hdf5_format(file_repls[0][0], locking=h5_locking) == "pytables"
+        )
         h5_config = None
         template = None
         if not is_pytables:
@@ -190,14 +215,21 @@ def _resolve_load_context(
             )
             template = build_hdf5_template(h5_config)
         h5_context = ResolvedHdf5Context(
-            is_pytables=is_pytables, h5_config=h5_config, template=template
+            is_pytables=is_pytables,
+            h5_config=h5_config,
+            template=template,
+            locking=h5_locking,
         )
     if h5_context is not None:
-        # Bind the resolved format hint into the partial so every file in a
-        # PyTables batch routes straight to pd.read_hdf without re-probing (D2's
-        # single O(1) probe per batch). Non-HDF5 loaders don't accept is_pytables.
+        # Bind the resolved format hint and locking mode into the partial so
+        # every file in a PyTables batch routes straight to pd.read_hdf without
+        # re-probing (D2's single O(1) probe per batch), and every raw open
+        # carries the batch's locking mode. Non-HDF5 loaders accept neither.
         file_loader = partial(
-            file_loader_fn, is_pytables=h5_context.is_pytables, **kwargs
+            file_loader_fn,
+            is_pytables=h5_context.is_pytables,
+            locking=h5_context.locking,
+            **kwargs,
         )
     else:
         file_loader = partial(file_loader_fn, **kwargs)
@@ -208,6 +240,7 @@ def _load_one_raw_hdf5(
     filename: str,
     repl: t.Dict[str, str],
     template: Hdf5FrameTemplate,
+    locking: bool | None = None,
 ) -> pd.DataFrame:
     """Worker for one raw Grid HDF5 file using the pre-built index template.
 
@@ -217,8 +250,10 @@ def _load_one_raw_hdf5(
     read-only and never mutated, so it is safe to share across threads. Returns
     only the per-file DataFrame; the caller owns GroupTuple construction so the
     legacy yield path and the chunked concat path share one worker body.
+
+    `locking` is forwarded to the open (see `_resolve_load_context`).
     """
-    with h5py.File(filename) as file:
+    with h5py.File(filename, locking=locking) as file:
         df = _fill_hdf5_frame(file, template)
     if repl:
         df[list(repl.keys())] = tuple(repl.values())
@@ -248,7 +283,7 @@ def load_files(
 
         max_workers = min(kwargs.pop("max_workers", 1), len(file_repls))
 
-        ctx = _resolve_load_context(file_repls, **kwargs)
+        ctx = _resolve_load_context(file_repls, max_workers, **kwargs)
         group_cols = list(file_repls[0][1].keys())
         GroupTuple = utils.create_group_tuple(*group_cols)
 
@@ -256,7 +291,10 @@ def load_files(
             utils.get_logger().debug(f"Loading file: {filename}")
             if ctx.h5_context is not None and ctx.h5_context.template is not None:
                 df = _load_one_raw_hdf5(
-                    filename, repl, ctx.h5_context.template
+                    filename,
+                    repl,
+                    ctx.h5_context.template,
+                    locking=ctx.h5_context.locking,
                 )
             else:
                 df = ctx.file_loader(filename, repl)
@@ -293,8 +331,9 @@ def load_files_chunked(
     concatenates the chunk results into a single DataFrame. Bounds peak RAM to
     one chunk's worth of frames in flight rather than all N.
 
-    `max_workers` is a top-level kwarg (never a dict entry). Caller is expected
-    to set `HDF5_USE_FILE_LOCKING=FALSE` when `max_workers > 1`.
+    When ``max_workers > 1`` the loader opens raw HDF5 files with
+    ``locking=False`` (see `_resolve_load_context`); no environment-variable
+    guard is needed or effective.
     """
     file_repls = utils.io.process_files(
         filestem, lambda f, r: (f, r), replacements, regex, wildcard_fill
@@ -310,13 +349,16 @@ def load_files_chunked(
     n_files = len(file_repls)
     max_workers = min(max_workers, n_files)
 
-    ctx = _resolve_load_context(file_repls, **kwargs)
+    ctx = _resolve_load_context(file_repls, max_workers, **kwargs)
 
     def load_one(filename, repl):
         utils.get_logger().debug(f"Loading file: {filename}")
         if ctx.h5_context is not None and ctx.h5_context.template is not None:
             df = _load_one_raw_hdf5(
-                filename, repl, ctx.h5_context.template
+                filename,
+                repl,
+                ctx.h5_context.template,
+                locking=ctx.h5_context.locking,
             )
         else:
             df = ctx.file_loader(filename, repl)

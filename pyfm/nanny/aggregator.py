@@ -287,11 +287,10 @@ def load_data(
     result = {}
     logger = utils.get_logger()
 
-    # Set HDF5 file locking off once per process before raising worker count
-    # (D3). Only set when actually concurrent; default max_workers=1 leaves the
-    # environment untouched (D6 conservative opt-in).
-    if max_workers > 1:
-        os.environ["HDF5_USE_FILE_LOCKING"] = "FALSE"
+    # The HDF5 concurrency guard lives in the loader: `_resolve_load_context`
+    # passes locking=False to h5py opens when max_workers > 1. (An os.environ
+    # set here would be a no-op — HDF5 reads HDF5_USE_FILE_LOCKING at library
+    # init, which precedes any set in this process.)
 
     for key in agg_params["run"]:
         run_params = agg_params[key]
