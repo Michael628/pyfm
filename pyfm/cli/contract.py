@@ -37,6 +37,7 @@ def contract():
 def run(param_file, param_file_opt, do_time_average):
     """Execute A2A contractions for all diagrams defined in the parameter file."""
     from sympy.utilities.iterables import multiset_permutations
+    import pyfm.tasks.contract  # noqa: F401 — registers build hooks for ContractConfig/DiagramConfig
     from pyfm.a2a.types import ContractConfig
     from pyfm.domain import LoadDictConfig
     from pyfm.core.builder import build_config
