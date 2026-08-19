@@ -121,11 +121,17 @@ def process_files(
 
         # Preprocess `fstring` to handle duplicate keys in regex replacements
         fstring_keys: t.List[str] = format_keys(fstring)
+        # Filter to keys that occur in the filestem BEFORE the emptiness check:
+        # a brace-free stem with non-matching replacements (e.g. the
+        # skip-existing re-read passes {"series": ..., "format": ...} against
+        # "out/corr.csv") must yield the plain stem, not crash on an empty
+        # product inside zip(*(...)).
+        if replacements:
+            replacements = {k: v for k, v in replacements.items() if k in fstring_keys}
         if not replacements:
             yield freeze({}), fstring
             return
 
-        replacements = {k: v for k, v in replacements.items() if k in fstring_keys}
         keys, repls = zip(
             *(
                 (k, map(str, r)) if isinstance(r, t.List) else (k, [str(r)])
