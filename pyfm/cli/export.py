@@ -27,7 +27,7 @@ def export():
     pass
 
 
-@export.command()
+@export.command(no_args_is_help=True)
 @param_file_option()
 @job_option(required=True, help="Job step name to aggregate.")
 @format_option()
@@ -46,7 +46,7 @@ def corr(param_file, job, fmt, average, skip_existing, logging_level):
     )
 
 
-@export.command()
+@export.command(no_args_is_help=True)
 @param_file_option()
 @job_option(required=True, help="Job step whose aggregated output to convert.")
 @format_option(choices=("csv", "hdf5", "dict", "parquet"))
