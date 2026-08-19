@@ -60,12 +60,14 @@ def job_option(required: bool = False, default=None, help: str = "Job step name.
 
     ``required`` / ``default`` / ``help`` vary per command, so they are passed
     explicitly at each call site.
+
+    ``default=None`` *omits* the ``default`` kwarg rather than passing it
+    through. Since click 8.2 an explicit ``default=None`` counts as a real
+    value (the ``UNSET`` sentinel marks "missing"), which silently defeats
+    ``required=True``. Omitting the kwarg restores required-option errors and
+    keeps optional options surfacing as ``None`` in the callback.
     """
-    return click.option(
-        "-j",
-        "--job",
-        type=str,
-        required=required,
-        default=default,
-        help=help,
-    )
+    kwargs = {"type": str, "required": required, "help": help}
+    if default is not None:
+        kwargs["default"] = default
+    return click.option("-j", "--job", **kwargs)
