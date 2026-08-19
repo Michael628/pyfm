@@ -64,6 +64,41 @@ def test_corr_skip_existing_flag(runner):
         )
 
 
+def test_corr_generate_manifest_flag(runner):
+    """Positive --generate-manifest dispatch on the real export corr command
+    (previously covered only via the deprecated task aggregate alias)."""
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data") as mock_agg,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(cli, ["export", "corr", "-j", "hadrons_lmi", "--generate-manifest"])
+        assert result.exit_code == 0, result.output
+        mock_agg.assert_called_once_with(
+            "hadrons_lmi",
+            FAKE_PARAMS,
+            format="csv",
+            average=False,
+            skip_existing=False,
+            generate_manifest=True,
+            max_workers=1,
+        )
+
+
+def test_corr_generate_manifest_conflicts_with_skip_existing(runner):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data") as mock_agg,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli,
+            ["export", "corr", "-j", "hadrons_lmi", "--generate-manifest", "--skip-existing"],
+        )
+        assert result.exit_code != 0
+        mock_agg.assert_not_called()
+
+
 def test_corr_custom_format(runner):
     with (
         patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
