@@ -424,6 +424,33 @@ def test_convert_forwards_dict_metadata():
     assert lkw["array_labels"] == {"t1": "0..1", "t2": "0..1"}
 
 
+def test_load_convert_data_preserves_restored_index_levels():
+    """Regression guard: index-restoring readers (hdf5/parquet) hand back the
+    written table's index already rebuilt, so leftover columns must extend it —
+    parity with the flat csv read — not silently replace the restored levels
+    via set_index."""
+    run_params = {
+        "out_files": {"filestem": "processed/{format}/pion"},
+        "load_files": {},
+    }
+    idx = pd.MultiIndex.from_product([["c0", "c1"], ["t1", "t2"]], names=["cfg", "t"])
+    restored = pd.DataFrame(
+        {"corr": [1.0, 2.0, 3.0, 4.0], "extra": list("abcd")}, index=idx
+    )
+    flat = restored.reset_index()  # csv read: everything comes back as columns
+
+    with patch("pyfm.nanny.aggregator.dio") as mock_dio:
+        mock_dio.load_files.return_value.agg.return_value = restored
+        out_restored = aggregator.load_convert_data(run_params, "hdf5")
+        mock_dio.load_files.return_value.agg.return_value = flat
+        out_flat = aggregator.load_convert_data(run_params, "csv")
+
+    assert out_restored.index.names == ["cfg", "t", "extra"]
+    assert list(out_restored.columns) == ["corr"]
+    assert out_flat.index.names == ["cfg", "t", "extra"]
+    assert out_restored.sort_index().equals(out_flat.sort_index())
+
+
 def test_convert_output_single_key_is_exact_stem():
     task = _make_task(_agg_single())
     with (

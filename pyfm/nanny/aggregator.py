@@ -559,6 +559,13 @@ def load_convert_data(
 
     non_index_cols = {data_col, "format"} | set(stem_keys)
     index_cols = [c for c in df.columns if c not in non_index_cols]
+    if (
+        index_cols
+        and df.index.names
+        and all(n is not None for n in df.index.names)
+    ):
+        df = df.reset_index()
+        index_cols = [c for c in df.columns if c not in non_index_cols]
     if index_cols:
         df = df.set_index(index_cols)
     return df
