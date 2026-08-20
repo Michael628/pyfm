@@ -45,8 +45,8 @@ def generate(ctx, param_file, job, series, cfg):
     type=int,
     default=1,
     help=(
-        "Number of worker threads for loading HDF5 files "
-        "(default: 1, today's behavior)."
+        "Number of workers for parallel file loading; loads serially "
+        "when 1 or below the small-batch threshold (default: 1)."
     ),
 )
 @logging_level_option()

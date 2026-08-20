@@ -23,13 +23,33 @@ from pyfm.dataio.converter import (
 from pyfm.domain import WrappedDataPipe
 from pyfm import utils
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
+
+import multiprocessing
+import time
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
 
 _PYTABLES_ROOT_ATTR = "PYTABLES_FORMAT_VERSION"
+
+# D10: pinned multiprocessing start method for the chunked load pool. Never
+# rely on interpreter defaults (Python 3.14 flips the Linux default to
+# forkserver; Aurora's 3.12 defaults to fork). "fork" is the measured cheapest
+# (≈22 ms pool startup vs ≈430–450 ms for spawn/forkserver); the parent's
+# already-initialized HDF5 library makes fork's COW inheritance an
+# empirically-cleared risk class (workers open files only in-child; the format
+# probe's `with` block closed before pool construction). Cleared by the Aurora
+# fork-arm acceptance gate; fallback if it deadlocks: "forkserver" + raise
+# _POOL_MIN_FILES to ~1000.
+_MP_START_METHOD = "fork"
+
+# D9: minimum file count for the process pool to engage (executor startup
+# dominates below this). Initial value sits inside the measured fork
+# crossover bracket (N* ≈ 5–20 files); recalibrate from the Aurora grid —
+# changing it is a one-constant edit. Bench override: pool_threshold kwarg.
+_POOL_MIN_FILES = 8
 
 
 @dataclasses.dataclass(frozen=True)
@@ -260,6 +280,41 @@ def _load_one_raw_hdf5(
     return df
 
 
+def _load_chunk(
+    chunk: t.List[t.Tuple[str, t.Dict]],
+    ctx: ResolvedLoadContext,
+) -> pd.DataFrame:
+    """Worker for one chunk of files: load each and concat in-child (D8).
+
+    Module-scope so `ProcessPoolExecutor.submit` can pickle it (the old
+    per-file closure lived inside `load_files_chunked` and could not cross a
+    process boundary). Raw Grid files reuse `_load_one_raw_hdf5` unchanged;
+    every other format goes through the picklable `ctx.file_loader` partial
+    with the replacement columns attached. The chunk's `pd.concat` runs
+    in-child (D8), collapsing N per-file pickle round-trips into one frame
+    per chunk. `ctx` (and the template it carries) is pickled per chunk-task
+    — read-only and never mutated, so per-child copies are safe. Returns only
+    the chunk frame; the caller owns the terminal concat. Doubles as the W=1
+    serial fast path, where it runs in-process over the whole batch.
+    """
+    frames = []
+    for filename, repl in chunk:
+        utils.get_logger().debug(f"Loading file: {filename}")
+        if ctx.h5_context is not None and ctx.h5_context.template is not None:
+            df = _load_one_raw_hdf5(
+                filename,
+                repl,
+                ctx.h5_context.template,
+                locking=ctx.h5_context.locking,
+            )
+        else:
+            df = ctx.file_loader(filename, repl)
+            if repl:
+                df[list(repl.keys())] = tuple(repl.values())
+        frames.append(df)
+    return pd.concat(frames)
+
+
 def load_files(
     filestem: str | t.List[str],
     replacements: t.Dict | None = None,
@@ -321,20 +376,57 @@ def load_files_chunked(
     wildcard_fill: bool = False,
     skip_file_set: t.List[str] | None = None,
     max_workers: int = 1,
+    pool_threshold: int = _POOL_MIN_FILES,
+    start_method: str = _MP_START_METHOD,
+    stats: t.Dict[str, t.Any] | None = None,
     **kwargs,
 ) -> pd.DataFrame:
-    """Load, concat, and return one DataFrame using a chunked thread pool.
+    """Load, concat, and return one DataFrame using a chunked process pool.
 
-    New chunk-aware entry point (D3/D4): resolves the load context once (template
-    + format probe), owns a `ThreadPoolExecutor`, submits worker-aligned chunks
-    of ``ceil(N/max_workers)`` files, drains and concatenates each chunk, then
-    concatenates the chunk results into a single DataFrame. Bounds peak RAM to
-    one chunk's worth of frames in flight rather than all N.
+    Chunk-aware entry point (D3/D4/D8): resolves the load context once
+    (template + format probe), then executes worker-aligned chunks of
+    ``ceil(N/max_workers)`` files. When ``max_workers > 1`` AND
+    ``n_files >= pool_threshold`` (D9) it owns a `ProcessPoolExecutor` with
+    its mp_context pinned to ``start_method`` (D10): every chunk-task is
+    submitted up front (no per-chunk barrier), each chunk is loaded and
+    concatenated IN-CHILD by the module-scope `_load_chunk` worker (D8 —
+    this removes both the HDF5-build thread serialization and the W−1 chunk
+    barriers, and collapses N per-file pickle round-trips into W chunk
+    frames), and chunk frames are drained in submission order (never in
+    completion order — row order is load-bearing) and concatenated once in the
+    parent. Bounds peak RAM to one chunk's worth of frames in flight per
+    worker plus the terminal-concat floor.
 
-    When ``max_workers > 1`` the loader opens raw HDF5 files with
+    Otherwise — ``max_workers == 1`` (the default) or a small batch below
+    the threshold — it is a plain serial pass through the same `_load_chunk`
+    in-process, with no executor at all. The D9 clamp happens BEFORE
+    `_resolve_load_context` sees the worker count, so non-concurrent runs
+    keep ``locking=None`` fail-fast semantics (see `_resolve_load_context`).
+
+    When the batch runs concurrently, raw HDF5 files open with
     ``locking=False`` (see `_resolve_load_context`); no environment-variable
     guard is needed or effective.
+
+    Args:
+        max_workers: worker processes for the pool. Strictly opt-in
+            (default 1 = serial).
+        pool_threshold: minimum ``n_files`` for the pool to engage (D9).
+            Smaller batches clamp to the serial path regardless of
+            ``max_workers`` — executor startup would dominate. Tuning/bench
+            override; production callers never pass it.
+        start_method: multiprocessing start method pinned into the pool's
+            mp_context (D10). Never rely on interpreter defaults.
+        stats: optional caller-owned dict, filled with bench observability:
+            ``effective_workers`` (post-clamp, post-threshold),
+            ``pool_used``, ``start_method``, ``n_files``, and per-phase wall
+            seconds (``enumerate_seconds``/``resolve_seconds``/
+            ``submit_seconds``/``drain_seconds``/``concat_seconds``).
+
+    Like ``max_workers``, the tuning kwargs must be passed by name, never
+    inside ``kwargs`` (top-level kwargs, never dict entries — baking them
+    into `LoadArrayConfig.create` would TypeError).
     """
+    t_start = time.perf_counter()
     file_repls = utils.io.process_files(
         filestem, lambda f, r: (f, r), replacements, regex, wildcard_fill
     )
@@ -346,36 +438,59 @@ def load_files_chunked(
         file0 = filestem if isinstance(filestem, str) else filestem[0] + ", ..."
         raise ValueError(f"No files found for file search pattern: {file0}")
 
+    t_enum = time.perf_counter()
     n_files = len(file_repls)
-    max_workers = min(max_workers, n_files)
+    max_workers = max(1, min(max_workers, n_files))
+    if n_files < pool_threshold:
+        # D9: small batches never pay executor startup. Clamp BEFORE
+        # _resolve_load_context so the locking mode reverts to None too.
+        max_workers = 1
 
     ctx = _resolve_load_context(file_repls, max_workers, **kwargs)
+    t_resolve = time.perf_counter()
 
-    def load_one(filename, repl):
-        utils.get_logger().debug(f"Loading file: {filename}")
-        if ctx.h5_context is not None and ctx.h5_context.template is not None:
-            df = _load_one_raw_hdf5(
-                filename,
-                repl,
-                ctx.h5_context.template,
-                locking=ctx.h5_context.locking,
-            )
-        else:
-            df = ctx.file_loader(filename, repl)
-            if repl:
-                df[list(repl.keys())] = tuple(repl.values())
-        return repl, df
-
-    chunk_size = max(1, math.ceil(n_files / max_workers))
-    chunks = [file_repls[i : i + chunk_size] for i in range(0, n_files, chunk_size)]
-
-    chunks_out = []
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        for chunk in chunks:
-            futures = [pool.submit(load_one, fn, r) for fn, r in chunk]
-            chunk_frames = [fut.result()[1] for fut in futures]
-            chunks_out.append(pd.concat(chunk_frames))
+    if max_workers == 1:
+        # Serial fast path: the same worker body in-process, no executor —
+        # per-file ValueErrors stay fully in-process and every h5py open is
+        # observable by in-process instrumentation.
+        chunks_out = [_load_chunk(file_repls, ctx)]
+        t_drain = time.perf_counter()
+        submit_seconds = 0.0
+        drain_seconds = t_drain - t_resolve
+    else:
+        chunk_size = max(1, math.ceil(n_files / max_workers))
+        chunks = [
+            file_repls[i : i + chunk_size] for i in range(0, n_files, chunk_size)
+        ]
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=multiprocessing.get_context(start_method),
+        ) as pool:
+            futures = [pool.submit(_load_chunk, chunk, ctx) for chunk in chunks]
+            t_submit = time.perf_counter()
+            chunks_out = [fut.result() for fut in futures]
+            t_drain = time.perf_counter()
+        submit_seconds = t_submit - t_resolve
+        drain_seconds = t_drain - t_submit
 
     if not chunks_out:
-        return pd.DataFrame()
-    return pd.concat(chunks_out)
+        result = pd.DataFrame()
+    else:
+        result = pd.concat(chunks_out)
+    t_concat = time.perf_counter()
+
+    if stats is not None:
+        stats.update(
+            {
+                "effective_workers": max_workers,
+                "pool_used": max_workers > 1,
+                "start_method": start_method if max_workers > 1 else None,
+                "n_files": n_files,
+                "enumerate_seconds": round(t_enum - t_start, 4),
+                "resolve_seconds": round(t_resolve - t_enum, 4),
+                "submit_seconds": round(submit_seconds, 4),
+                "drain_seconds": round(drain_seconds, 4),
+                "concat_seconds": round(t_concat - t_drain, 4),
+            }
+        )
+    return result
