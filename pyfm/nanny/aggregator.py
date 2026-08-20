@@ -489,6 +489,27 @@ def set_format_col(df: pd.DataFrame, out_stem: str, out_format: str) -> pd.DataF
     return df
 
 
+def _apply_average_actions(
+    df: pd.DataFrame, avg_run_params: t.Dict[str, t.Any], data_col: str = "corr"
+) -> pd.DataFrame:
+    """Apply a run key's averaging actions to already-aggregated data.
+
+    Mirrors ``process_data``'s composition: pulls the averaging actions (and the
+    ``_avg`` output index override when a handler sets one) and runs them through
+    the processor. CSV stores complex values as strings, so the data column is
+    restored to numeric dtype first — otherwise the numeric averaging actions
+    (``time_average`` / ``average`` / ``real``) operate on strings. Parity with the
+    ``scripts/locate_agg_files.py`` prototype's ``apply_average``.
+    """
+    if data_col in df.columns and not pd.api.types.is_numeric_dtype(df[data_col]):
+        df[data_col] = df[data_col].apply(complex)
+
+    actions = dict(avg_run_params.get("actions", {}))
+    if index := avg_run_params.get("out_files", {}).get("index"):
+        actions["index"] = index
+    return pc.execute(df, actions)
+
+
 def load_convert_data(
     run_params: t.Dict[str, t.Any], input_format: str, data_col: str = "corr"
 ) -> pd.DataFrame:
@@ -560,6 +581,7 @@ def convert_task_data(
     input_format: str = "csv",
     output_format: str = "csv",
     output: str | None = None,
+    average: bool = False,
 ) -> None:
     """Convert a prior run's aggregated output to a different file format.
 
@@ -571,6 +593,13 @@ def convert_task_data(
     writer's ``{format}`` groupby to rewrite the directory) and ``write_files`` swaps
     the extension. ``--output`` overrides the write path (exact stem for a single run
     key; base directory for multi-run-key steps).
+
+    With ``average=True``, the existing (non-averaged) aggregated files are loaded
+    in ``input_format``, the averaging actions from
+    ``build_aggregator_params(average=True)`` are applied in-process via
+    ``_apply_average_actions``, and the result is written to the ``_avg`` output
+    filestems in ``output_format``. Input and output formats may then match — the
+    averaging is the transformation.
     """
     task = create_task(job_step, yaml_data)
     agg_params = task.handler.build_aggregator_params(task.config, average=False)
@@ -578,6 +607,12 @@ def convert_task_data(
         raise ValueError(f"No aggregator parameters provided for task: {job_step}.")
 
     logger = utils.get_logger()
+
+    if average:
+        avg_params = task.handler.build_aggregator_params(task.config, True)
+    else:
+        avg_params = agg_params
+
     run_keys = agg_params["run"]
     num_keys = len(run_keys)
 
@@ -589,7 +624,10 @@ def convert_task_data(
             logger.warning(f"Empty DataFrame for {key}")
             continue
 
-        out_filestem = run_params["out_files"]["filestem"]
+        if average:
+            df = _apply_average_actions(df, avg_params[key])
+
+        out_filestem = avg_params[key]["out_files"]["filestem"]
         stem = resolve_convert_output_stem(out_filestem, output, num_keys)
 
         dio.write_files(

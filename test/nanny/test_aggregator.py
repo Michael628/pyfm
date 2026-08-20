@@ -332,6 +332,43 @@ def _agg_single(filestem="processed/{format}/pion", load_files=None):
     }
 
 
+def _make_split_task(raw_params, avg_params):
+    """Fake task whose handler returns raw params for average=False and avg
+    params for average=True (mirrors the real handler contract)."""
+    handler = MagicMock()
+    handler.build_aggregator_params.side_effect = (
+        lambda config, average: avg_params if average else raw_params
+    )
+    return Task(handler=handler, config=MagicMock(), key="test_key")
+
+
+def _avg_single(raw_filestem="processed/{format}/pion", actions=None):
+    """Raw (average=False) and avg (average=True) param pairs for one run key."""
+    raw = {
+        "run": ["diagram"],
+        "diagram": {
+            "out_files": {"filestem": raw_filestem},
+            "load_files": {"regex": {"cfg": "[0-9]+"}},
+        },
+    }
+    avg = {
+        "run": ["diagram"],
+        "diagram": {
+            "out_files": {"filestem": raw_filestem + "_avg"},
+            "load_files": {"regex": {"cfg": "[0-9]+"}},
+            "actions": actions if actions is not None else {"time_average": ["t1", "t4"]},
+        },
+    }
+    return raw, avg
+
+
+def _average_of(call):
+    """Extract the `average` build argument from either args or kwargs."""
+    if "average" in call.kwargs:
+        return call.kwargs["average"]
+    return call.args[1] if len(call.args) > 1 else False
+
+
 def test_convert_loads_and_writes_each_run_key():
     task = _make_task(_agg_single())
     df = pd.DataFrame({"corr": [1.0, 2.0], "cfg": ["c0", "c1"]})
@@ -435,6 +472,115 @@ def test_convert_no_agg_params_raises():
     with patch("pyfm.nanny.aggregator.create_task", return_value=task):
         with pytest.raises(ValueError, match="No aggregator parameters"):
             aggregator.convert_task_data("job", {})
+
+
+def test_convert_average_builds_both_param_sets_and_writes_avg_stem():
+    """Averaging on convert mirrors aggregate_task_data's raw/avg split (regressed
+    twice via commits 4ec1283, 7b5d439): builds params for both the agg load
+    (average=False) and the averaged output (average=True), loads the existing
+    non-averaged agg files, routes the averaging actions through the processor,
+    and writes to the ``_avg`` output filestem."""
+    raw, avg = _avg_single(actions={"time_average": ["t1", "t4"], "real": True})
+    task = _make_split_task(raw, avg)
+
+    captured = {}
+
+    def fake_execute(df, actions):
+        captured["actions"] = dict(actions)
+        return df
+
+    with (
+        patch("pyfm.nanny.aggregator.create_task", return_value=task),
+        patch("pyfm.nanny.aggregator.dio") as mock_dio,
+        patch("pyfm.nanny.aggregator.pc.execute", side_effect=fake_execute),
+    ):
+        mock_dio.load_files.return_value.agg.return_value = pd.DataFrame(
+            {"corr": [1.0, 2.0]}
+        )
+        # Stub both loader entry points (convert uses load_files today; the
+        # chunked stub keeps the test robust if the loader switches).
+        mock_dio.load_files_chunked.return_value = pd.DataFrame(
+            {"corr": [1.0, 2.0]}
+        )
+        aggregator.convert_task_data(
+            "job", {}, input_format="csv", output_format="csv", average=True
+        )
+
+    built = [
+        _average_of(c) for c in task.handler.build_aggregator_params.call_args_list
+    ]
+    assert {True, False} == set(built)
+
+    # Load targets the existing (non-averaged) agg files.
+    _, lkw = mock_dio.load_files.call_args
+    assert lkw["filestem"] == "processed/{format}/pion.csv"
+    assert lkw["replacements"]["format"] == "csv"
+
+    # Averaging actions reach the processor.
+    assert captured["actions"]["time_average"] == ["t1", "t4"]
+    assert captured["actions"]["real"] is True
+
+    # Write targets the _avg stem; same in/out format is fine when averaging.
+    _, wkw = mock_dio.write_files.call_args
+    assert wkw["filestem"] == "processed/{format}/pion_avg"
+    assert wkw["format"] == "csv"
+
+
+def test_convert_average_restores_complex_dtype_from_csv_strings():
+    """CSV agg files store complex corr values as strings; the averaging step must
+    restore numeric dtype before pc.execute or the numeric actions operate on
+    strings (prototype scripts/locate_agg_files.py:53-54)."""
+    raw, avg = _avg_single(actions={"average": ["tsource"]})
+    task = _make_split_task(raw, avg)
+
+    captured = {}
+
+    def fake_execute(df, actions):
+        captured["corr_dtype"] = str(df["corr"].dtype)
+        return df
+
+    with (
+        patch("pyfm.nanny.aggregator.create_task", return_value=task),
+        patch("pyfm.nanny.aggregator.dio") as mock_dio,
+        patch("pyfm.nanny.aggregator.pc.execute", side_effect=fake_execute),
+    ):
+        mock_dio.load_files.return_value.agg.return_value = pd.DataFrame(
+            {"corr": ["(1+2j)", "(3+4j)"]}
+        )
+        mock_dio.load_files_chunked.return_value = pd.DataFrame(
+            {"corr": ["(1+2j)", "(3+4j)"]}
+        )
+        aggregator.convert_task_data("job", {}, input_format="csv", average=True)
+
+    assert captured["corr_dtype"] == "complex128"
+
+
+def test_convert_average_output_overrides_stem():
+    """--output composes with averaging: single run key -> exact stem."""
+    raw, avg = _avg_single()
+    task = _make_split_task(raw, avg)
+    with (
+        patch("pyfm.nanny.aggregator.create_task", return_value=task),
+        patch("pyfm.nanny.aggregator.dio") as mock_dio,
+    ):
+        mock_dio.load_files.return_value.agg.return_value = pd.DataFrame({"corr": [1.0]})
+        mock_dio.load_files_chunked.return_value = pd.DataFrame({"corr": [1.0]})
+        aggregator.convert_task_data("job", {}, average=True, output="/tmp/out.csv")
+    assert mock_dio.write_files.call_args.kwargs["filestem"] == "/tmp/out"
+
+
+def test_convert_without_average_runs_no_actions():
+    """Parity guard: without --average, no processor actions run on the convert path."""
+    task = _make_task(_agg_single())
+    with (
+        patch("pyfm.nanny.aggregator.create_task", return_value=task),
+        patch("pyfm.nanny.aggregator.dio") as mock_dio,
+        patch("pyfm.nanny.aggregator.pc.execute") as mock_exec,
+    ):
+        mock_dio.load_files.return_value.agg.return_value = pd.DataFrame({"corr": [1.0]})
+        mock_dio.load_files_chunked.return_value = pd.DataFrame({"corr": [1.0]})
+        aggregator.convert_task_data("job", {}, input_format="csv", output_format="hdf5")
+    mock_exec.assert_not_called()
 
 
 def test_aggregate_task_data_average_writes_to_avg_stem_and_runs_actions():

@@ -20,7 +20,7 @@ import pandas as pd
 
 from pyfm import utils
 import pyfm.dataio as dio
-from pyfm.dataio import processor as pc
+from pyfm.nanny.aggregator import _apply_average_actions
 from pyfm.nanny.taskbuilder import create_task
 
 # Input formats understood by the loader, mapped to their file extension.
@@ -45,18 +45,11 @@ def build_agg_params(job, params, average):
 def apply_average(df, avg_run_params, data_col="corr"):
     """Apply a run key's averaging actions to already-aggregated data.
 
-    Mirrors ``aggregator.process_data``: pulls the averaging actions (and the
-    ``_avg`` output index) and runs them through the processor. CSV stores complex
-    values as strings, so the data column is restored to numeric dtype first --
-    otherwise the numeric averaging actions operate on strings.
+    Thin delegation to the aggregator's ``_apply_average_actions`` (same
+    composition: complex-dtype restore + actions + index override) so this
+    script and ``pyfm export convert --average`` cannot drift.
     """
-    if data_col in df.columns and not pd.api.types.is_numeric_dtype(df[data_col]):
-        df[data_col] = df[data_col].apply(complex)
-
-    actions = dict(avg_run_params.get("actions", {}))
-    if index := avg_run_params.get("out_files", {}).get("index"):
-        actions["index"] = index
-    return pc.execute(df, actions)
+    return _apply_average_actions(df, avg_run_params, data_col)
 
 
 def set_format_col(df, out_stem, out_format):

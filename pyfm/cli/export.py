@@ -85,12 +85,23 @@ def corr(param_file, job, fmt, average, skip_existing, generate_manifest, max_wo
     help="Output path (exact stem for a single run key; base directory for "
     "multi-run-key steps).",
 )
+@click.option(
+    "--average",
+    is_flag=True,
+    default=False,
+    help="Average the loaded aggregated data and write it to the `_avg` output "
+    "locations; permits --input-format and --format to match.",
+)
 @logging_level_option()
-def convert(param_file, job, fmt, input_fmt, output, logging_level):
-    """Convert a prior run's aggregated output to a different file format."""
+def convert(param_file, job, fmt, input_fmt, output, average, logging_level):
+    """Convert a prior run's aggregated output, optionally averaging it."""
     from pyfm import utils
     from pyfm.nanny import aggregator
 
+    if input_fmt == fmt and not average:
+        raise click.UsageError(
+            "--input-format and --format must differ unless --average is given."
+        )
     params = utils.io.load_param(param_file)
     utils.set_logging_level(logging_level)
     aggregator.convert_task_data(
@@ -99,6 +110,7 @@ def convert(param_file, job, fmt, input_fmt, output, logging_level):
         input_format=input_fmt,
         output_format=fmt,
         output=output,
+        average=average,
     )
 
 
