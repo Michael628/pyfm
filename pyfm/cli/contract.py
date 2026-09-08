@@ -4,14 +4,6 @@ import typing as t
 from time import perf_counter
 
 import click
-from sympy.utilities.iterables import multiset_permutations
-
-from pyfm.a2a.types import ContractConfig
-from pyfm.domain import LoadDictConfig
-from pyfm.core.builder import build_config
-from pyfm.dataio import data_to_frame, write_files
-from pyfm.a2a import execute, time_average
-from pyfm import utils
 
 
 def _make_contraction_key(contraction: t.Tuple[str]):
@@ -44,6 +36,15 @@ def contract():
 )
 def run(param_file, param_file_opt, do_time_average):
     """Execute A2A contractions for all diagrams defined in the parameter file."""
+    from sympy.utilities.iterables import multiset_permutations
+    import pyfm.tasks.contract  # noqa: F401 — registers build hooks for ContractConfig/DiagramConfig
+    from pyfm.a2a.types import ContractConfig
+    from pyfm.domain import LoadDictConfig
+    from pyfm.core.builder import build_config
+    from pyfm.dataio import data_to_frame, write_files
+    from pyfm.a2a import execute, time_average
+    from pyfm import utils
+
     param_file = param_file or param_file_opt
     if param_file is None:
         raise click.UsageError(

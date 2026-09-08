@@ -15,6 +15,7 @@ from pyfm.nanny import (
     submit_job,
     validate_steps,
 )
+from pyfm.cli._options import job_option, logging_level_option, param_file_option
 
 
 @click.group()
@@ -24,9 +25,24 @@ def nanny():
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
-@click.option("-j", "--job", type=str, default=None, help="Restrict nanny loop to this job step only.")
-@click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
+@param_file_option()
+@job_option(required=True, help="Job step name.")
+@click.option("-s", "--series", type=str, required=True, help="Gauge field series label.")
+@click.option("-n", "--config", "cfg", type=str, required=True, help="Configuration number.")
+def generate(param_file, job, series, cfg):
+    """Generate input files for a specific job/series/config."""
+    from pyfm import utils
+    from pyfm.nanny import write_input_file
+
+    params = utils.io.load_param(param_file)
+    ifile = write_input_file(job, params, series, cfg)
+    utils.get_logger().info(f"Input parameters written to {ifile}")
+
+
+@nanny.command()
+@param_file_option()
+@job_option(default=None, help="Restrict nanny loop to this job step only.")
+@logging_level_option()
 def run(param_file, job, logging_level):
     """Run the nanny loop to submit and monitor HPC jobs."""
     os.system("umask 022")
@@ -35,10 +51,10 @@ def run(param_file, job, logging_level):
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
+@param_file_option()
 @click.option("-i", "--input", "input_file", type=click.Path(dir_okay=False), required=True, help="Input file list to submit.")
-@click.option("-j", "--job", type=str, required=True, help="Job step name to submit.")
-@click.option("--logging-level", type=str, default="INFO", help="Logging verbosity (DEBUG, INFO, WARNING, ERROR).")
+@job_option(required=True, help="Job step name to submit.")
+@logging_level_option()
 def submit(param_file, input_file, job, logging_level):
     """Submit a single job to the HPC scheduler."""
     utils.set_logging_level(logging_level)
@@ -52,9 +68,9 @@ def submit(param_file, input_file, job, logging_level):
 @nanny.command()
 @click.argument("steps", nargs=-1, required=True)
 @click.option("-s", "--series", type=str, required=True, help="Gauge field series to add.")
-@click.option("-n","--config", "cfg_list", multiple=True, type=int, help="Individual configuration numbers to add.")
+@click.option("-n", "--config", "cfg_list", multiple=True, type=int, help="Individual configuration numbers to add.")
 @click.option("--config-range", "cfg_range", nargs=3, type=int, default=None, help="Config range as START STOP STEP (exclusive stop).")
-@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
+@param_file_option()
 def add(steps, series, cfg_list, cfg_range, param_file):
     """Add todo entries for SERIES and STEPS.
 
@@ -89,8 +105,8 @@ def add(steps, series, cfg_list, cfg_range, param_file):
 
 
 @nanny.command()
-@click.option("-p", "--param-file", type=click.Path(dir_okay=False), default="params.yaml", help="Path to YAML parameter file.")
-@click.option("-j", "--job", type=str, default=None, help="Job step to inspect.")
+@param_file_option()
+@job_option(default=None, help="Job step to inspect.")
 @click.option("-s", "--series", type=str, default=None, help="Gauge field series to filter on.")
 @click.option("-n", "--config", "config", type=str, default=None, help="Configuration number to filter on.")
 @click.option("-v", "--verbose", is_flag=True, default=False, help="Print detailed output file status.")

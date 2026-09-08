@@ -123,3 +123,22 @@ def test_nanny_check_partial_args_falls_back_to_check_jobs(runner, fake_yaml_par
         assert result.exit_code == 0
         mock_cj.assert_called_once_with(fake_yaml_params)
         mock_ao.assert_not_called()
+
+
+# NOTE: `generate` imports utils/write_input_file locally (Phase 2), so these tests
+# patch at source; the run/submit/add/check tests above patch `pyfm.cli.nanny.*`
+# because those commands still import at module top-level.
+def test_nanny_generate_dispatches_with_required_args(runner, fake_yaml_params):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=fake_yaml_params),
+        patch("pyfm.nanny.write_input_file", return_value="output.xml") as mock_wif,
+        patch("pyfm.utils.get_logger"),
+    ):
+        result = runner.invoke(cli, ["nanny", "generate", "-j", "hadrons_lmi", "-s", "a", "-n", "100"])
+        assert result.exit_code == 0, result.output
+        mock_wif.assert_called_once_with("hadrons_lmi", fake_yaml_params, "a", "100")
+
+
+def test_nanny_generate_missing_required_arg_fails(runner):
+    result = runner.invoke(cli, ["nanny", "generate", "-s", "a", "-n", "100"])
+    assert result.exit_code != 0

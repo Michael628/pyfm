@@ -2,7 +2,7 @@
 
 Focuses on the ``time_average`` action's handling of data that has already been
 time-averaged (carries a ``t`` column), which is what the contract
-``task aggregate --average`` path must consume without assuming ``t1``/``t2``
+``export corr --average`` path must consume without assuming ``t1``/``t2``
 columns still exist.
 """
 import numpy as np

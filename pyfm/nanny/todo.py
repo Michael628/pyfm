@@ -128,7 +128,8 @@ def find_next_unfinished_task(
     past it: the request is only honored when the requested step is genuinely
     the next task to run. This prevents a requested step from being bundled
     ahead of an incomplete predecessor (e.g. an unsubmitted task, which is not
-    a Q/XXfix barrier) when using ``pyfm nanny run -j <step>``.
+    a Q/XXfix barrier) when using ``pyfm nanny run -j <step>``. The request
+    must match the step name exactly (no prefix matching).
     """
 
     # Format
@@ -142,7 +143,7 @@ def find_next_unfinished_task(
         return result
 
     _, _, step = result
-    return result if step.startswith(step_request) else None
+    return result if step == step_request else None
 
 
 ######################################################################

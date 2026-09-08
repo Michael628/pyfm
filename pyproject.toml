@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "click>=8.0",
+    "click>=8.2",
     "Cython>=0.29",
     "dict2xml>=1.7",
     "gvar>=11.9",

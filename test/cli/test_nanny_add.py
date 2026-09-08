@@ -32,7 +32,7 @@ class TestNannyAddCfg:
         ):
             mock_utils.io.load_param.return_value = fake_params
             result = runner.invoke(
-                cli, ["nanny", "add", "a", "smear", "hadrons", "--cfg", "200", "--cfg", "220"]
+                cli, ["nanny", "add", "-s", "a", "smear", "hadrons", "--config", "200", "--config", "220"]
             )
         assert result.exit_code == 0, result.output
         mock_vs.assert_called_once_with(("smear", "hadrons"), fake_params["job_setup"])
@@ -49,7 +49,7 @@ class TestNannyAddCfg:
         ):
             mock_utils.io.load_param.return_value = fake_params
             result = runner.invoke(
-                cli, ["nanny", "add", "a", "smear", "--cfg-range", "200", "400", "20"]
+                cli, ["nanny", "add", "-s", "a", "smear", "--config-range", "200", "400", "20"]
             )
         assert result.exit_code == 0, result.output
         mock_pc.assert_called_once_with(cfg=None, cfg_range=(200, 400, 20))
@@ -67,7 +67,7 @@ class TestNannyAddValidation:
         ):
             mock_utils.io.load_param.return_value = fake_params
             result = runner.invoke(
-                cli, ["nanny", "add", "a", "bogus", "--cfg", "200"]
+                cli, ["nanny", "add", "-s", "a", "bogus", "--config", "200"]
             )
         assert result.exit_code != 0
         assert "Invalid steps" in result.output
@@ -78,7 +78,7 @@ class TestNannyAddValidation:
             mock_utils.io.load_param.return_value = fake_params
             result = runner.invoke(
                 cli,
-                ["nanny", "add", "a", "smear", "--cfg", "200", "--cfg-range", "200", "400", "20"],
+                ["nanny", "add", "-s", "a", "smear", "--config", "200", "--config-range", "200", "400", "20"],
             )
         assert result.exit_code != 0
         assert "mutually exclusive" in result.output.lower() or "mutually exclusive" in (result.output + "").lower()
@@ -87,7 +87,7 @@ class TestNannyAddValidation:
         fake_params = _fake_params()
         with patch(f"{NANNY_MOD}.utils") as mock_utils:
             mock_utils.io.load_param.return_value = fake_params
-            result = runner.invoke(cli, ["nanny", "add", "a", "smear"])
+            result = runner.invoke(cli, ["nanny", "add", "-s", "a", "smear"])
         assert result.exit_code != 0
         assert "required" in result.output.lower()
 
@@ -103,7 +103,7 @@ class TestNannyAddParamFile:
         ):
             mock_utils.io.load_param.return_value = fake_params
             result = runner.invoke(
-                cli, ["nanny", "add", "a", "smear", "--cfg", "200", "-p", "custom.yaml"]
+                cli, ["nanny", "add", "-s", "a", "smear", "--config", "200", "-p", "custom.yaml"]
             )
         assert result.exit_code == 0, result.output
         mock_utils.io.load_param.assert_called_once_with("custom.yaml")
@@ -118,7 +118,7 @@ class TestNannyAddParamFile:
         ):
             mock_utils.io.load_param.return_value = fake_params
             result = runner.invoke(
-                cli, ["nanny", "add", "a", "smear", "--cfg", "200"]
+                cli, ["nanny", "add", "-s", "a", "smear", "--config", "200"]
             )
         assert result.exit_code == 0, result.output
         mock_utils.io.load_param.assert_called_once_with("params.yaml")

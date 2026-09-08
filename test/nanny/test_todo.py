@@ -162,6 +162,27 @@ class TestFindNextUnfinishedTask:
         result = todo.find_next_unfinished_task(line, step_request="hadrons")
         assert result == (3, "b.100", "hadrons")
 
+    def test_step_request_exact_match_only(self):
+        # A step request matches the step name exactly, never by prefix:
+        # grid_smear does not qualify for step_request="grid" (and vice versa).
+        line = ["d.2484", "grid_smear", "0", "grid", "0"]
+        assert todo.find_next_unfinished_task(line, step_request="grid_smear") == (
+            1,
+            "d.2484",
+            "grid_smear",
+        )
+        assert todo.find_next_unfinished_task(line, step_request="grid") is None
+
+    def test_step_request_no_prefix_family_match(self):
+        # hadrons_smear must not qualify for -j hadrons either.
+        line = ["a.60", "smear_X", "1000", "hadrons_smear", "0"]
+        assert todo.find_next_unfinished_task(line, step_request="hadrons") is None
+        assert todo.find_next_unfinished_task(line, step_request="hadrons_smear") == (
+            3,
+            "a.60",
+            "hadrons_smear",
+        )
+
 
 class TestFindNextQueuedTask:
     def test_finds_queued(self):
