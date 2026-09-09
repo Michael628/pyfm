@@ -168,6 +168,9 @@ files:
   high_modes:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_t{tsource}_{series}
     good_size: 3900
+  bias_modes:
+    filestem: e{eigs}n{noise}nb{nbias}/correlators_bias/m{mass}/{gamma_label}/{dset}/corr_{gamma_label}_{dset}_m{mass}_{tsource}_{series}
+    good_size: 3900
   meson:
     filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
     good_size: 1286000

@@ -18,9 +18,11 @@ class LMIConfig(CompositeConfig):
     epack_config: epack.EpackConfig
     meson_config: meson.MesonConfig
     high_modes_config: HighModeConfig
+    bias_config: HighModeConfig
     skip_epack: bool = False
     skip_meson: bool = False
     skip_high_modes: bool = False
+    skip_bias: bool = False
 
     @property
     def split_mpi_layout(self) -> str | None:
@@ -35,7 +37,7 @@ class LMIConfig(CompositeConfig):
         return self.high_modes_config.split_mpi_layout
 
 
-_OPTIONAL_CONFIGS = ["meson", "high_modes", "epack"]
+_OPTIONAL_CONFIGS = ["meson", "high_modes", "epack", "bias"]
 
 
 def normalize_params(params: t.Dict) -> t.Dict:
@@ -82,6 +84,13 @@ def route_params(params: t.Dict) -> t.Dict:
             shift_gauge_name=SHIFT_GAUGE_NAME,
             skip_low_modes="epack" not in preprocessor_params,
         ),
+        bias_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+            solver_name=SOLVER_NAME,
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            skip_low_modes="epack" not in preprocessor_params,
+        ),
     )
 
     # Update child processor with corresponding params passed to parent
@@ -94,17 +103,32 @@ def route_params(params: t.Dict) -> t.Dict:
 def validate_config(config: LMIConfig) -> None:
     """Validate LMIConfig after construction and postprocessing.
 
-    Validates that if epack is skipped, meson must also be skipped.
+    Validates that if epack is skipped, meson must also be skipped. Warns when
+    an enabled bias config still binds the shared high-modes Outfile label.
     """
-
+    # getattr default: grid_lma shares this validator but GridLMAConfig has no
+    # skip_bias field.
     for k, skip in [
-        (k, getattr(config, f"skip_{k}")) for k in ["meson", "high_modes", "epack"]
+        (k, getattr(config, f"skip_{k}", False))
+        for k in ["meson", "high_modes", "epack", "bias"]
     ]:
         if skip:
             utils.get_logger().debug(f"Skipping {k} step")
 
     if config.skip_epack and not config.skip_meson:
         raise ValueError("Epack parameters must be set to perform meson calculation")
+
+    if not getattr(config, "skip_bias", True):
+        bias_stem = config.bias_config.high_modes.filestem
+        main_stem = config.high_modes_config.high_modes.filestem
+        if bias_stem == main_stem:
+            utils.get_logger().warning(
+                "bias_config still binds the shared files.high_modes label "
+                f"({bias_stem}); bias outputs will be written under the "
+                "high-modes filestem with block labels. Add a files.bias_modes "
+                "entry and set `high_modes: bias_modes` in the tasks.bias "
+                "slice to segregate them."
+            )
 
 
 def build_input_params(config: LMIConfig) -> HadronsInput:
@@ -140,6 +164,8 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
             epack_mass_shifts.extend(config.meson_config.masses)
         if not config.skip_high_modes:
             epack_mass_shifts.extend(config.high_modes_config.masses)
+        if not config.skip_bias:
+            epack_mass_shifts.extend(config.bias_config.masses)
 
         if epack_mass_shifts:
             mass_shifts_input = epack.build_epack_mass_shifts(
@@ -182,6 +208,26 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
         modules |= highmode_input.modules
         schedule += highmode_input.schedule
 
+    # 5. BIAS section: mirror the high-mode section for the bias sibling
+    if not config.skip_bias:
+        bias_sp_masses = []
+        if config.bias_config.solver == "mpcg":
+            bias_sp_masses = config.bias_config.masses
+            sp_gauge = gauge.build_sp_gauge(config.gauge_config)
+            modules |= sp_gauge.modules
+            schedule += sp_gauge.schedule
+
+        bias_masses = config.bias_config.masses
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=bias_masses, sp_masses=bias_sp_masses
+        )
+        modules |= actions.modules
+        schedule += actions.schedule
+
+        bias_input = highmode.build_input_params(config.bias_config)
+        modules |= bias_input.modules
+        schedule += bias_input.schedule
+
     # Deduplicate schedule: keep first occurrence of each module name
     deduplicated_schedule = list(dict.fromkeys(schedule))
 
@@ -189,15 +235,21 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
 
 
 def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
+    bias_config = (
+        config.bias_config
+        if not getattr(config, "skip_bias", True) and config.bias_config.op_list
+        else None
+    )
     df = [
         m.create_outfile_catalog(c)
         for m, c in zip(
-            [gauge, epack, meson, highmode],
+            [gauge, epack, meson, highmode, highmode],
             [
                 config.gauge_config,
                 config.epack_config,
                 config.meson_config,
                 config.high_modes_config,
+                bias_config,
             ],
         )
         if c is not None
@@ -206,11 +258,21 @@ def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
 
 
 def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
-    return (
+    params = (
         highmode.build_aggregator_params(config.high_modes_config, average)
         if not config.skip_high_modes
         else {}
     )
+    if not getattr(config, "skip_bias", True):
+        bias = highmode.build_aggregator_params(
+            config.bias_config, average, run_prefix="bias_"
+        )
+        params = {
+            **params,
+            **bias,
+            "run": params.get("run", []) + bias.get("run", []),
+        }
+    return params
 
 
 def compare_outputs(

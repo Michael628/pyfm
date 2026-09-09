@@ -5,7 +5,12 @@ import itertools
 from pyrsistent import freeze, thaw
 from dataclasses import fields
 
-from pyfm.tasks.hadrons.types import HadronsInput, HighModeConfig, CorrelatorStrategy
+from pyfm.tasks.hadrons.types import (
+    HadronsInput,
+    HighModeConfig,
+    CorrelatorStrategy,
+    SourceRef,
+)
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import OpList
 from pyfm.tasks.hadrons.highmode import sib, twopoint
@@ -39,6 +44,18 @@ def route_params(params: t.Dict) -> t.Dict:
         preprocessor_params.pop("split_mpi_layout", None)
         preprocessor_params.pop("subgrid_ranks", None)
 
+    # Bias sampling seed: compose the user's base with series/cfg here — the
+    # route hook is the only place both are visible (post-construction hooks
+    # cannot see them, and the aggregation path builds without series/cfg).
+    # Leave the field untouched when the base is absent so validate_config
+    # can raise a clear "bias_seed is required" error.
+    if preprocessor_params.get("nbias") is not None:
+        seed_base = preprocessor_params.get("bias_seed")
+        if seed_base is not None:
+            preprocessor_params["bias_seed"] = (
+                f"{seed_base}_{params.get('series', '')}_{params.get('cfg', '')}"
+            )
+
     # Get field names from HighModeConfig, excluding 'mass'
     # - 'mass' comes from top-level params (MassDict)
     # !NOTE: Don't squash params['mass']
@@ -58,7 +75,7 @@ def route_params(params: t.Dict) -> t.Dict:
 def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
     def generate_outfile_formatting():
         solver_labels = config.get_solver_labels()
-        res = {"tsource": list(map(str, config.tsource_range)), "dset": solver_labels}
+        res = {"tsource": config.source_axis, "dset": solver_labels}
 
         for op in config.op_list:
             res["gamma_label"] = op.gamma.name.lower()
@@ -76,29 +93,33 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     modules = {}
     schedule = []
 
+    # Sources needing (re)generation, keyed by the unique {tsource} axis
+    # values (bare times in dt mode, block labels in bias mode) so duplicate
+    # sampled times stay distinct sources.
     if not config.overwrite:
         df = create_outfile_catalog(config)
         if df.empty:
-            run_tsources = []
+            run_refs = []
         else:
             missing_files = df[df["exists"] == False]
-            run_tsources = []
-            for tsource in config.tsource_range:
-                if any(missing_files["tsource"] == str(tsource)):
-                    run_tsources.append(str(tsource))
+            run_refs = [
+                ref
+                for ref in config.source_refs
+                if any(missing_files["tsource"] == ref.axis)
+            ]
     else:
-        run_tsources = list(map(str, config.tsource_range))
+        run_refs = config.source_refs
 
     modules["sink"] = hadmods.sink(name="sink", mom="0 0 0")
     schedule.append("sink")
 
     quark_schedule = []
-    for tsource in run_tsources:
-        name = f"noise_t{tsource}"
+    for ref in run_refs:
+        name = f"noise_{ref.label}"
         modules[name] = hadmods.noise_rw(
             name=name,
             nsrc=str(config.noise),
-            t0=tsource,
+            t0=str(ref.t0),
             tstep=str(config.time),
         )
         quark_schedule.append(name)
@@ -146,11 +167,11 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
                     raise ValueError(f"Unknown high-mode CG solver: {config.solver}")
             schedule.append(name)
 
-    quark_inputs = build_quark_strategy(config, run_tsources)
+    quark_inputs = build_quark_strategy(config, run_refs)
     modules |= quark_inputs.modules
     quark_schedule += quark_inputs.schedule
 
-    contract_inputs = build_contract_strategy(config, run_tsources)
+    contract_inputs = build_contract_strategy(config, run_refs)
     modules |= contract_inputs.modules
     quark_schedule += contract_inputs.schedule
 
@@ -201,13 +222,14 @@ def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[s
 
 
 def build_quark_strategy(
-    config: HighModeConfig, run_tsources: t.List[str]
+    config: HighModeConfig, run_refs: t.List[SourceRef]
 ) -> HadronsInput:
     match config.correlator_strategy:
         case CorrelatorStrategy.TWOPOINT:
-            return twopoint.build_quarks(config, run_tsources)
+            return twopoint.build_quarks(config, run_refs)
         case CorrelatorStrategy.SIB:
-            return sib.build_quarks(config, run_tsources)
+            # Dead path (arity-broken callee); kept for parity, callee untouched.
+            return sib.build_quarks(config, run_refs)
         case _:
             raise ValueError(
                 f"Unknown correlator_strategy: {config.correlator_strategy}"
@@ -215,13 +237,13 @@ def build_quark_strategy(
 
 
 def build_contract_strategy(
-    config: HighModeConfig, run_tsources: t.List[str]
+    config: HighModeConfig, run_refs: t.List[SourceRef]
 ) -> HadronsInput:
     match config.correlator_strategy:
         case CorrelatorStrategy.SIB:
-            return sib.build_contractions(config, run_tsources)
+            return sib.build_contractions(config, run_refs)
         case CorrelatorStrategy.TWOPOINT:
-            return twopoint.build_contractions(config, run_tsources)
+            return twopoint.build_contractions(config, run_refs)
         case _:
             raise ValueError(
                 f"Unknown correlator_strategy: {config.correlator_strategy}"
@@ -231,6 +253,7 @@ def build_contract_strategy(
 def build_aggregator_params(
     config: HighModeConfig,
     average: bool,
+    run_prefix: str = "",
 ) -> t.Dict:
     agg_params = freeze({})
 
@@ -241,7 +264,7 @@ def build_aggregator_params(
 
     infile = config.high_modes.filename
 
-    e_rep = freeze({"tsource": list(map(str, config.tsource_range))}).evolver()
+    e_rep = freeze({"tsource": config.source_axis}).evolver()
 
     solver_labels = config.get_solver_labels()
 
@@ -258,7 +281,7 @@ def build_aggregator_params(
         e_rep["gamma_label"] = gamma_label
         for mass, dset in itertools.product(op.mass, solver_labels):
             mass_label = config.mass.to_string(mass, True)
-            file_label = f"{gamma_label}_{mass_label}_{dset}"
+            file_label = f"{run_prefix}{gamma_label}_{mass_label}_{dset}"
             run_list.append(file_label)
             e_rep["mass"] = mass_label
             e_rep["dset"] = dset
@@ -316,3 +339,18 @@ def validate_config(config: HighModeConfig) -> None:
         raise ValueError(
             f"subgrid_ranks must be a positive integer; got {config.subgrid_ranks}."
         )
+
+    if config.nbias is not None:
+        if config.nbias < 1:
+            raise ValueError(f"nbias must be a positive integer; got {config.nbias}.")
+        if not config.bias_seed:
+            raise ValueError(
+                "bias_seed is required when nbias is set (it seeds the "
+                "deterministic time-slice draws; set it under tasks.bias:)."
+            )
+        if not config.bias_replace and config.nbias > config.time:
+            raise ValueError(
+                f"nbias ({config.nbias}) exceeds the time extent ({config.time}); "
+                "without-replacement sampling (bias_replace=False) requires "
+                "nbias <= time."
+            )
