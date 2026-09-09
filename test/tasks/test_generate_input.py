@@ -319,3 +319,149 @@ def test_split_grid_preserves_schedule_ordering(
     plain_schedule = plain_task.handler.build_input_params(plain_task.config).schedule
 
     assert split_schedule == plain_schedule
+
+
+# --- appended: composite bias integration (slice 4) ---
+class TestBiasComposite:
+    @staticmethod
+    def _set_bias(params, *, nbias=4, bias_seed="bias-seed", label="bias_modes",
+                  gamma=("pion_local",), mass=("l",), residual=None):
+        bias = params["job_setup"]["lma"]["tasks"].setdefault("bias", {})
+        bias["nbias"] = nbias
+        bias["bias_seed"] = bias_seed
+        bias["gamma"] = list(gamma)
+        bias["mass"] = list(mass)
+        if label is not None:
+            bias["high_modes"] = label
+        if residual is not None:
+            bias["residual"] = residual
+        return params
+
+    def test_lma_with_bias_emits_block_modules_with_sampled_t0(
+        self, tmp_path, monkeypatch, hadrons_params
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._set_bias(hadrons_params)
+
+        task = create_task("lma", hadrons_params, "a", "20")
+        write_input_file("lma", hadrons_params, "a", "20")
+
+        root = ET.parse(tmp_path / "in" / "full-lma-a.20.xml").getroot()
+        t0_by_name = {}
+        for module in root.findall(".//module"):
+            name = module.find("id/name").text
+            if name.startswith("noise_n"):
+                t0_by_name[name] = module.find("options/t0").text
+
+        assert sorted(t0_by_name) == [f"noise_n{i}" for i in range(4)]
+        for i, t0 in enumerate(task.config.bias_config.tsource_range):
+            assert t0_by_name[f"noise_n{i}"] == str(t0)
+
+    def test_bias_outputs_use_bias_modes_filestem(
+        self, tmp_path, monkeypatch, hadrons_params
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._set_bias(hadrons_params)
+
+        write_input_file("lma", hadrons_params, "a", "20")
+
+        xml = (tmp_path / "in" / "full-lma-a.20.xml").read_text()
+        assert "correlators_bias" in xml
+        assert "nb4" in xml  # {nbias} format key namespaces the bias outputs
+
+    def test_bias_without_rebind_warns(
+        self, tmp_path, monkeypatch, caplog, hadrons_params
+    ):
+        monkeypatch.chdir(tmp_path)
+        self._set_bias(hadrons_params, label=None)
+
+        with caplog.at_level(logging.WARNING):
+            write_input_file("lma", hadrons_params, "a", "20")
+
+        assert "bias_modes" in caplog.text
+
+    def test_empty_bias_block_changes_nothing(
+        self, tmp_path, monkeypatch, hadrons_params
+    ):
+        monkeypatch.chdir(tmp_path)
+
+        plain_task = create_task("lma", hadrons_params, "a", "20")
+        plain_sched = plain_task.handler.build_input_params(plain_task.config).schedule
+
+        biased_params = copy.deepcopy(hadrons_params)
+        biased_params["job_setup"]["lma"]["tasks"]["bias"] = {}
+        biased_task = create_task("lma", biased_params, "a", "20")
+        biased_sched = biased_task.handler.build_input_params(biased_task.config).schedule
+
+        assert biased_task.config.skip_bias is False  # key present
+        assert plain_sched == biased_sched
+
+    def test_bias_absent_sets_skip_flag(self, hadrons_params):
+        task = create_task("lma", hadrons_params)
+        assert task.config.skip_bias is True
+
+    def test_aggregator_merges_bias_family(self, hadrons_params):
+        self._set_bias(hadrons_params)
+        task = create_task("lma", hadrons_params)
+        params = task.handler.build_aggregator_params(task.config, average=False)
+
+        run = params["run"]
+        assert any(k.startswith("bias_") for k in run)
+        assert any(not k.startswith("bias_") for k in run)
+        for key in run:
+            assert key in params
+        bias_key = next(k for k in run if k.startswith("bias_"))
+        assert "correlators_bias" in params[bias_key]["load_files"]["filestem"]
+
+    def test_aggregation_path_catalog_enumerates_all_blocks(self, hadrons_params):
+        # Aggregation builds configs without series/cfg (aggregator.py), so
+        # the seed composes empty suffixes there; the catalog axis (a pure
+        # function of nbias) must still enumerate every block — the design's
+        # coherence invariant.
+        self._set_bias(hadrons_params)
+        task = create_task("lma", hadrons_params)
+
+        assert task.config.bias_config.bias_seed.endswith("__")
+        assert task.config.bias_config.source_axis == [f"n{i}" for i in range(4)]
+        # (create_outfile_catalog call dropped: pre-existing {series}/{cfg}
+        # retention makes it raise on series/cfg-less builds)
+
+    def test_epack_mass_shifts_include_bias_masses(self, hadrons_params):
+        self._set_bias(hadrons_params, mass=("d",))
+        task = create_task("lma", hadrons_params, "a", "20")
+        result = task.handler.build_input_params(task.config)
+
+        # epack mass-shift modules are named low_modes_name.format(mass=label)
+        # on the epack config (shared route default); every bias mass label
+        # must join the shifted set.
+        epack_cfg = task.config.epack_config
+        for mass_label in task.config.bias_config.masses:
+            assert epack_cfg.low_modes_name.format(mass=mass_label) in result.modules
+
+
+# --- appended: grid routing-safety (slice 5) ---
+def test_grid_lma_builds_with_bias_task_present(tmp_path, monkeypatch, grid_params):
+    """grid_lma shares lmi routing; a tasks.bias block routes but is silently unused.
+
+    GridLMAConfig has no bias_config field: the routed slice is dropped, the
+    derived skip_bias flag becomes a harmless formatting entry, and the shared
+    handlers (catalog/validate/aggregator) are getattr-guarded. The build must
+    succeed and the Grid XML must contain no bias content.
+    """
+    monkeypatch.chdir(tmp_path)
+    params = copy.deepcopy(grid_params)
+    params["job_setup"]["lma"]["tasks"]["bias"] = {
+        "nbias": 4,
+        "bias_seed": "grid-bias",
+        "gamma": ["pion_local"],
+        "mass": ["l"],
+    }
+
+    task = create_task("lma", params, "a", "20")  # must not raise
+    assert not hasattr(task.config, "skip_bias")  # GridLMAConfig has no bias field
+
+    write_input_file("lma", params, "a", "20")
+
+    root = ET.parse(tmp_path / "in" / "grid-full-lma-a.20.xml").getroot()
+    seeds = [e.text for e in root.findall(".//sources/elem/seed")]
+    assert seeds and not any("noise_n" in s for s in seeds)
