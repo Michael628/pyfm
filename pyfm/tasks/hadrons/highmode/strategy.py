@@ -9,6 +9,7 @@ from pyfm.tasks.hadrons.types import (
     HadronsInput,
     HighModeConfig,
     CorrelatorStrategy,
+    SolveCrossTerms,
     SourceRef,
 )
 import pyfm.tasks.hadrons.modules as hadmods
@@ -16,6 +17,44 @@ from pyfm.domain import OpList
 from pyfm.tasks.hadrons.highmode import sib, twopoint
 
 from pyfm import utils
+
+
+_LEGACY_CROSS_TERMS: t.Dict[str, t.Tuple[bool, SolveCrossTerms]] = {
+    "none": (False, SolveCrossTerms.DIAGONAL),
+    "mass": (True, SolveCrossTerms.DIAGONAL),
+    "solve": (False, SolveCrossTerms.ALL),
+    "all": (True, SolveCrossTerms.ALL),
+    "0": (False, SolveCrossTerms.DIAGONAL),
+    "1": (True, SolveCrossTerms.DIAGONAL),
+    "2": (False, SolveCrossTerms.ALL),
+    "3": (True, SolveCrossTerms.ALL),
+}
+
+
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Translate the legacy ``cross_terms`` enum onto the split fields.
+
+    Silent by design (gauge ``action_type`` precedent, ``gauge.py``):
+    ``none`` -> defaults, ``mass`` -> mass toggle, ``solve`` -> ALL,
+    ``all`` -> mass toggle + ALL. Explicit ``mass_cross_terms`` /
+    ``solve_cross_terms`` keys always win. Runs before ``route_params``'
+    reflection split so the legacy key never leaks into ``operations``.
+    """
+    for site in (params, params.get("_preprocessor") or {}):
+        legacy = site.get("cross_terms")
+        if legacy is None:
+            continue
+        try:
+            mass_cross, solve_cross = _LEGACY_CROSS_TERMS[str(legacy).lower()]
+        except KeyError:
+            raise ValueError(
+                f"Invalid cross_terms value ({legacy!r}). "
+                "options are: none, mass, solve, all"
+            ) from None
+        site.pop("cross_terms", None)
+        site.setdefault("mass_cross_terms", mass_cross)
+        site.setdefault("solve_cross_terms", solve_cross)
+    return params
 
 
 def route_params(params: t.Dict) -> t.Dict:
@@ -196,8 +235,21 @@ def sort_schedule(config: HighModeConfig, module_names: t.List[str]) -> t.List[s
         return -1
 
     def mixed_solvers_last(name):
-        # Assumes get_solver_labels appends cross_terms to the end of the list
-        for i, label in reversed(list(enumerate(config.get_solver_labels()))):
+        # Two-list ranking: modules matching a cross label rank strictly
+        # above every base rank (len(base)+i — byte-identical indices to
+        # the legacy appended-at-end list for DIAGONAL/ALL); everything
+        # else ranks against the base list. Under TIERED the `ama` dset
+        # leaves the dset list while ama quark modules persist; ranking
+        # those against the dset list would invert the ranLL->ama precon
+        # order (quark_gen's guess chain).
+        base_labels = config.get_solver_labels(skip_cross=True)
+        cross_labels = [
+            l for l in config.get_solver_labels() if l not in base_labels
+        ]
+        for i, label in reversed(list(enumerate(cross_labels))):
+            if label in name:
+                return len(base_labels) + i
+        for i, label in reversed(list(enumerate(base_labels))):
             if label in name:
                 return i
         return -1
@@ -279,8 +331,11 @@ def build_aggregator_params(
     for op in config.op_list:
         gamma_label = op.gamma.name.lower()
         e_rep["gamma_label"] = gamma_label
-        for mass, dset in itertools.product(op.mass, solver_labels):
-            mass_label = config.mass.to_string(mass, True)
+        # Mass axis from get_mass_labels so cross-mass dsets aggregate like
+        # diagonal ones (the catalog/resume gate has always used this axis).
+        for mass_label, dset in itertools.product(
+            config.get_mass_labels(op), solver_labels
+        ):
             file_label = f"{run_prefix}{gamma_label}_{mass_label}_{dset}"
             run_list.append(file_label)
             e_rep["mass"] = mass_label

@@ -15,6 +15,7 @@ from pyfm.tasks.hadrons import (
     lmi,
 )
 from pyfm.tasks.hadrons.highmode.twopoint import contraction_gen
+from pyfm.tasks.hadrons.types import SolveCrossTerms
 import pyfm.tasks.grid.modules as gridmods
 
 
@@ -200,6 +201,24 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
     )
 
 
+def validate_config(config: GridLMAConfig) -> None:
+    """Validate GridLMAConfig after construction.
+
+    Delegates to the shared LMI validator for cross-sibling concerns, then
+    rejects non-DIAGONAL solve-cross modes: the Grid LMA path resolves each
+    contraction side through ``solver_map`` (ranLL -> lma, ama -> mpcg) and
+    has no meaning for cross-solver contractions.
+    """
+    lmi.validate_config(config)
+    if config.high_modes_config.solve_cross_terms != SolveCrossTerms.DIAGONAL:
+        raise ValueError(
+            "grid_lma only supports solve_cross_terms=DIAGONAL; got "
+            f"{config.high_modes_config.solve_cross_terms!r}. Cross-solver "
+            "contractions are not implemented for the Grid LMA path — use "
+            "the Hadrons LMI task instead."
+        )
+
+
 # Register GridLMAConfig with all handlers
 register_task(
     "grid_lma",
@@ -209,5 +228,5 @@ register_task(
     lmi.build_aggregator_params,
     lmi.normalize_params,
     lmi.route_params,
-    validate=lmi.validate_config,
+    validate=validate_config,
 )

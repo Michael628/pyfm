@@ -465,3 +465,29 @@ def test_grid_lma_builds_with_bias_task_present(tmp_path, monkeypatch, grid_para
     root = ET.parse(tmp_path / "in" / "grid-full-lma-a.20.xml").getroot()
     seeds = [e.text for e in root.findall(".//sources/elem/seed")]
     assert seeds and not any("noise_n" in s for s in seeds)
+
+
+# --- appended: TIERED end-to-end (phase 5) ---
+def test_generate_high_modes_tiered_input(tmp_path, monkeypatch, hadrons_params):
+    """TIERED: ranLL_ama cross contractions and dsets; no HH (ama) contraction
+    modules; ama propagators persist (the LH contraction consumes them)."""
+    monkeypatch.chdir(tmp_path)
+    hadrons_params["job_setup"]["high_modes"]["tasks"]["high_modes"][
+        "solve_cross_terms"
+    ] = "tiered"
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+    contractions = {n for n in modules if n.startswith("corr_")}
+    cross = {n for n in contractions if "ama" in n and "ranLL" in n}
+
+    assert cross, "expected ranLL_ama cross contractions under TIERED"
+    assert all(n.startswith("corr_ranLL_ama_") for n in cross)
+    assert not any(n.startswith("corr_ama_") for n in contractions), "HH dropped"
+    assert not any("ama_ranLL" in n for n in contractions), "reverse orientation dropped"
+    assert any(n.startswith("quark_ama_") for n in modules), "ama propagators persist"
+
+    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
+    # module names and output filestems both name the ranLL_ama dset
+    assert "ranLL_ama" in xml

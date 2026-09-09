@@ -60,11 +60,18 @@ class LanczosParams(FromDictProtocol):
         return {k: str(v) for k, v in self.items()}
 
 
-class CrossTerms(SerializableEnum):
-    NONE = 0
-    MASS = 1
-    SOLVE = 2
-    ALL = 3
+class SolveCrossTerms(SerializableEnum):
+    """Solve-side cross-term mode for connected two-point contractions.
+
+    L = ``ranLL`` (low-mode/eigenvector solve); H = any CG solve (label
+    starting with ``ama``). DIAGONAL (HH + LL), ALL (HH, LL, HL, LH),
+    TIERED (LL + LH only). No cross terms between different CG solvers.
+    """
+
+    DIAGONAL = 0
+    ALL = 1
+    TIERED = 2
+
 
 class CorrelatorStrategy(Enum):
     TWOPOINT = auto()
@@ -84,7 +91,8 @@ class HighModeConfig(SimpleConfig):
     dt: int
     noise: int
     time: int
-    cross_terms: CrossTerms = CrossTerms.NONE
+    mass_cross_terms: bool = False
+    solve_cross_terms: SolveCrossTerms = SolveCrossTerms.DIAGONAL
     shift_gauge_name: str | None = None
     skip_low_modes: bool = False
     skip_cg: bool = False
@@ -165,7 +173,7 @@ class HighModeConfig(SimpleConfig):
 
     def get_mass_labels(self, op:OpList.Op, skip_cross: bool = False) -> t.List[str]:
         mass_labels = [self.mass.to_string(m, True) for m in op.mass]
-        if not skip_cross and self.cross_terms in (CrossTerms.MASS, CrossTerms.ALL):
+        if not skip_cross and self.mass_cross_terms:
             cross_labels = [f"{mass_labels[j]}_m{a}" for i,a in enumerate(mass_labels) for j in range(i)]
             mass_labels += cross_labels
         return mass_labels
@@ -182,8 +190,53 @@ class HighModeConfig(SimpleConfig):
             else:
                 solver_labels += [f"ama_{r}" for r in residuals]
 
-        if not skip_cross and self.cross_terms in (CrossTerms.SOLVE, CrossTerms.ALL):
-            cross_labels = [f"{a}_{b}" for a in solver_labels for b in solver_labels if a != b]
-            solver_labels += cross_labels
+        if skip_cross:
+            return solver_labels
 
-        return solver_labels
+        diagonals = [s for s in solver_labels if self.admits_solve_pair(s, s)]
+        cross_labels = [
+            f"{quark}_{antiquark}"
+            for quark in solver_labels
+            for antiquark in solver_labels
+            if quark != antiquark and self.admits_solve_pair(quark, antiquark)
+        ]
+        return diagonals + cross_labels
+
+    def admits_solve_pair(self, quark: str, antiquark: str) -> bool:
+        """Whether a contraction pairing quark-side solver ``quark`` with
+        antiquark-side solver ``antiquark`` belongs to the configured
+        solve-cross mode (diagonal pairs included).
+
+        Single source of truth shared by :meth:`get_solver_labels` and
+        ``twopoint.contraction_gen`` so the catalog/resume/aggregation label
+        list and the emitted contraction set cannot diverge. Dset names are
+        quark-first (``TwoPointOp.solver_label``), so ``quark`` is the first
+        segment of a cross label (``ranLL_ama`` = L quark, H antiquark).
+
+        - DIAGONAL: base (same-solver) pairs only.
+        - ALL: both orientations of every L x H pair; never H x H' (two
+          different CG solvers never cross).
+        - TIERED: the LL diagonal plus the L-quark orientation only (dset
+          ``ranLL_ama``); the HH diagonal leaves the dset list while ama
+          propagators remain (see ``quark_gen``'s skip-cross discipline).
+        - With either solver class absent (``skip_low_modes``/``skip_cg``)
+          the mode is ignored and every base pair is admitted.
+        """
+        mode = self.solve_cross_terms
+        if self.skip_low_modes or self.skip_cg:
+            mode = SolveCrossTerms.DIAGONAL
+
+        def is_low(label: str) -> bool:
+            return label == "ranLL"
+
+        if quark == antiquark:
+            if mode == SolveCrossTerms.TIERED:
+                return is_low(quark)
+            return True
+        low_quark = is_low(quark)
+        low_antiquark = is_low(antiquark)
+        if low_quark and not low_antiquark:
+            return mode in (SolveCrossTerms.ALL, SolveCrossTerms.TIERED)
+        if low_antiquark and not low_quark:
+            return mode == SolveCrossTerms.ALL
+        return False

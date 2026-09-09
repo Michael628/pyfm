@@ -4,7 +4,7 @@ import itertools
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import OpList, Gamma, MassDict
-from pyfm.tasks.hadrons.types import CrossTerms, HighModeConfig, SourceRef
+from pyfm.tasks.hadrons.types import HighModeConfig, SourceRef
 
 
 _AXIAL_GAMMAS = frozenset(
@@ -128,16 +128,14 @@ def contraction_gen(
             if mlabel1 < mlabel2:
                 continue
 
-            if (
-                config.cross_terms not in (CrossTerms.MASS, CrossTerms.ALL)
-                and mlabel1 != mlabel2
-            ):
+            if not config.mass_cross_terms and mlabel1 != mlabel2:
                 continue
 
-            if (
-                config.cross_terms not in (CrossTerms.SOLVE, CrossTerms.ALL)
-                and slabel1 != slabel2
-            ):
+            # slabel1 drives the antiquark, slabel2 the quark, and dset names
+            # are quark-first (TwoPointOp.solver_label) — so the pair check
+            # takes (quark=slabel2, antiquark=slabel1) and TIERED keeps the
+            # pairs whose dset is `ranLL_ama`.
+            if not config.admits_solve_pair(slabel2, slabel1):
                 continue
 
             common1 = dict(

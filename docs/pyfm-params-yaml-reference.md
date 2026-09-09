@@ -421,6 +421,49 @@ tasks:
 
 ---
 
+## `job_setup.hadrons.tasks.high_modes` — cross-term controls (`HighModeConfig`)
+
+Two independent knobs replace the legacy `cross_terms` enum. Both live in the
+`high_modes` (or `bias`) task slice and default to "no cross terms", matching
+the legacy `none`.
+
+```yaml
+tasks:
+  high_modes:
+    mass_cross_terms: true      # cross-mass contractions (m_l_mu style dsets)
+    solve_cross_terms: tiered   # DIAGONAL | ALL | TIERED
+    pion_local:
+      mass: ["l", "u"]
+```
+
+- `mass_cross_terms` (default `false`): when set, contractions pairing two
+  different masses are emitted (one per unordered pair, earlier-list label
+  first: `002426_m001524`). They join the outfile catalog, resume gate, and —
+  since the split — the aggregation run list.
+- `solve_cross_terms` (default `DIAGONAL`): controls which solver pairs are
+  contracted. `L` = `ranLL` (low-mode/eigenvector solve), `H` = any CG solve
+  (label starting with `ama`); two different CG solvers never cross.
+  - `DIAGONAL` — HH + LL only (base behavior, byte-identical to legacy `none`).
+  - `ALL` — HH, LL, HL, LH (both orientations, e.g. dsets `ranLL_ama` and
+    `ama_ranLL`).
+  - `TIERED` — LL + LH only: dset `ranLL_ama` plus the `ranLL` diagonal. The
+    `ama` (HH) correlator is *not* produced, but ama propagators still are
+    (the LH contraction consumes them). Ignored (treated as DIAGONAL) when no
+    low modes are provided (`skip_low_modes`) or CG is skipped (`skip_cg`).
+- `grid_lma` rejects any non-`DIAGONAL` value with a clear error — cross-solver
+  contractions are Hadrons-LMI only.
+
+**Legacy mapping** (silent, canonical keys win):
+
+| legacy `cross_terms` | `mass_cross_terms` | `solve_cross_terms` |
+|---|---|---|
+| `none` | `false` | `DIAGONAL` |
+| `mass` | `true` | `DIAGONAL` |
+| `solve` | `false` | `ALL` |
+| `all` | `true` | `ALL` |
+
+---
+
 ## `job_setup.hadrons.tasks.epack` — `EpackConfig`
 
 ```yaml
@@ -548,4 +591,4 @@ Each entry:
 - **Labels vs. paths:** emphasize that `outfile:`, `file:`, `evalfile:` are *labels* into `files:`, not paths. This trips people up.
 - **Skip-by-omission:** the LMI `skip_*` behavior (omit a `tasks` sub-block to skip that stage) is non-obvious and deserves its own callout.
 - **`good_size` is validation, not allocation:** clarify it's the completeness threshold the nanny uses to decide a file is "done", not a size hint.
-- **Worth confirming:** I documented behavior from the configs in `pyfm/tasks/` and `pyfm/a2a/types.py`. The `sib`/`photex`/`selfen` contraction types and `cross_terms` exist in code but aren't exercised in this example file — flag whether your audience needs those covered.
+- **Worth confirming:** I documented behavior from the configs in `pyfm/tasks/` and `pyfm/a2a/types.py`. The `sib`/`photex`/`selfen` contraction types exist in code but aren't exercised in this example file — flag whether your audience needs those covered.
