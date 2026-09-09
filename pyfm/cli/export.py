@@ -33,16 +33,36 @@ def export():
 @format_option()
 @click.option("--average", is_flag=True, default=False, help="Average over configurations after aggregation.")
 @click.option("--skip-existing", is_flag=True, default=False, help="Skip configs whose output already exists.")
+@click.option("--generate-manifest", is_flag=True, default=False, help="Generate manifest sidecars from existing processed agg files instead of aggregating.")
+@click.option(
+    "--max-workers",
+    type=int,
+    default=1,
+    help=(
+        "Number of workers for parallel file loading; loads serially "
+        "when 1 or below the small-batch threshold (default: 1)."
+    ),
+)
 @logging_level_option()
-def corr(param_file, job, fmt, average, skip_existing, logging_level):
+def corr(param_file, job, fmt, average, skip_existing, generate_manifest, max_workers, logging_level):
     """Aggregate output data across configurations into a single file."""
     from pyfm import utils
     from pyfm.nanny import aggregator
 
+    if generate_manifest and skip_existing:
+        raise click.UsageError(
+            "--generate-manifest and --skip-existing are mutually exclusive."
+        )
     params = utils.io.load_param(param_file)
     utils.set_logging_level(logging_level)
     aggregator.aggregate_task_data(
-        job, params, format=fmt, average=average, skip_existing=skip_existing
+        job,
+        params,
+        format=fmt,
+        average=average,
+        skip_existing=skip_existing,
+        generate_manifest=generate_manifest,
+        max_workers=max_workers,
     )
 
 
@@ -65,12 +85,23 @@ def corr(param_file, job, fmt, average, skip_existing, logging_level):
     help="Output path (exact stem for a single run key; base directory for "
     "multi-run-key steps).",
 )
+@click.option(
+    "--average",
+    is_flag=True,
+    default=False,
+    help="Average the loaded aggregated data and write it to the `_avg` output "
+    "locations; permits --input-format and --format to match.",
+)
 @logging_level_option()
-def convert(param_file, job, fmt, input_fmt, output, logging_level):
-    """Convert a prior run's aggregated output to a different file format."""
+def convert(param_file, job, fmt, input_fmt, output, average, logging_level):
+    """Convert a prior run's aggregated output, optionally averaging it."""
     from pyfm import utils
     from pyfm.nanny import aggregator
 
+    if input_fmt == fmt and not average:
+        raise click.UsageError(
+            "--input-format and --format must differ unless --average is given."
+        )
     params = utils.io.load_param(param_file)
     utils.set_logging_level(logging_level)
     aggregator.convert_task_data(
@@ -79,6 +110,7 @@ def convert(param_file, job, fmt, input_fmt, output, logging_level):
         input_format=input_fmt,
         output_format=fmt,
         output=output,
+        average=average,
     )
 
 

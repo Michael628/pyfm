@@ -46,7 +46,7 @@ def test_aggregate_delegates_to_export_corr(runner):
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi"])
         assert result.exit_code == 0, result.output
         assert "deprecated" in result.output.lower()
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_average_flag(runner):
@@ -57,7 +57,7 @@ def test_aggregate_average_flag(runner):
     ):
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--average"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=True, skip_existing=False)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=True, skip_existing=False, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_skip_existing_flag(runner):
@@ -68,7 +68,7 @@ def test_aggregate_skip_existing_flag(runner):
     ):
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--skip-existing"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=True)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=True, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_custom_format(runner):
@@ -79,9 +79,79 @@ def test_aggregate_custom_format(runner):
     ):
         result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "-f", "hdf5"])
         assert result.exit_code == 0, result.output
-        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="hdf5", average=False, skip_existing=False)
+        mock_agg.assert_called_once_with("hadrons_lmi", FAKE_PARAMS, format="hdf5", average=False, skip_existing=False, generate_manifest=False, max_workers=1)
 
 
 def test_aggregate_missing_job_fails(runner):
     result = runner.invoke(cli, ["task", "aggregate"])
     assert result.exit_code != 0
+
+
+def test_aggregate_max_workers_flag(runner):
+    """--max-workers N forwards max_workers=N through the export corr alias."""
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data") as mock_agg,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli, ["task", "aggregate", "-j", "hadrons_lmi", "--max-workers", "4"]
+        )
+        assert result.exit_code == 0, result.output
+        mock_agg.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, format="csv", average=False, skip_existing=False, generate_manifest=False, max_workers=4
+        )
+
+
+def test_aggregate_max_workers_must_be_int(runner):
+    """Non-int --max-workers is rejected by Click's type validation."""
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data"),
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli, ["task", "aggregate", "-j", "hadrons_lmi", "--max-workers", "abc"]
+        )
+        assert result.exit_code != 0
+
+
+def test_aggregate_generate_manifest_flag(runner):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data") as mock_agg,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--generate-manifest"])
+        assert result.exit_code == 0, result.output
+        mock_agg.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, format="csv", average=False,
+            skip_existing=False, generate_manifest=True, max_workers=1,
+        )
+
+
+def test_aggregate_generate_manifest_with_average(runner):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data") as mock_agg,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(cli, ["task", "aggregate", "-j", "hadrons_lmi", "--generate-manifest", "--average"])
+        assert result.exit_code == 0, result.output
+        mock_agg.assert_called_once_with(
+            "hadrons_lmi", FAKE_PARAMS, format="csv", average=True,
+            skip_existing=False, generate_manifest=True, max_workers=1,
+        )
+
+
+def test_aggregate_generate_manifest_conflicts_with_skip_existing(runner):
+    with (
+        patch("pyfm.utils.io.load_param", return_value=FAKE_PARAMS),
+        patch("pyfm.nanny.aggregator.aggregate_task_data") as mock_agg,
+        patch("pyfm.utils.set_logging_level"),
+    ):
+        result = runner.invoke(
+            cli, ["task", "aggregate", "-j", "hadrons_lmi", "--generate-manifest", "--skip-existing"]
+        )
+        assert result.exit_code != 0
+        mock_agg.assert_not_called()

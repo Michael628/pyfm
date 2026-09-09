@@ -39,9 +39,19 @@ def generate(ctx, param_file, job, series, cfg):
 @format_option()
 @click.option("--average", is_flag=True, default=False, help="Average over configurations after aggregation.")
 @click.option("--skip-existing", is_flag=True, default=False, help="Skip configs whose output already exists.")
+@click.option("--generate-manifest", is_flag=True, default=False, help="Generate manifest sidecars from existing processed agg files instead of aggregating.")
+@click.option(
+    "--max-workers",
+    type=int,
+    default=1,
+    help=(
+        "Number of workers for parallel file loading; loads serially "
+        "when 1 or below the small-batch threshold (default: 1)."
+    ),
+)
 @logging_level_option()
 @click.pass_context
-def aggregate(ctx, param_file, job, fmt, average, skip_existing, logging_level):
+def aggregate(ctx, param_file, job, fmt, average, skip_existing, generate_manifest, max_workers, logging_level):
     """Aggregate output data across configurations into a single file (deprecated alias)."""
     from pyfm.cli.export import export
 
