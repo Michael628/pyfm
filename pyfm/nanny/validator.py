@@ -92,25 +92,33 @@ def compare_task_outputs(
     task_a = create_task(job_a, yaml_params, series, cfg)
     task_b = create_task(job_b, yaml_params, series, cfg)
 
-    # Step 1: the compared outputs (high_modes correlators) exist & are complete
+    # Step 1: the compared (high_modes) outputs exist & are complete
     # for both jobs. Scoped to high_modes — the subconfig step 4 actually
     # compares — so unrelated epack/meson outputs don't gate the comparison.
-    # (v1 coupling: hadrons_lmi exposes .high_modes_config; this generalizes
-    # when other task types register compare_outputs.)
+    # (v1 coupling: hadrons_lmi and grid_lma expose .high_modes_config as a
+    # list; this generalizes when other task types register compare_outputs.)
     for task, job in ((task_a, job_a), (task_b, job_b)):
-        df = highmode.create_outfile_catalog(task.config.high_modes_config)
-        if df is None or df.empty:
+        if not task.config.high_modes_config:
             raise ValueError(
-                f"Job {job!r} ({task.key}) has no high_modes outfile catalog; cannot compare."
+                f"Job {job!r} ({task.key}) has no high_modes outfile catalog; "
+                "cannot compare."
             )
-        bad = df[
-            (df["exists"] == False) | (df["file_size"].fillna(0) < df["good_size"])
-        ]
-        if not bad.empty:
-            raise ValueError(
-                f"Job {job!r} ({task.key}) is missing or has incomplete high_modes "
-                f"outputs ({len(bad)} file(s) below threshold)."
-            )
+        for i, hm in enumerate(task.config.high_modes_config):
+            df = highmode.create_outfile_catalog(hm)
+            if df is None or df.empty:
+                raise ValueError(
+                    f"Job {job!r} ({task.key}) has no high_modes outfile "
+                    f"catalog for entry {i}; cannot compare."
+                )
+            bad = df[
+                (df["exists"] == False) | (df["file_size"].fillna(0) < df["good_size"])
+            ]
+            if not bad.empty:
+                raise ValueError(
+                    f"Job {job!r} ({task.key}) is missing or has incomplete "
+                    f"high_modes outputs (entry {i}: {len(bad)} file(s) below "
+                    "threshold)."
+                )
 
     # Step 2: same task type.
     if task_a.key != task_b.key:

@@ -546,7 +546,7 @@ class TestGridLmaValidation:
             "mass_cross_terms"
         ] = True
         task = create_task("lma", grid_params, "a", "20")
-        assert task.config.high_modes_config.mass_cross_terms is True
+        assert task.config.high_modes_config[0].mass_cross_terms is True
 
     def test_grid_lma_accepts_tiered_collapsed_to_diagonal(self, grid_params):
         # TIERED + no epack => skip_low_modes=True => effective DIAGONAL:
@@ -556,7 +556,7 @@ class TestGridLmaValidation:
         tasks.pop("epack", None)
         tasks.pop("meson", None)  # meson requires epack (lmi validator)
         task = create_task("lma", grid_params, "a", "20")  # must not raise
-        hm = task.config.high_modes_config
+        hm = task.config.high_modes_config[0]
         assert hm.solve_cross_terms == SolveCrossTerms.TIERED
         assert hm.effective_solve_cross_terms is SolveCrossTerms.DIAGONAL
         # The epack pop also flips skip_epack; the default-built epack must

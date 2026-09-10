@@ -418,7 +418,8 @@ def validate_config(config: HighModeConfig) -> None:
         if not config.bias_seed:
             raise ValueError(
                 "bias_seed is required when nbias is set (it seeds the "
-                "deterministic time-slice draws; set it under tasks.bias:)."
+                "deterministic time-slice draws; set it in the tasks.high_modes "
+                "list entry)."
             )
         if not config.bias_replace and config.nbias > config.time:
             raise ValueError(

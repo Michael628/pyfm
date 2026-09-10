@@ -57,7 +57,7 @@ Merged into the nanny config **and** every job/task. These are the values most `
 | `ens` | Ensemble tag, fills `{ens}` everywhere | Template key |
 | `space` / `time` | Spatial / temporal lattice extent | Config input (e.g. `SmearConfig`, `*.time`) |
 | `runid` | Run identifier string with `{series}/{eigs}/{noise}` | String template |
-| `dt` | Source-time-slice spacing, fills `{dt}`; ignored when `nbias` is set (see `tasks.bias`) | Config input (`HighModeConfig.dt`) + template key |
+| `dt` | Source-time-slice spacing, fills `{dt}`; ignored when `nbias` is set in a `high_modes` list entry | Config input (`HighModeConfig.dt`) + template key |
 | `noise` | Noise count (keep `1`), fills `{noise}` | Config input + template key |
 | `eigs` | Number of eigenvalues used, fills `{eigs}` | Config input (`EpackConfig.eigs`) + template key |
 | `lattice` | `[nx, ny, nz, nt]` geometry | Config input (`JobConfig.lattice`) |
@@ -373,38 +373,48 @@ job_setup:
           mass: ["l"]
 ```
 
-This is the richest task. `LMIConfig` is composite: each `tasks` sub-block routes to a child config, and **omitting a sub-block sets the corresponding `skip_*` flag** (`normalize_params`).
+This is the richest task. `LMIConfig` is composite: each `tasks` sub-block routes to a child config, and **omitting a sub-block sets the corresponding `skip_*` flag** (`normalize_params`); for `high_modes` the flag derives from the (possibly coerced) entry list being empty — an absent block and `high_modes: []` are equivalent.
 
 | Sub-block | Builds | Notable keys |
 |-----------|--------|--------------|
 | `epack` | `EpackConfig` | `load` (load vs. IRL-solve), `save_evals`, `save_eigs` |
 | `meson` | `MesonConfig` | `gamma` (list of gamma structures), `mass` (label list) |
-| `high_modes` | `HighModeConfig` | per-operator (`vec_local`, `pion_local`, ...) → `mass` list (CG solves + deflation) |
-| `bias` | `HighModeConfig` (second sibling, `bias_config`) | `nbias`, `bias_seed`, `bias_replace` (default `true`: with-replacement draws), `high_modes` (files-label rebind), per-operator `mass` lists |
+| `high_modes` | `list[HighModeConfig]` | per-operator (`vec_local`, `pion_local`, ...) → `mass` list (CG solves + deflation); accepts a single mapping (one entry) or a list of mappings — e.g. a bias entry with `nbias`, `bias_seed`, `bias_replace`, `high_modes` (files-label rebind) |
 
 Validation: if `epack` is skipped, `meson` must be skipped too (no eigenvectors → no meson fields).
 
 ---
 
-## `job_setup.hadrons.tasks.bias` — bias sources (`HighModeConfig`)
+## `job_setup.hadrons.tasks.high_modes` — multiple entries & bias sources
 
-Optional second `HighModeConfig` sibling (`bias_config`). When `nbias` is set, source
-placement switches from `dt`-spaced times to `nbias` random time slices drawn **with
-replacement by default** — duplicate times are distinct sources with distinct outputs (block labels
-`n0..n{nbias-1}` fill the `{tsource}` placeholder; module names `noise_n0`, outputs
-`..._n0_{series}`).
+`high_modes` accepts a **single mapping** (one `HighModeConfig`, the common
+case) or a **list of mappings** — each entry is a full `HighModeConfig`
+routed, built, and emitted independently; input params, the outfile catalog,
+and aggregation iterate entries in list order.
+
+An entry with `nbias` set is a *bias entry*: source placement switches from
+`dt`-spaced times to `nbias` random time slices drawn **with replacement by
+default** — duplicate times are distinct sources with distinct outputs (block
+labels `n0..n{nbias-1}` fill the `{tsource}` placeholder; module names
+`noise_n0`, outputs `..._n0_{series}`).
 
 ```yaml
 tasks:
-  bias:
-    nbias: 8
-    bias_seed: lmi4444-v1
-    residual: [1.0e-4, 1.0e-8]
-    high_modes: bias_modes     # rebind to the bias files entry (warns if forgotten)
-    pion_local:
-      mass: ["l"]
+  high_modes:
+    - pion_local:
+        mass: ["l"]
+      vec_local:
+        mass: ["l"]
+    - nbias: 8
+      bias_seed: lmi4444-v1
+      residual: [1.0e-4, 1.0e-8]
+      high_modes: bias_modes     # rebind to a distinct files entry (warns if shared)
+      pion_local:
+        mass: ["l"]
 ```
 
+- A single mapping is coerced to a one-entry list — existing params files are
+  unchanged.
 - `bias_seed` is composed with `series`/`cfg` at config-build time
   (`{bias_seed}_{series}_{cfg}`), independent of `runid`; the same (seed, series, cfg)
   always re-derives the same draws, so resume/completion/aggregation stay coherent.
@@ -415,9 +425,15 @@ tasks:
   allowed) or without (`rng.sample`; rejects `nbias > time` with a clear error). Block labels,
   outputs, and aggregation are identical in structure across both modes — only the drawn
   times differ.
-- Aggregation run keys are prefixed `bias_` and merged alongside the high-mode family.
-- `grid_lma` shares the routing: a `tasks.bias` block routes but is silently unused
-  there (Grid bias support is deferred).
+- Entries sharing a `files` label warn: their outputs share a filestem namespace.
+  Give each entry its own `files` entry (e.g. `bias_modes`) and rebind with
+  `high_modes:` inside that entry.
+- Aggregation run keys are namespaced per entry: the first entry is unprefixed,
+  later entries get `hm1_`, `hm2_`, ... prefixes, with run lists concatenated.
+- The former `tasks.bias:` key is gone — a yaml still using it fails loudly (`KeyError: 'bias_config'`); move the block into a list entry.
+- `grid_lma` shares the routing and accepts the same single-entry form; more
+  than one entry raises at config-build time (Grid bias/multi-entry support is
+  deferred — use the Hadrons LMI task).
 
 ---
 
@@ -425,8 +441,8 @@ tasks:
 
 Two independent knobs replace the legacy `cross_terms` enum, and the
 `chain_cg_solves` toggle (below) controls how multi-residual CG solves seed
-each other's guesses. All of them live in the `high_modes` (or `bias`) task
-slice; the cross-term pair defaults to "no cross terms", matching the legacy
+each other's guesses. All of them live in a `high_modes` task-slice
+entry; the cross-term pair defaults to "no cross terms", matching the legacy
 `none`.
 
 ```yaml
@@ -469,8 +485,8 @@ tasks:
   runs independently and guesses the `ranLL` propagator of the same
   gamma/mass/source; when low modes are skipped, no guess is provided. With
   a single `residual` the two modes coincide (`ama` guesses `ranLL` either
-  way) — the toggle only matters for multi-residual configs. Applies to the
-  `bias` slice too; under TIERED it rewires guesses among the demand-driven
+  way) — the toggle only matters for multi-residual configs. Applies to every
+  `high_modes` list entry; under TIERED it rewires guesses among the demand-driven
   (contract-gamma) CG solves only.
 - Module names, outputs, the outfile catalog, and the resume gate are
   identical in both modes (only the `guess` option inside `quark_*` modules
