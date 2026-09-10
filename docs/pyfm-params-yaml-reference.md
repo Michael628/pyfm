@@ -449,13 +449,21 @@ tasks:
   - `ALL` — HH, LL, HL, LH (both orientations, e.g. dsets `ranLL_ama` and
     `ama_ranLL`).
   - `TIERED` — LL + LH only: dset `ranLL_ama` plus the `ranLL` diagonal. The
-    `ama` (HH) correlator is *not* produced, but ama propagators still are
-    (the LH contraction consumes them). Ignored (treated as DIAGONAL) when no
+    `ama` (HH) correlator is *not* produced; ama propagators are emitted
+    demand-driven — only those a contraction consumes (the contract-gamma
+    PION_LOCAL/IDENTITY solves; op-gamma CG solves with no consumer are
+    skipped). Ignored (treated as DIAGONAL, with a logged warning) when no
     low modes are provided (`skip_low_modes`) or CG is skipped (`skip_cg`).
-- `grid_lma` rejects any non-`DIAGONAL` value with a clear error — cross-solver
-  contractions are Hadrons-LMI only.
+- `grid_lma` rejects any config whose *effective* mode is not `DIAGONAL`
+  (TIERED/ALL collapsed by `skip_low_modes`/`skip_cg` are valid Grid
+  workloads) and supports exactly **one** residual — cross-solver
+  contractions and multi-residual `ama_{r}` labels are Hadrons-LMI only.
 
-**Legacy mapping** (silent, canonical keys win):
+**Legacy mapping** (silent, canonical keys win; string values only — numeric
+values were never valid and raise `ValueError`; the translation is logged at
+debug level. Params files are re-read and re-normalized on every run, so a
+stored yaml using the legacy `cross_terms` key keeps translating — nothing
+needs regeneration.):
 
 | legacy `cross_terms` | `mass_cross_terms` | `solve_cross_terms` |
 |---|---|---|

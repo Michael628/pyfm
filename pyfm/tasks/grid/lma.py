@@ -205,17 +205,29 @@ def validate_config(config: GridLMAConfig) -> None:
     """Validate GridLMAConfig after construction.
 
     Delegates to the shared LMI validator for cross-sibling concerns, then
-    rejects non-DIAGONAL solve-cross modes: the Grid LMA path resolves each
-    contraction side through ``solver_map`` (ranLL -> lma, ama -> mpcg) and
-    has no meaning for cross-solver contractions.
+    guards Grid capability on the **effective** solve-cross mode: TIERED/ALL
+    that collapse to DIAGONAL under skip flags emit only same-solver pairs
+    and are valid Grid workloads. The LMA path resolves each contraction
+    side through ``solver_map`` (ranLL -> lma, ama -> mpcg), so exactly one
+    CG residual is supported (the mpcg block pins residual[0]; per-residual
+    ``ama_{r}`` labels have no solver_map entry).
     """
     lmi.validate_config(config)
-    if config.high_modes_config.solve_cross_terms != SolveCrossTerms.DIAGONAL:
+    hm = config.high_modes_config
+    if hm.effective_solve_cross_terms != SolveCrossTerms.DIAGONAL:
         raise ValueError(
             "grid_lma only supports solve_cross_terms=DIAGONAL; got "
-            f"{config.high_modes_config.solve_cross_terms!r}. Cross-solver "
-            "contractions are not implemented for the Grid LMA path — use "
-            "the Hadrons LMI task instead."
+            f"{hm.solve_cross_terms!r} (effective "
+            f"{hm.effective_solve_cross_terms!r}). Cross-solver contractions "
+            "are not implemented for the Grid LMA path — use the Hadrons LMI "
+            "task instead."
+        )
+    if len(hm.residual) > 1:
+        raise ValueError(
+            "grid_lma supports exactly one high-mode residual; got "
+            f"{hm.residual}. solver_map resolves only ranLL and ama — "
+            "per-residual ama_{r} labels have no Grid solver (and the mpcg "
+            "block pins residual[0])."
         )
 
 

@@ -5,6 +5,8 @@ mode), the shared pair-membership helper, the contraction-emission
 bijection, and the legacy `cross_terms` translation.
 """
 
+import logging
+
 import pytest
 
 from pyfm.domain import Gamma, MassDict, OpList, Outfile
@@ -16,8 +18,9 @@ from pyfm.tasks.hadrons.highmode.strategy import (
     normalize_params,
     route_params,
     sort_schedule,
+    validate_config,
 )
-from pyfm.tasks.hadrons.highmode.twopoint import contraction_gen
+from pyfm.tasks.hadrons.highmode.twopoint import contraction_gen, quark_gen
 from pyfm.tasks.hadrons.types import HighModeConfig, SolveCrossTerms
 
 
@@ -44,11 +47,12 @@ def make_config(**overrides):
 
 
 def make_two_mass_config(**overrides):
-    return make_config(
+    kwargs = dict(
         mass=MassDict.from_dict({"l": 0.002426, "u": 0.001524}),
         operations=OpList([OpList.Op(gamma=Gamma.PION_LOCAL, mass=("l", "u"))]),
-        **overrides,
     )
+    kwargs.update(overrides)
+    return make_config(**kwargs)
 
 
 class TestSolverLabels:
@@ -135,6 +139,21 @@ class TestMassLabels:
         op = config.op_list[0]
         assert config.get_mass_labels(op, skip_cross=True) == ["002426", "001524"]
 
+    def test_cross_labels_key_canonical_regardless_of_listing_order(self):
+        ascending = make_two_mass_config(mass_cross_terms=True)  # mass=("l","u")
+        descending = make_two_mass_config(
+            mass_cross_terms=True,
+            operations=OpList([OpList.Op(gamma=Gamma.PION_LOCAL, mass=("u", "l"))]),
+        )
+        # Diagonals follow listing order; the cross label is key-canonical
+        # (raw key "l" < "u" -> l's value string first) in both cases.
+        assert ascending.get_mass_labels(ascending.op_list[0]) == [
+            "002426", "001524", "002426_m001524",
+        ]
+        assert descending.get_mass_labels(descending.op_list[0]) == [
+            "001524", "002426", "002426_m001524",
+        ]
+
 
 class TestAdmitsSolvePair:
     @pytest.mark.parametrize(
@@ -162,6 +181,20 @@ class TestAdmitsSolvePair:
             skip_low_modes=True, solve_cross_terms=SolveCrossTerms.TIERED
         )
         assert config.admits_solve_pair("ama", "ama") is True
+
+
+class TestEffectiveSolveCrossTerms:
+    def test_passthrough_when_both_solver_classes_present(self):
+        config = make_config(solve_cross_terms=SolveCrossTerms.TIERED)
+        assert config.effective_solve_cross_terms is SolveCrossTerms.TIERED
+
+    @pytest.mark.parametrize(
+        "flags",
+        [{"skip_low_modes": True}, {"skip_cg": True}],
+    )
+    def test_skip_flags_collapse_to_diagonal(self, flags):
+        config = make_config(solve_cross_terms=SolveCrossTerms.ALL, **flags)
+        assert config.effective_solve_cross_terms is SolveCrossTerms.DIAGONAL
 
 
 class TestContractionBijection:
@@ -224,6 +257,99 @@ class TestContractionBijection:
         assert emitted == set(config.get_mass_labels(op))
 
 
+class TestDemandDrivenPropagators:
+    @staticmethod
+    def _props(config):
+        return {(op.solver, op.gamma, op.mass) for op in quark_gen(config)}
+
+    @staticmethod
+    def _precons(config):
+        return {
+            (op.solver, op.gamma, op.mass): op.precon for op in quark_gen(config)
+        }
+
+    def test_tiered_skips_op_gamma_cg_solves(self):
+        config = make_config(
+            solve_cross_terms=SolveCrossTerms.TIERED,
+            operations=OpList.from_dict({"vec_local": {"mass": ["l"]}}),
+        )
+        assert self._props(config) == {
+            ("ranLL", Gamma.VEC_LOCAL, "l"),
+            ("ranLL", Gamma.PION_LOCAL, "l"),
+            ("ama", Gamma.PION_LOCAL, "l"),
+        }
+
+    def test_tiered_preserves_precon_chain(self):
+        config = make_config(
+            solve_cross_terms=SolveCrossTerms.TIERED,
+            operations=OpList.from_dict({"vec_local": {"mass": ["l"]}}),
+        )
+        precons = self._precons(config)
+        assert precons[("ama", Gamma.PION_LOCAL, "l")] == "ranLL"
+        assert precons[("ranLL", Gamma.VEC_LOCAL, "l")] is None
+        assert precons[("ranLL", Gamma.PION_LOCAL, "l")] is None
+
+    def test_tiered_multi_residual_chains_remaining_solvers(self):
+        config = make_config(
+            solve_cross_terms=SolveCrossTerms.TIERED,
+            residual=[1e-6, 1e-8],
+            operations=OpList.from_dict({"vec_local": {"mass": ["l"]}}),
+        )
+        precons = self._precons(config)
+        assert precons[("ama_1e-06", Gamma.PION_LOCAL, "l")] == "ranLL"
+        assert precons[("ama_1e-08", Gamma.PION_LOCAL, "l")] == "ama_1e-06"
+        assert ("ama_1e-06", Gamma.VEC_LOCAL, "l") not in precons
+        assert ("ama_1e-08", Gamma.VEC_LOCAL, "l") not in precons
+
+    @pytest.mark.parametrize(
+        "overrides",
+        [{}, {"solve_cross_terms": SolveCrossTerms.ALL}],
+    )
+    def test_diagonal_and_all_emit_every_base_propagator(self, overrides):
+        # Regression pair: modes that admit HH keep the full set — identical
+        # to the previous label-list-driven generator.
+        config = make_config(
+            operations=OpList.from_dict({"vec_local": {"mass": ["l"]}}),
+            **overrides,
+        )
+        assert self._props(config) == {
+            ("ranLL", Gamma.VEC_LOCAL, "l"),
+            ("ranLL", Gamma.PION_LOCAL, "l"),
+            ("ama", Gamma.VEC_LOCAL, "l"),
+            ("ama", Gamma.PION_LOCAL, "l"),
+        }
+
+    def test_axial_ops_share_the_nonaxial_solve(self):
+        config = make_config(
+            solve_cross_terms=SolveCrossTerms.TIERED,
+            operations=OpList.from_dict(
+                {"vec_local": {"mass": ["l"]}, "axial_vec_local": {"mass": ["l"]}}
+            ),
+        )
+        props = self._props(config)
+        assert ("ranLL", Gamma.VEC_LOCAL, "l") in props  # shared by vec + axial ops
+        assert ("ranLL", Gamma.IDENTITY, "l") in props
+        assert ("ama", Gamma.IDENTITY, "l") in props
+        assert ("ama", Gamma.VEC_LOCAL, "l") not in props
+
+    def test_every_precon_names_an_emitted_module(self):
+        config = make_config(
+            solve_cross_terms=SolveCrossTerms.TIERED,
+            residual=[1e-6, 1e-8],
+            operations=OpList.from_dict({"vec_local": {"mass": ["l"]}}),
+            overwrite=True,
+        )
+        result = build_input_params(config)
+        for ref in config.source_refs:
+            for op in quark_gen(config):
+                glabel = op.gamma.name.lower()
+                name = f"quark_{op.solver}_{glabel}_mass_{op.mass}_{ref.label}"
+                assert name in result.modules
+                if op.precon is not None:
+                    guess = f"quark_{op.precon}_{glabel}_mass_{op.mass}_{ref.label}"
+                    assert guess in result.modules, f"dangling precon {guess}"
+
+
 class TestLegacyTranslation:
     @pytest.mark.parametrize(
         "legacy,mass_cross,solve_cross",
@@ -233,8 +359,6 @@ class TestLegacyTranslation:
             ("solve", False, SolveCrossTerms.ALL),
             ("all", True, SolveCrossTerms.ALL),
             ("SOLVE", False, SolveCrossTerms.ALL),
-            (2, False, SolveCrossTerms.ALL),
-            (3, True, SolveCrossTerms.ALL),
         ],
     )
     def test_translation_table(self, legacy, mass_cross, solve_cross):
@@ -278,6 +402,43 @@ class TestLegacyTranslation:
     def test_no_legacy_key_is_noop(self):
         params = {"mass": {"l": 0.01}, "_preprocessor": {"pion_local": {"mass": ["l"]}}}
         assert normalize_params(params) is params
+
+    @pytest.mark.parametrize("legacy", [0, 1, 2, 3, "0", "3"])
+    def test_numeric_values_rejected(self, legacy):
+        # Numeric values were never accepted by the legacy enum
+        # (SerializableEnum.from_dict matches member names); dropping the
+        # aliases restores that historical strictness.
+        with pytest.raises(ValueError, match="cross_terms"):
+            normalize_params({"_preprocessor": {"cross_terms": legacy}})
+
+    def test_root_level_legacy_key_translates(self):
+        routed = normalize_params({"cross_terms": "mass", "_preprocessor": {}})
+        assert routed["mass_cross_terms"] is True
+        assert routed["solve_cross_terms"] is SolveCrossTerms.DIAGONAL
+        assert "cross_terms" not in routed
+        assert routed["_preprocessor"] == {}
+
+    def test_translation_does_not_mutate_input(self):
+        params = {
+            "_preprocessor": {"cross_terms": "solve", "pion_local": {"mass": ["l"]}}
+        }
+        snapshot = {"_preprocessor": dict(params["_preprocessor"])}
+        routed = normalize_params(params)
+        assert params == snapshot  # caller's dict untouched
+        assert routed["_preprocessor"]["solve_cross_terms"] is SolveCrossTerms.ALL
+        assert "cross_terms" not in routed["_preprocessor"]
+
+    def test_noop_returns_identity_without_preprocessor(self):
+        bare = {"mass": {"l": 0.01}}
+        assert normalize_params(bare) is bare
+
+    def test_translation_logged_at_debug(self, caplog):
+        with caplog.at_level("DEBUG"):
+            normalize_params({"_preprocessor": {"cross_terms": "mass"}})
+        assert any(
+            "cross_terms" in r.message and "mass_cross_terms" in r.message
+            for r in caplog.records
+        )
 
 
 class TestScheduleRanking:
@@ -338,6 +499,35 @@ class TestScheduleRanking:
         )
 
 
+class TestDowngradeWarning:
+    def test_downgrade_warns_once_naming_modes_and_trigger(self, caplog):
+        config = make_config(
+            skip_low_modes=True, solve_cross_terms=SolveCrossTerms.TIERED
+        )
+        with caplog.at_level(logging.WARNING):
+            validate_config(config)
+        downgrade_records = [r for r in caplog.records if "downgraded" in r.message]
+        assert len(downgrade_records) == 1
+        assert "TIERED" in downgrade_records[0].message
+        assert "DIAGONAL" in downgrade_records[0].message
+        assert "skip_low_modes" in downgrade_records[0].message
+
+    def test_both_flags_named_when_both_set(self, caplog):
+        config = make_config(
+            skip_low_modes=True, skip_cg=True, solve_cross_terms=SolveCrossTerms.ALL
+        )
+        with caplog.at_level(logging.WARNING):
+            validate_config(config)
+        message = next(r.message for r in caplog.records if "downgraded" in r.message)
+        assert "skip_low_modes" in message and "skip_cg" in message
+
+    def test_no_warning_without_downgrade(self, caplog):
+        config = make_config(solve_cross_terms=SolveCrossTerms.TIERED)
+        with caplog.at_level(logging.WARNING):
+            validate_config(config)
+        assert not any("downgraded" in r.message for r in caplog.records)
+
+
 class TestGridLmaValidation:
     def test_grid_lma_rejects_tiered(self, grid_params):
         grid_params["job_setup"]["lma"]["tasks"]["high_modes"][
@@ -357,6 +547,32 @@ class TestGridLmaValidation:
         ] = True
         task = create_task("lma", grid_params, "a", "20")
         assert task.config.high_modes_config.mass_cross_terms is True
+
+    def test_grid_lma_accepts_tiered_collapsed_to_diagonal(self, grid_params):
+        # TIERED + no epack => skip_low_modes=True => effective DIAGONAL:
+        # a valid Grid workload (previously over-rejected by the raw check).
+        tasks = grid_params["job_setup"]["lma"]["tasks"]
+        tasks["high_modes"]["solve_cross_terms"] = "tiered"
+        tasks.pop("epack", None)
+        tasks.pop("meson", None)  # meson requires epack (lmi validator)
+        task = create_task("lma", grid_params, "a", "20")  # must not raise
+        hm = task.config.high_modes_config
+        assert hm.solve_cross_terms == SolveCrossTerms.TIERED
+        assert hm.effective_solve_cross_terms is SolveCrossTerms.DIAGONAL
+        # The epack pop also flips skip_epack; the default-built epack must
+        # pass validation — pin the flag so the dependency is explicit.
+        assert task.config.skip_epack is True
+        # End-to-end: the accepted (effective-DIAGONAL) config must build a
+        # Grid workload — exercising solver_map resolution without KeyError.
+        task.handler.build_input_params(task.config)
+
+    def test_grid_lma_rejects_multi_residual(self, grid_params):
+        grid_params["job_setup"]["lma"]["tasks"]["high_modes"]["residual"] = [
+            1e-6,
+            1e-8,
+        ]
+        with pytest.raises(ValueError, match="one high-mode residual"):
+            create_task("lma", grid_params, "a", "20")
 
 
 class TestAggregatorAxes:
@@ -410,3 +626,39 @@ class TestAggregatorAxes:
         for key in params["run"]:
             assert key in params
         assert len(params["run"]) == len({k for k in params if k != "run"})
+
+    def test_tiered_average_run_list_and_actions(self):
+        config = make_config(solve_cross_terms=SolveCrossTerms.TIERED)
+        params = build_aggregator_params(config, average=True)
+        first = params[params["run"][0]]
+        assert first["actions"]["average"] == ["tsource"]
+        assert first["actions"]["real"] is True
+        assert first["actions"]["index"] == ["series_cfg", "gamma", "t"]
+        assert self._axis(params, "dset") == {"ranLL", "ranLL_ama"}
+
+    def test_mass_cross_average_aggregates_cross_mass(self):
+        config = make_two_mass_config(mass_cross_terms=True)
+        params = build_aggregator_params(config, average=True)
+        assert self._axis(params, "mass") == {"002426", "001524", "002426_m001524"}
+        for key in params["run"]:
+            assert params[key]["actions"]["average"] == ["tsource"]
+
+    def test_average_outfile_carries_avg_suffix(self):
+        # The _avg suffix lands via get_processed_filename, which only
+        # rewrites stems containing "correlators" (production shape — see
+        # example/params_files); the sibling catalog-axis test overrides
+        # high_modes the same way.
+        config = make_config(
+            solve_cross_terms=SolveCrossTerms.TIERED,
+            high_modes=Outfile(
+                filestem=(
+                    "dt{dt}/correlators/m{mass}/{gamma_label}/{dset}/"
+                    "corr_{dset}_m{mass}_t{tsource}_{series}"
+                ),
+                ext=".20.h5",
+                good_size=1,
+            ),
+        )
+        params = build_aggregator_params(config, average=True)
+        first = params[params["run"][0]]
+        assert "_avg" in first["out_files"]["filestem"]

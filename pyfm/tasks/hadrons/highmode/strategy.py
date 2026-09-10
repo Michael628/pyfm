@@ -24,11 +24,32 @@ _LEGACY_CROSS_TERMS: t.Dict[str, t.Tuple[bool, SolveCrossTerms]] = {
     "mass": (True, SolveCrossTerms.DIAGONAL),
     "solve": (False, SolveCrossTerms.ALL),
     "all": (True, SolveCrossTerms.ALL),
-    "0": (False, SolveCrossTerms.DIAGONAL),
-    "1": (True, SolveCrossTerms.DIAGONAL),
-    "2": (False, SolveCrossTerms.ALL),
-    "3": (True, SolveCrossTerms.ALL),
 }
+
+
+def _translate_legacy_cross_terms(site: t.Dict) -> t.Dict:
+    """Return ``site`` unchanged (same object) unless it carries a legacy
+    ``cross_terms`` key, in which case return a new dict with the key
+    translated onto ``mass_cross_terms``/``solve_cross_terms`` — explicit
+    keys win. Raises ``ValueError`` on an unrecognized value."""
+    legacy = site.get("cross_terms")
+    if legacy is None:
+        return site
+    try:
+        mass_cross, solve_cross = _LEGACY_CROSS_TERMS[str(legacy).lower()]
+    except KeyError:
+        raise ValueError(
+            f"Invalid cross_terms value ({legacy!r}). "
+            "options are: none, mass, solve, all"
+        ) from None
+    utils.get_logger().debug(
+        f"Translating legacy cross_terms={legacy!r} -> "
+        f"mass_cross_terms={mass_cross}, solve_cross_terms={solve_cross.name}"
+    )
+    return {k: v for k, v in site.items() if k != "cross_terms"} | {
+        "mass_cross_terms": site.get("mass_cross_terms", mass_cross),
+        "solve_cross_terms": site.get("solve_cross_terms", solve_cross),
+    }
 
 
 def normalize_params(params: t.Dict) -> t.Dict:
@@ -39,22 +60,18 @@ def normalize_params(params: t.Dict) -> t.Dict:
     ``all`` -> mass toggle + ALL. Explicit ``mass_cross_terms`` /
     ``solve_cross_terms`` keys always win. Runs before ``route_params``'
     reflection split so the legacy key never leaks into ``operations``.
+
+    Non-mutating (``lmi.normalize_params`` style): the caller's dicts are
+    never modified, and the input object itself is returned (identity, not
+    a copy) when no legacy key is present at either site.
     """
-    for site in (params, params.get("_preprocessor") or {}):
-        legacy = site.get("cross_terms")
-        if legacy is None:
-            continue
-        try:
-            mass_cross, solve_cross = _LEGACY_CROSS_TERMS[str(legacy).lower()]
-        except KeyError:
-            raise ValueError(
-                f"Invalid cross_terms value ({legacy!r}). "
-                "options are: none, mass, solve, all"
-            ) from None
-        site.pop("cross_terms", None)
-        site.setdefault("mass_cross_terms", mass_cross)
-        site.setdefault("solve_cross_terms", solve_cross)
-    return params
+    result = _translate_legacy_cross_terms(params)
+    slice_ = params.get("_preprocessor")
+    if slice_ is not None:
+        translated = _translate_legacy_cross_terms(slice_)
+        if translated is not slice_:
+            result = result | {"_preprocessor": translated}
+    return result
 
 
 def route_params(params: t.Dict) -> t.Dict:
@@ -409,3 +426,21 @@ def validate_config(config: HighModeConfig) -> None:
                 "without-replacement sampling (bias_replace=False) requires "
                 "nbias <= time."
             )
+
+    effective = config.effective_solve_cross_terms
+    if effective != config.solve_cross_terms:
+        triggers = ", ".join(
+            flag
+            for flag, enabled in (
+                ("skip_low_modes", config.skip_low_modes),
+                ("skip_cg", config.skip_cg),
+            )
+            if enabled
+        )
+        utils.get_logger().warning(
+            f"solve_cross_terms={config.solve_cross_terms.name} downgraded to "
+            f"{effective.name}: {triggers} "
+            f"{'are' if ', ' in triggers else 'is'} set — cross modes require "
+            "both solver classes (low modes and CG); only same-solver "
+            "(diagonal) pairs are admitted."
+        )

@@ -491,3 +491,36 @@ def test_generate_high_modes_tiered_input(tmp_path, monkeypatch, hadrons_params)
     xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
     # module names and output filestems both name the ranLL_ama dset
     assert "ranLL_ama" in xml
+
+
+def test_generate_high_modes_tiered_skips_dead_cg_solves(
+    tmp_path, monkeypatch, hadrons_params
+):
+    """TIERED with a non-pion op (the fixture's high_modes step lists
+    pion_local + vec_local): the op-gamma ama propagators have zero
+    contraction consumers and are not emitted; the contract-gamma ama
+    propagators persist (consumed by ranLL_ama), precon-chained to ranLL."""
+    monkeypatch.chdir(tmp_path)
+    params = copy.deepcopy(hadrons_params)  # sibling-test convention
+    params["job_setup"]["high_modes"]["tasks"]["high_modes"][
+        "solve_cross_terms"
+    ] = "tiered"
+
+    write_input_file("high_modes", params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+
+    # Dead solves gone: the vec_local op-gamma CG propagator has no consumer
+    # under TIERED (the LH cross consumes only the PION_LOCAL antiquark side).
+    assert not any(n.startswith("quark_ama_vec_local") for n in modules)
+    # Live propagators persist.
+    assert any(n.startswith("quark_ama_pion_local") for n in modules)
+    assert any(n.startswith("corr_ranLL_ama_") for n in modules)
+
+    # Precon chain: the ranLL contract-gamma solve precedes its ama consumer.
+    # [1:] skips the module-count header line (golden-comparison convention).
+    sched = (tmp_path / "schedules" / "high-modes-a.20.sched").read_text().splitlines()[1:]
+    assert (
+        sched.index("quark_ranLL_pion_local_mass_l_t0")
+        < sched.index("quark_ama_pion_local_mass_l_t0")
+    )

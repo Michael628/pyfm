@@ -212,6 +212,20 @@ class HighModeConfig(SimpleConfig):
         ]
         return diagonals + cross_labels
 
+    @property
+    def effective_solve_cross_terms(self) -> SolveCrossTerms:
+        """The configured solve-cross mode after degenerate-solver collapse.
+
+        With either solver class absent (``skip_low_modes``/``skip_cg``) the
+        mode is ignored and every base pair is admitted — the effective mode
+        is DIAGONAL. Single source shared by :meth:`admits_solve_pair`, the
+        downgrade warning in ``highmode.validate_config``, and the grid_lma
+        capability guard.
+        """
+        if self.skip_low_modes or self.skip_cg:
+            return SolveCrossTerms.DIAGONAL
+        return self.solve_cross_terms
+
     def admits_solve_pair(self, quark: str, antiquark: str) -> bool:
         """Whether a contraction pairing quark-side solver ``quark`` with
         antiquark-side solver ``antiquark`` belongs to the configured
@@ -228,13 +242,11 @@ class HighModeConfig(SimpleConfig):
           different CG solvers never cross).
         - TIERED: the LL diagonal plus the L-quark orientation only (dset
           ``ranLL_ama``); the HH diagonal leaves the dset list while ama
-          propagators remain (see ``quark_gen``'s skip-cross discipline).
-        - With either solver class absent (``skip_low_modes``/``skip_cg``)
-          the mode is ignored and every base pair is admitted.
+          propagators remain (emitted demand-driven — see ``quark_gen``).
+        - With either solver class absent the effective mode is DIAGONAL
+          (:attr:`effective_solve_cross_terms`).
         """
-        mode = self.solve_cross_terms
-        if self.skip_low_modes or self.skip_cg:
-            mode = SolveCrossTerms.DIAGONAL
+        mode = self.effective_solve_cross_terms
 
         def is_low(label: str) -> bool:
             return label == "ranLL"
