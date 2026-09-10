@@ -421,17 +421,21 @@ tasks:
 
 ---
 
-## `job_setup.hadrons.tasks.high_modes` — cross-term controls (`HighModeConfig`)
+## `job_setup.hadrons.tasks.high_modes` — cross-term and solve-chaining controls (`HighModeConfig`)
 
-Two independent knobs replace the legacy `cross_terms` enum. Both live in the
-`high_modes` (or `bias`) task slice and default to "no cross terms", matching
-the legacy `none`.
+Two independent knobs replace the legacy `cross_terms` enum, and the
+`chain_cg_solves` toggle (below) controls how multi-residual CG solves seed
+each other's guesses. All of them live in the `high_modes` (or `bias`) task
+slice; the cross-term pair defaults to "no cross terms", matching the legacy
+`none`.
 
 ```yaml
 tasks:
   high_modes:
     mass_cross_terms: true      # cross-mass contractions (m_l_mu style dsets)
     solve_cross_terms: tiered   # DIAGONAL | ALL | TIERED
+    residual: [1.0e-6, 1.0e-8]
+    chain_cg_solves: true       # default; false = every CG solve guesses ranLL
     pion_local:
       mass: ["l", "u"]
 ```
@@ -458,6 +462,21 @@ tasks:
   (TIERED/ALL collapsed by `skip_low_modes`/`skip_cg` are valid Grid
   workloads) and supports exactly **one** residual — cross-solver
   contractions and multi-residual `ama_{r}` labels are Hadrons-LMI only.
+- `chain_cg_solves` (default `true`): solves are chained — each emitted CG
+  solve starts from the nearest earlier emitted solver's propagator
+  (`ranLL` → no guess; `ama_{r1}` guesses `ranLL`; `ama_{r2}` guesses
+  `ama_{r1}`, following the `residual` list order). `false`: every CG solve
+  runs independently and guesses the `ranLL` propagator of the same
+  gamma/mass/source; when low modes are skipped, no guess is provided. With
+  a single `residual` the two modes coincide (`ama` guesses `ranLL` either
+  way) — the toggle only matters for multi-residual configs. Applies to the
+  `bias` slice too; under TIERED it rewires guesses among the demand-driven
+  (contract-gamma) CG solves only.
+- Module names, outputs, the outfile catalog, and the resume gate are
+  identical in both modes (only the `guess` option inside `quark_*` modules
+  changes). Flipping the toggle mid-campaign does not invalidate existing
+  outputs — use `overwrite` if outputs made under the other mode must be
+  regenerated.
 
 **Legacy mapping** (silent, canonical keys win; string values only — numeric
 values were never valid and raise `ValueError`; the translation is logged at

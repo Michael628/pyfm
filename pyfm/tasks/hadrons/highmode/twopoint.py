@@ -75,7 +75,10 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
     refinement of the previous ``[None] + solver_labels[:-1]`` zip. Per
     (gamma, mass) the required set is a prefix of the base solver list (the
     HH diagonal drops wholesale), so a guess never references a skipped
-    module. Emission order is deterministic and mass-major: every solve and
+    module. With ``chain_cg_solves=False`` (independent mode) every CG solve
+    guesses ``ranLL`` directly instead — or nothing, when low modes are
+    skipped (``ranLL`` itself never takes a guess in either mode).
+    Emission order is deterministic and mass-major: every solve and
     gamma for one mass is emitted before moving on to the next mass (the
     schedule builder consumes this order), base-solver order preserved
     within a mass so precons precede their consumers.
@@ -98,10 +101,21 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
         required, key=lambda k: (k[2], solver_labels.index(k[0]), k[1].name)
     ):
         precon = None
-        for earlier in reversed(solver_labels[: solver_labels.index(solver)]):
-            if (earlier, gamma, mass) in required:
-                precon = earlier
-                break
+        if config.chain_cg_solves or solver == "ranLL":
+            # Chained (default): nearest earlier base solver whose
+            # same-(gamma, mass) propagator is also emitted. Unchanged from
+            # the previous behavior (ranLL hits an empty prefix and stays
+            # guessless), so the default path is byte-identical.
+            for earlier in reversed(solver_labels[: solver_labels.index(solver)]):
+                if (earlier, gamma, mass) in required:
+                    precon = earlier
+                    break
+        elif ("ranLL", gamma, mass) in required:
+            # Independent: every CG solve guesses ranLL directly. The LL
+            # diagonal is always admitted, so an emitted CG solve's
+            # same-(gamma, mass) ranLL is emitted too; without low modes no
+            # guess is provided.
+            precon = "ranLL"
         yield TwoPointOp.Op(
             gamma=gamma, mass=mass, solver=solver, apply_g5=True, precon=precon
         )
