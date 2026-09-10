@@ -171,10 +171,20 @@ class HighModeConfig(SimpleConfig):
     def masses(self) -> t.List[str]:
         return self.operations.mass
 
-    def get_mass_labels(self, op:OpList.Op, skip_cross: bool = False) -> t.List[str]:
+    def get_mass_labels(self, op: OpList.Op, skip_cross: bool = False) -> t.List[str]:
         mass_labels = [self.mass.to_string(m, True) for m in op.mass]
         if not skip_cross and self.mass_cross_terms:
-            cross_labels = [f"{mass_labels[j]}_m{a}" for i,a in enumerate(mass_labels) for j in range(i)]
+            # Canonical cross-mass order: raw-key ascending. This matches
+            # contraction_gen's `mlabel1 < mlabel2` guard (which puts the
+            # smaller raw key on the quark; TwoPointOp.mass_label joins
+            # quark-first), so the catalog/resume/aggregation axis and the
+            # emitted filenames agree for any op.mass listing order.
+            cross_labels = [
+                f"{self.mass.to_string(lo, True)}_m{self.mass.to_string(hi, True)}"
+                for i, a in enumerate(op.mass)
+                for j in range(i)
+                for lo, hi in [sorted((op.mass[j], a))]
+            ]
             mass_labels += cross_labels
         return mass_labels
 

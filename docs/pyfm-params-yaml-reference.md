@@ -437,9 +437,11 @@ tasks:
 ```
 
 - `mass_cross_terms` (default `false`): when set, contractions pairing two
-  different masses are emitted (one per unordered pair, earlier-list label
-  first: `002426_m001524`). They join the outfile catalog, resume gate, and —
-  since the split — the aggregation run list.
+  different masses are emitted (one per unordered pair, in canonical
+  raw-key-ascending order — e.g. `002426_m001524` for keys `l`/`u` —
+  independent of the order masses are listed under the operation). They join
+  the outfile catalog, resume gate, and — since the split — the aggregation
+  run list.
 - `solve_cross_terms` (default `DIAGONAL`): controls which solver pairs are
   contracted. `L` = `ranLL` (low-mode/eigenvector solve), `H` = any CG solve
   (label starting with `ama`); two different CG solvers never cross.

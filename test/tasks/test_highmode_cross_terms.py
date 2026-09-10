@@ -209,6 +209,20 @@ class TestContractionBijection:
         emitted = {con.mass_label(config.mass) for _, con in contraction_gen(config)}
         assert emitted == {"002426", "001524"}
 
+    @pytest.mark.parametrize("mass_order", [("l", "u"), ("u", "l")])
+    def test_mass_label_bijection_holds_for_any_listing_order(self, mass_order):
+        # I1 regression: the catalog/aggregation axis (get_mass_labels) and
+        # the emitted filenames (TwoPointOp.mass_label via contraction_gen)
+        # must be the same set regardless of op.mass listing order.
+        config = make_config(
+            mass=MassDict.from_dict({"l": 0.002426, "u": 0.001524}),
+            operations=OpList([OpList.Op(gamma=Gamma.PION_LOCAL, mass=mass_order)]),
+            mass_cross_terms=True,
+        )
+        op = config.op_list[0]
+        emitted = {con.mass_label(config.mass) for _, con in contraction_gen(config)}
+        assert emitted == set(config.get_mass_labels(op))
+
 
 class TestLegacyTranslation:
     @pytest.mark.parametrize(
