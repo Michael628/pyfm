@@ -367,23 +367,106 @@ def meson_field(
     right: str,
     output: str,
     apply_g5: str,
+    cb_pairs_left: str = "",
+    cb_pairs_right: str = "",
 ) -> t.Dict:
+    """Wrap ``MContraction::StagA2AMesonField``.
+
+    With ``cb_pairs_left``/``cb_pairs_right`` naming two distinct
+    ``MUtilities::EigenPackCBPairs`` instances, the eigenvector rows come from
+    on-demand checkerboard pairs (HadronsMILC 4d96243) — the options are
+    injected only when set, keeping the legacy emission byte-identical. The
+    C++ setup requires both set together (MesonField.hpp).
+    """
+    if bool(cb_pairs_left) != bool(cb_pairs_right):
+        raise ValueError(
+            "cbPairsLeft and cbPairsRight must be set together (two distinct "
+            "MUtilities::EigenPackCBPairs instances); got "
+            f"{cb_pairs_left!r} / {cb_pairs_right!r}."
+        )
+    options = {
+        "action": action,
+        "block": block,
+        "mom": {
+            "elem": "0 0 0",
+        },
+        "spinTaste": {"gammas": gammas, "gauge": gauge, "applyG5": apply_g5},
+        "lowModes": low_modes,
+        "left": left,
+        "right": right,
+        "output": output,
+    }
+    if cb_pairs_left:
+        options["cbPairsLeft"] = cb_pairs_left
+        options["cbPairsRight"] = cb_pairs_right
     return {
         "id": {
             "name": name,
             "type": "MContraction::StagA2AMesonField",
         },
+        "options": options,
+    }
+
+
+def eigen_pack_cb_pairs(name: str, eigen_pack: str, action: str) -> t.Dict:
+    """Wrap ``MUtilities::EigenPackCBPairs`` — on-demand CB pair source over a
+    checkerboarded eigenpack (odd partner filled from Meooe on demand)."""
+    return {
+        "id": {"name": name, "type": "MUtilities::EigenPackCBPairs"},
+        "options": {"action": action, "eigenPack": eigen_pack},
+    }
+
+
+def load_meson_field(
+    name: str, file: str, dataset: str, side: str = "", low_modes: str = ""
+) -> t.Dict:
+    """Wrap ``MIO::LoadMesonField`` — read back a StagA2AMesonField file.
+
+    ``file`` may embed the ``@traj@`` token (replaced with the trajectory
+    counter at execute time; passes through pyfm's ``{...}`` format strings
+    untouched). ``side``/``low_modes`` stay empty for the solver-input use.
+    """
+    return {
+        "id": {"name": name, "type": "MIO::LoadMesonField"},
+        "options": {
+            "file": file,
+            "dataset": dataset,
+            "side": side,
+            "lowModes": low_modes,
+        },
+    }
+
+
+def lma_meson_field_solver(
+    name: str,
+    action: str,
+    low_modes: str,
+    meson_field: str,
+    noise_index: str = "0",
+    noise: str = "",
+) -> t.Dict:
+    """Wrap ``MSolver::StagLMAMesonField`` — file-driven LMA solver family.
+
+    One module creates the full ``<name>_t{t}`` / ``<name>_t{t}_subtract``
+    family for every timeslice (HadronsMILC 583b95a; no ``timeslice`` param).
+    ``meson_field`` names a ``MIO::LoadMesonField`` module; ``noise`` names a
+    ``<fvnoise>_vec`` object to enable the pairing/normalization self-check.
+    """
+    return {
+        "id": {
+            "name": name,
+            "type": "MSolver::StagLMAMesonField",
+        },
         "options": {
             "action": action,
-            "block": block,
-            "mom": {
-                "elem": "0 0 0",
-            },
-            "spinTaste": {"gammas": gammas, "gauge": gauge, "applyG5": apply_g5},
             "lowModes": low_modes,
-            "left": left,
-            "right": right,
-            "output": output,
+            "mesonField": meson_field,
+            "noiseIndex": noise_index,
+            "eigStart": "0",
+            "nEigs": "-1",
+            "negFirst": "",
+            "pairScale": "",
+            "noise": noise,
         },
     }
 

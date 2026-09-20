@@ -106,6 +106,9 @@ class HighModeConfig(SimpleConfig):
     nbias: int | None = None
     bias_seed: str | None = None
     bias_replace: bool = True
+    low_mode_method: str = "compute"
+    meson_stoch_proj: Outfile | None = None
+    blocksize: int = 12
 
     @property
     def tsource_range(self) -> t.List[int]:

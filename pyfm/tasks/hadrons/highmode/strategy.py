@@ -13,7 +13,7 @@ from pyfm.tasks.hadrons.types import (
     SourceRef,
 )
 import pyfm.tasks.hadrons.modules as hadmods
-from pyfm.domain import OpList
+from pyfm.domain import Gamma, OpList
 from pyfm.tasks.hadrons.highmode import sib, twopoint
 
 from pyfm import utils
@@ -145,6 +145,101 @@ def create_outfile_catalog(config: HighModeConfig) -> pd.DataFrame:
     return df
 
 
+def create_meson_field_catalog(config: HighModeConfig) -> pd.DataFrame:
+    """Catalog the per-mass meson-field intermediate files (load mode).
+
+    Deliberately NOT concatenated into :func:`create_outfile_catalog`:
+    intermediates must not join the correlator catalog that drives the
+    resume gate, ``compare_outputs`` pairing, or the nanny compare gate.
+    ``{cfg}`` is pre-formatted by the config builder in real builds; the
+    catalog is only consumed by ``build_input_params``' skip-if-complete
+    check.
+    """
+    if config.meson_stoch_proj is None:
+        raise ValueError(
+            "low_mode_method='load' requires a meson_stoch_proj files entry "
+            "(filestem + good_size) for the meson-field intermediates."
+        )
+    if not config.masses:
+        return pd.DataFrame()
+
+    def generate_outfile_formatting():
+        res = {"mass": config.masses, "gamma": ["G1_G1"]}
+        yield res, config.meson_stoch_proj
+
+    return utils.io.catalog_files(generate_outfile_formatting())
+
+
+def build_lma_meson_field_chain(
+    config: HighModeConfig,
+    mass_label: str,
+    action: str,
+    solver_name: str,
+    low_modes: str,
+    write: bool,
+) -> HadronsInput:
+    """Per-mass file-driven LMA chain (``low_mode_method='load'``).
+
+    ``cbpairs_l/r`` → meson-field writer → loader → ``StagLMAMesonField``
+    solver. The writer chain is emitted only when ``write`` (file missing or
+    undersized, or ``overwrite``); the loader always runs — it reads disk, so
+    a complete file makes the writer redundant. Declaration order carries the
+    writer→loader file edge, which the Hadrons scheduler graph cannot see.
+    The dataset/file name ``G1_G1_0_0_0`` is the writer's dataname for the
+    identity spin-taste at zero momentum.
+    """
+    modules = {}
+    schedule = []
+    stem = config.meson_stoch_proj.filestem.format(mass=mass_label)
+
+    if write:
+        cbpairs_l = f"cbpairs_l_mass_{mass_label}"
+        cbpairs_r = f"cbpairs_r_mass_{mass_label}"
+        modules[cbpairs_l] = hadmods.eigen_pack_cb_pairs(
+            name=cbpairs_l, eigen_pack=low_modes, action=action
+        )
+        modules[cbpairs_r] = hadmods.eigen_pack_cb_pairs(
+            name=cbpairs_r, eigen_pack=low_modes, action=action
+        )
+        schedule += [cbpairs_l, cbpairs_r]
+
+        writer = f"mfwrite_mass_{mass_label}"
+        modules[writer] = hadmods.meson_field(
+            name=writer,
+            action="",
+            block=str(config.blocksize),
+            gammas=Gamma.IDENTITY.gamma_string,
+            gauge="gauge",
+            low_modes=low_modes,
+            left="",
+            right="noise_fv_vec",
+            output=stem,
+            apply_g5="false",
+            cb_pairs_left=cbpairs_l,
+            cb_pairs_right=cbpairs_r,
+        )
+        schedule.append(writer)
+
+    loader = f"mfload_mass_{mass_label}"
+    modules[loader] = hadmods.load_meson_field(
+        name=loader,
+        file=f"{stem}.@traj@/G1_G1_0_0_0.h5",
+        dataset="G1_G1_0_0_0",
+    )
+    schedule.append(loader)
+
+    modules[solver_name] = hadmods.lma_meson_field_solver(
+        name=solver_name,
+        action=action,
+        low_modes=low_modes,
+        meson_field=loader,
+        noise="noise_fv_vec",
+    )
+    schedule.append(solver_name)
+
+    return HadronsInput(modules=modules, schedule=schedule)
+
+
 def build_input_params(config: HighModeConfig) -> HadronsInput:
     modules = {}
     schedule = []
@@ -166,8 +261,31 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     else:
         run_refs = config.source_refs
 
+    use_meson_field = config.low_mode_method == "load" and not config.skip_low_modes
+    incomplete_masses: t.Set[str] = set()
+    if use_meson_field and not config.overwrite:
+        mf_catalog = create_meson_field_catalog(config)
+        if not mf_catalog.empty:
+            bad = utils.io.get_bad_files(mf_catalog)
+            incomplete_masses = set(
+                mf_catalog[mf_catalog["filepath"].isin(bad)]["mass"]
+            )
+
     modules["sink"] = hadmods.sink(name="sink", mom="0 0 0")
     schedule.append("sink")
+
+    if use_meson_field and config.masses:
+        # Shared full-volume noise: every RandomWall references it by bare
+        # name, and the meson-field writer (`right`) and the solver's
+        # pairing/normalization self-check (`noise`) consume `noise_fv_vec`.
+        # Emitted whenever the chain is (masses non-empty) — the loader and
+        # solver run even with no pending sources, so gating on run_refs
+        # would dangle their noise_fv_vec references. The module name is
+        # part of the RNG stream — do not rename casually.
+        modules["noise_fv"] = hadmods.full_volume_noise(
+            name="noise_fv", nsrc=str(config.noise)
+        )
+        schedule.append("noise_fv")
 
     quark_schedule = []
     for ref in run_refs:
@@ -177,6 +295,7 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
             nsrc=str(config.noise),
             t0=str(ref.t0),
             tstep=str(config.time),
+            noise="noise_fv" if use_meson_field else "",
         )
         quark_schedule.append(name)
 
@@ -185,12 +304,24 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
         if not config.skip_low_modes:
             name = config.solver_name.format(solver="ranLL", mass=mass_label)
             low_modes = config.low_modes_name.format(mass=mass_label)
-            modules[name] = hadmods.lma_solver(
-                name=name,
-                action=action,
-                low_modes=low_modes,
-            )
-            schedule.append(name)
+            if use_meson_field:
+                chain = build_lma_meson_field_chain(
+                    config,
+                    mass_label=mass_label,
+                    action=action,
+                    solver_name=name,
+                    low_modes=low_modes,
+                    write=config.overwrite or mass_label in incomplete_masses,
+                )
+                modules |= chain.modules
+                schedule += chain.schedule
+            else:
+                modules[name] = hadmods.lma_solver(
+                    name=name,
+                    action=action,
+                    low_modes=low_modes,
+                )
+                schedule.append(name)
 
         cg_solver_labels: t.List = [
             s for s in config.get_solver_labels(skip_cross=True) if "ama" in s
@@ -399,6 +530,37 @@ def validate_config(config: HighModeConfig) -> None:
         raise ValueError(
             "High-mode solver must be one of 'mpcg', 'rb', or 'cg'; "
             f"got {config.solver!r}."
+        )
+
+    if config.low_mode_method not in {"compute", "load"}:
+        raise ValueError(
+            "low_mode_method must be 'compute' or 'load'; got "
+            f"{config.low_mode_method!r}."
+        )
+    if config.low_mode_method == "load" and not config.skip_low_modes:
+        if config.noise != 1:
+            raise ValueError(
+                "low_mode_method='load' requires noise == 1 (the "
+                "StagLMAMesonField solver family reads a single noise column, "
+                f"noiseIndex=0); got noise={config.noise}."
+            )
+        if config.meson_stoch_proj is None:
+            raise ValueError(
+                "low_mode_method='load' requires a meson_stoch_proj files entry "
+                "(filestem + good_size) for the meson-field intermediates; add "
+                "one under files: in the job YAML."
+            )
+        if "{mass}" not in config.meson_stoch_proj.filestem:
+            raise ValueError(
+                "low_mode_method='load' requires the meson_stoch_proj "
+                "filestem to carry the {mass} token (one meson field per "
+                f"mass); got {config.meson_stoch_proj.filestem!r}."
+            )
+    if config.low_mode_method == "load" and config.skip_low_modes:
+        utils.get_logger().warning(
+            "low_mode_method='load' is inert for this entry: skip_low_modes "
+            "is set, so no ranLL solver (and no meson-field chain) is "
+            "emitted."
         )
 
     has_nonlocal_ops = any([not op.gamma.local for op in config.operations.op_list])

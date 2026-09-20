@@ -174,4 +174,7 @@ files:
   meson:
     filestem: e{eigs}n{noise}dt{dt}/mesons/m{mass}/mf_{series}
     good_size: 1286000
+  meson_stoch_proj:
+    filestem: e{eigs}n{noise}dt{dt}/lma-meson/m{mass}/mf_{series}
+    good_size: 1286000
 

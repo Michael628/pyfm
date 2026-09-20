@@ -509,6 +509,49 @@ needs regeneration.):
 
 ---
 
+## `job_setup.hadrons.tasks.high_modes` — file-driven low modes (`low_mode_method`)
+
+`low_mode_method` (default `compute`) selects how the ranLL low-mode solve is
+realized. `compute` keeps the live `MSolver::StagLMA` solver over the loaded
+eigenpack. `load` swaps it for the file-driven `MSolver::StagLMAMesonField`
+chain: per mass, two `MUtilities::EigenPackCBPairs` instances feed a
+`MContraction::StagA2AMesonField` writer (identity spin-taste, zero momentum)
+whose `.{cfg}/G1_G1_0_0_0.h5` file is read back by `MIO::LoadMesonField`; one
+solver module per mass creates the full `<name>_t{t}` family, and each
+source's quark propagator references `<solver>_t{t0}`. Random walls draw from
+one shared `MNoise::StagFullVolumeSpinColorDiagonal` module (`noise_fv`); the
+module name is part of the RNG stream, so renaming it changes the noise bits.
+
+```yaml
+tasks:
+  high_modes:
+    low_mode_method: load
+    pion_local:
+      mass: ["l", "u"]
+```
+
+Constraints and interactions:
+
+- Requires `noise: 1` (validated loudly) — the solver family reads a single
+  noise column (`noiseIndex=0`).
+- Requires a `files.meson_stoch_proj` entry (`filestem` with `{mass}`;
+  `good_size`) for the intermediates; the label substring `meson` maps it to
+  the `.{cfg}/{gamma}_0_0_0.h5` layout. Carry `{eigs}`/`{noise}` tokens in the
+  stem (as the example filestems do) so eigenpack or noise changes rotate the
+  output namespace — nothing else binds a complete file to the config that
+  produced it, so a stale file would otherwise be silently reused. Per mass,
+  a complete file skips the writer chain on later runs while the loader still
+  runs.
+- `blocksize` (shared param; `HighModeConfig` default 12, production YAMLs
+  set 200) feeds the meson-field writer's kernel blocking.
+- The `ranLL` dset/catalog/aggregation surface is identical in both modes —
+  two configs differing only in `low_mode_method` produce directly comparable
+  correlators (modulo RNG: the shared noise module does not reproduce the
+  per-source internal-noise bits of `compute` mode).
+- `grid_lma` rejects `low_mode_method: load` (Hadrons-only chain).
+
+---
+
 ## `job_setup.hadrons.tasks.epack` — `EpackConfig`
 
 ```yaml
@@ -618,6 +661,7 @@ The single source of truth for every input/output path. Each label becomes an `O
 | `high_modes` | High-mode correlator output |
 | `bias_modes` | Bias-sampler correlator output (label must contain a known substring such as `modes`) |
 | `meson` | Meson-field output |
+| `meson_stoch_proj` | File-driven LMA meson-field intermediate (`low_mode_method: load`; label must contain `meson`) |
 | `contract` | A2A correlator output |
 
 Each entry:

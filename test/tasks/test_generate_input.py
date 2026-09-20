@@ -556,3 +556,66 @@ def test_generate_high_modes_tiered_skips_dead_cg_solves(
         sched.index("quark_ranLL_pion_local_mass_l_t0")
         < sched.index("quark_ama_pion_local_mass_l_t0")
     )
+
+
+# --- appended: low_mode_method='load' end-to-end (file-driven LMA) ---
+def test_generate_high_modes_load_method_input(tmp_path, monkeypatch, hadrons_params):
+    """low_mode_method=load: fv noise, meson-field chain, _t{t} solver refs."""
+    monkeypatch.chdir(tmp_path)
+    hadrons_params["job_setup"]["high_modes"]["tasks"]["high_modes"][
+        "low_mode_method"
+    ] = "load"
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+    assert "noise_fv" in modules
+    for m in ("l", "u"):
+        assert f"cbpairs_l_mass_{m}" in modules
+        assert f"cbpairs_r_mass_{m}" in modules
+        assert f"mfwrite_mass_{m}" in modules
+        assert f"mfload_mass_{m}" in modules
+
+    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
+    assert "<type>MSolver::StagLMAMesonField</type>" in xml
+    assert "<type>MSolver::StagLMA</type>" not in xml
+    assert "MIO::LoadMesonField" in xml
+    assert "<noise>noise_fv</noise>" in xml  # RandomWalls reference the fv module
+    assert "noise_fv_vec" in xml
+    # quark props bind the per-timeslice solver family members
+    assert "stag_ranLL_mass_l_t0" in xml
+    assert "stag_ranLL_mass_l_t3" in xml
+
+    sched = (
+        tmp_path / "schedules" / "high-modes-a.20.sched"
+    ).read_text().splitlines()[1:]
+    for m in ("l", "u"):
+        assert sched.index(f"mfwrite_mass_{m}") < sched.index(f"mfload_mass_{m}")
+        assert sched.index(f"mfload_mass_{m}") < sched.index(f"stag_ranLL_mass_{m}")
+
+
+def test_lmi_rejects_conflicting_load_method_on_shared_mass(hadrons_params):
+    """Two high_modes list entries sharing a mass label with different
+    low_mode_method values would collide on the shared solver module name —
+    lmi.validate_config raises instead of silently last-wins."""
+    tasks = hadrons_params["job_setup"]["lma"]["tasks"]
+    main = tasks["high_modes"]
+    conflict = dict(main)
+    conflict["low_mode_method"] = "load"
+    conflict["mass"] = ["l"]  # shares "l" with the main (compute) entry
+    tasks["high_modes"] = [main, conflict]
+
+    with pytest.raises(ValueError, match="low_mode_method"):
+        create_task("lma", hadrons_params, "a", "20")
+
+
+def test_grid_lma_rejects_load_method(grid_params):
+    grid_params["job_setup"]["lma"]["tasks"]["high_modes"]["low_mode_method"] = "load"
+    # Satisfy the shared HighModeConfig validate (files entry + noise==1) so
+    # the GRID capability guard is the failure, not the child validation.
+    grid_params["files"]["meson_stoch_proj"] = {
+        "filestem": "lma-meson/m{mass}/mf_{series}",
+        "good_size": 1286000,
+    }
+    with pytest.raises(ValueError, match="low_mode_method"):
+        create_task("lma", grid_params, "a", "20")

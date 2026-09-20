@@ -249,6 +249,14 @@ def validate_config(config: GridLMAConfig) -> None:
             "block pins residual[0])."
         )
 
+    if hm.low_mode_method == "load" and not hm.skip_low_modes:
+        raise ValueError(
+            "grid_lma does not support low_mode_method='load' (the "
+            "file-driven StagLMAMesonField chain is Hadrons-only; grid's "
+            "solver_map covers only ranLL and ama). Use the Hadrons LMI "
+            "task for meson-field low modes."
+        )
+
 
 # Register GridLMAConfig with all handlers
 register_task(

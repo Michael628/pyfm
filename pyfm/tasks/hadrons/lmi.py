@@ -179,6 +179,39 @@ def validate_config(config: LMIConfig) -> None:
                 "tasks.high_modes list entry to segregate them."
             )
 
+    # low_mode_method agreement across entries sharing a mass label: the
+    # solver module name (solver_name template) is shared, and the load-mode
+    # chain adds mass-keyed modules (cbpairs/mfwrite/mfload) — a
+    # compute/load mix, or two load entries with different filestems, would
+    # silently last-wins in the modules-dict merge.
+    for i, hm_i in enumerate(config.high_modes_config):
+        for hm_j in config.high_modes_config[:i]:
+            shared = sorted(set(hm_i.masses) & set(hm_j.masses))
+            if not shared:
+                continue
+            if hm_i.low_mode_method != hm_j.low_mode_method:
+                raise ValueError(
+                    f"high_modes_config entries bind the same mass label(s) "
+                    f"{shared} with different low_mode_method values "
+                    f"({hm_j.low_mode_method!r} vs {hm_i.low_mode_method!r}); "
+                    "the shared solver module name would silently take the "
+                    "last entry's solver type. Split the masses or align the "
+                    "method."
+                )
+            if (
+                hm_i.low_mode_method == "load"
+                and hm_i.meson_stoch_proj is not None
+                and hm_j.meson_stoch_proj is not None
+                and hm_i.meson_stoch_proj.filestem != hm_j.meson_stoch_proj.filestem
+            ):
+                raise ValueError(
+                    f"high_modes_config entries bind the same mass label(s) "
+                    f"{shared} in load mode with different meson_stoch_proj "
+                    "filestems; the chain module names collide and the merge "
+                    "silently keeps the last entry's options. Use one files "
+                    "entry per mass family."
+                )
+
 
 def build_input_params(config: LMIConfig) -> HadronsInput:
     """Generate input parameters for the full LMI task.

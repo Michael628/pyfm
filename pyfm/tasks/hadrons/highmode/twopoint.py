@@ -204,6 +204,11 @@ def build_quarks(config: HighModeConfig, run_refs: t.List[SourceRef]) -> Hadrons
             quark = f"quark_{op.solver}_{glabel}_mass_{op.mass}_{ref.label}"
             source = f"noise_{ref.label}"
             solver = config.solver_name.format(solver=op.solver, mass=op.mass)
+            if op.solver == "ranLL" and config.low_mode_method == "load":
+                # File-driven solver family: one StagLMAMesonField module
+                # creates <name>_t{t} for every timeslice; each source binds
+                # its own timeslice at the reference site.
+                solver = f"{solver}_t{ref.t0}"
 
             if op.precon:
                 guess = f"quark_{op.precon}_{glabel}_mass_{op.mass}_{ref.label}"
