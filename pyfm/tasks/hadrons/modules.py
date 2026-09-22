@@ -437,31 +437,57 @@ def load_meson_field(
     }
 
 
-def lma_meson_field_solver(
+# The dead file-driven LMA solver wrapper formerly defined at this
+# position was removed with the load-mode chain swap: HadronsMILC deleted
+# that module type in dacc3fa, and lma_meson_field_prop below is its
+# eager-producer replacement.
+
+
+def lma_meson_field_prop(
     name: str,
     action: str,
     low_modes: str,
     meson_field: str,
+    ta: str,
+    tb: str,
+    tstep: str,
+    gammas: str,
+    apply_g5: str,
     noise_index: str = "0",
     noise: str = "",
 ) -> t.Dict:
-    """Wrap ``MSolver::StagLMAMesonField`` — file-driven LMA solver family.
+    """Wrap ``MFermion::StagLMAMesonFieldProp`` — eager low-mode producer.
 
-    One module creates the full ``<name>_t{t}`` / ``<name>_t{t}_subtract``
-    family for every timeslice (HadronsMILC 583b95a; no ``timeslice`` param).
-    ``meson_field`` names a ``MIO::LoadMesonField`` module; ``noise`` names a
-    ``<fvnoise>_vec`` object to enable the pairing/normalization self-check.
+    Reconstructs one scalar ``PropagatorField`` per output name from
+    precomputed meson-field files (the GaugeProp-style replacement of the
+    former ``MSolver::StagLMAMesonField`` family, HadronsMILC dacc3fa):
+    outputs are ``<name>_t<t>`` for a single gamma (or empty ``gammas``)
+    and ``<name>_t<t>_<spin>_<taste>`` for multiple gammas, one per
+    ``t`` in ``[tA, tB]`` stride ``tStep`` — the raw gamma labels
+    (independent of ``applyG5``) name the per-gamma outputs, exactly
+    GaugeProp's per-gamma guess grammar. ``meson_field`` is a
+    whitespace-separated parallel list of ``MIO::LoadMesonField`` module
+    names, one per gamma in raw order (each loader must hold the file
+    produced under the applyG5-conjugated gamma; miswiring fails at the
+    execute-time metadata cross-check). ``gauge`` stays empty — the
+    module applies no spin-taste operator (fatal otherwise). ``noise``
+    names a ``<fvnoise>_vec`` object to enable the pairing/normalization
+    self-check.
     """
     return {
         "id": {
             "name": name,
-            "type": "MSolver::StagLMAMesonField",
+            "type": "MFermion::StagLMAMesonFieldProp",
         },
         "options": {
             "action": action,
             "lowModes": low_modes,
             "mesonField": meson_field,
+            "spinTaste": {"gammas": gammas, "gauge": "", "applyG5": apply_g5},
             "noiseIndex": noise_index,
+            "tA": ta,
+            "tB": tb,
+            "tStep": tstep,
             "eigStart": "0",
             "nEigs": "-1",
             "negFirst": "",

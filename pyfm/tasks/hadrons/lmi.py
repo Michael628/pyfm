@@ -211,6 +211,22 @@ def validate_config(config: LMIConfig) -> None:
                     "silently keeps the last entry's options. Use one files "
                     "entry per mass family."
                 )
+            if hm_i.low_mode_method == "load" and hm_j.low_mode_method == "load":
+                needed_i = highmode.needed_ranll_gammas(hm_i)
+                needed_j = highmode.needed_ranll_gammas(hm_j)
+                for mass in shared:
+                    gammas_i = {g.name for g in needed_i.get(mass, [])}
+                    gammas_j = {g.name for g in needed_j.get(mass, [])}
+                    if gammas_i != gammas_j:
+                        raise ValueError(
+                            f"high_modes_config entries bind mass label "
+                            f"'{mass}' in load mode with different "
+                            f"needed-gamma sets ({sorted(gammas_j)} vs "
+                            f"{sorted(gammas_i)}); the shared chain module "
+                            "names (writer/loader/producer) would silently "
+                            "take the last entry's options. Align the "
+                            "operations or split the masses."
+                        )
 
 
 def build_input_params(config: LMIConfig) -> HadronsInput:

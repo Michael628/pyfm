@@ -1,4 +1,4 @@
-"""Tests for low_mode_method='load': file-driven StagLMAMesonField low modes."""
+"""Tests for low_mode_method='load': file-driven StagLMAMesonFieldProp low-mode producers."""
 
 import copy
 import logging
@@ -80,6 +80,16 @@ class TestLowModeMethodValidation:
             low_mode_method="load", noise=2, meson_stoch_proj=MESON_STOCH_PROJ
         )
         with pytest.raises(ValueError, match="noise"):
+            validate_config(config)
+
+    def test_load_rejects_nbias(self):
+        config = make_config(
+            low_mode_method="load",
+            nbias=4,
+            bias_seed="seed_a_20",
+            meson_stoch_proj=MESON_STOCH_PROJ,
+        )
+        with pytest.raises(ValueError, match="nbias"):
             validate_config(config)
 
     def test_load_requires_meson_stoch_proj(self):
@@ -165,23 +175,32 @@ class TestModuleWrappers:
         assert module["options"]["side"] == ""
         assert module["options"]["lowModes"] == ""
 
-    def test_lma_meson_field_solver(self):
-        module = hadmods.lma_meson_field_solver(
-            name="stag_ranLL_mass_l",
+    def test_lma_meson_field_prop(self):
+        module = hadmods.lma_meson_field_prop(
+            name="quark_ranLL_pion_local_mass_l",
             action="stag_mass_l",
             low_modes="evecs_mass_l",
-            meson_field="mfload_mass_l",
+            meson_field="mfload_mass_l_G1_G1",
+            ta="0",
+            tb="3",
+            tstep="1",
+            gammas="(G5 G5)",
+            apply_g5="true",
             noise="noise_fv_vec",
         )
         assert module["id"] == {
-            "name": "stag_ranLL_mass_l",
-            "type": "MSolver::StagLMAMesonField",
+            "name": "quark_ranLL_pion_local_mass_l",
+            "type": "MFermion::StagLMAMesonFieldProp",
         }
         assert module["options"] == {
             "action": "stag_mass_l",
             "lowModes": "evecs_mass_l",
-            "mesonField": "mfload_mass_l",
+            "mesonField": "mfload_mass_l_G1_G1",
+            "spinTaste": {"gammas": "(G5 G5)", "gauge": "", "applyG5": "true"},
             "noiseIndex": "0",
+            "tA": "0",
+            "tB": "3",
+            "tStep": "1",
             "eigStart": "0",
             "nEigs": "-1",
             "negFirst": "",
@@ -204,16 +223,25 @@ class TestLoadModeEmission:
     def test_chain_modules_emitted_per_mass(self):
         result = build_input_params(self.load_config())
         for m in ("l", "u"):
-            for prefix in ("cbpairs_l_", "cbpairs_r_", "mfwrite_", "mfload_"):
+            for prefix in ("cbpairs_l_", "cbpairs_r_", "mfwrite_"):
                 assert f"{prefix}mass_{m}" in result.modules
-            solver = result.modules[f"stag_ranLL_mass_{m}"]
-            assert solver["id"]["type"] == "MSolver::StagLMAMesonField"
-            assert solver["options"]["noiseIndex"] == "0"
+            assert f"mfload_mass_{m}_G1_G1" in result.modules
+            producer = result.modules[f"quark_ranLL_pion_local_mass_{m}"]
+            assert producer["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
+            assert producer["options"]["noiseIndex"] == "0"
+            assert producer["options"]["tA"] == "0"
+            assert producer["options"]["tB"] == "3"
+            assert producer["options"]["tStep"] == "1"
 
     def test_no_stag_lma_in_load_mode(self):
         result = build_input_params(self.load_config())
         assert all(
             mod["id"]["type"] != "MSolver::StagLMA"
+            for mod in result.modules.values()
+        )
+        # the dead file-driven solver family is gone entirely
+        assert not any(
+            mod["id"]["type"] == "MSolver::StagLMAMesonField"
             for mod in result.modules.values()
         )
 
@@ -225,7 +253,10 @@ class TestLoadModeEmission:
         for t in range(4):
             assert result.modules[f"noise_t{t}"]["options"]["noise"] == "noise_fv"
         assert result.modules["mfwrite_mass_l"]["options"]["right"] == "noise_fv_vec"
-        assert result.modules["stag_ranLL_mass_l"]["options"]["noise"] == "noise_fv_vec"
+        assert (
+            result.modules["quark_ranLL_pion_local_mass_l"]["options"]["noise"]
+            == "noise_fv_vec"
+        )
 
     def test_writer_chain_options(self):
         result = build_input_params(self.load_config())
@@ -235,41 +266,49 @@ class TestLoadModeEmission:
         assert w["lowModes"] == "evecs_mass_l"
         assert w["left"] == ""
         assert w["action"] == ""
-        assert w["spinTaste"]["gammas"] == "(G1 G1)"
+        assert w["spinTaste"]["gammas"] == "(G5 G5)"
         assert w["spinTaste"]["gauge"] == "gauge"
-        assert w["spinTaste"]["applyG5"] == "false"
+        assert w["spinTaste"]["applyG5"] == "true"
         assert w["mom"] == {"elem": "0 0 0"}
         assert w["output"] == "mesonfield/mf_l"
 
-    def test_loader_and_solver_reference_chain(self):
+    def test_loader_and_producer_reference_chain(self):
         result = build_input_params(self.load_config())
-        loader = result.modules["mfload_mass_l"]["options"]
+        loader = result.modules["mfload_mass_l_G1_G1"]["options"]
         assert loader["file"] == "mesonfield/mf_l.@traj@/G1_G1_0_0_0.h5"
         assert loader["dataset"] == "G1_G1_0_0_0"
-        solver = result.modules["stag_ranLL_mass_l"]["options"]
-        assert solver["mesonField"] == "mfload_mass_l"
-        assert solver["lowModes"] == "evecs_mass_l"
+        producer = result.modules["quark_ranLL_pion_local_mass_l"]["options"]
+        assert producer["mesonField"] == "mfload_mass_l_G1_G1"
+        assert producer["lowModes"] == "evecs_mass_l"
 
-    def test_quark_props_reference_timeslice_solvers(self):
+    def test_ranll_quark_props_replaced_by_producer_outputs(self):
         result = build_input_params(self.load_config())
-        quark = result.modules["quark_ranLL_pion_local_mass_l_t0"]
-        assert quark["options"]["solver"] == "stag_ranLL_mass_l_t0"
-        ama = result.modules["quark_ama_pion_local_mass_l_t0"]
-        assert ama["options"]["solver"] == "stag_ama_mass_l"
+        # No ranLL GaugeProp middlemen: the producer's outputs ARE the
+        # quark propagators (quark_ranLL_{glabel}_mass_{m}_t{t}).
+        assert not any(
+            n.startswith("quark_ranLL_")
+            and n.endswith(tuple(f"_t{t}" for t in range(4)))
+            for n in result.modules
+        )
+        ama = result.modules["quark_ama_pion_local_mass_l_t0"]["options"]
+        assert ama["solver"] == "stag_ama_mass_l"
+        # The ama guess base names a producer output exactly (single
+        # gamma: bare <name>_t<t>, GaugeProp gammaKey "" — no suffix).
+        assert ama["guess"] == "quark_ranLL_pion_local_mass_l_t0"
 
     def test_writer_precedes_loader_in_schedule(self):
         result = build_input_params(self.load_config())
         for m in ("l", "u"):
             assert (
                 result.schedule.index(f"mfwrite_mass_{m}")
-                < result.schedule.index(f"mfload_mass_{m}")
-                < result.schedule.index(f"stag_ranLL_mass_{m}")
+                < result.schedule.index(f"mfload_mass_{m}_G1_G1")
+                < result.schedule.index(f"quark_ranLL_pion_local_mass_{m}")
             )
 
-    def test_solver_precedes_quark_props(self):
+    def test_producer_precedes_ama_quark_props(self):
         result = build_input_params(self.load_config())
-        assert result.schedule.index("stag_ranLL_mass_l") < result.schedule.index(
-            "quark_ranLL_pion_local_mass_l_t0"
+        assert result.schedule.index("quark_ranLL_pion_local_mass_l") < (
+            result.schedule.index("quark_ama_pion_local_mass_l_t0")
         )
 
     def test_compute_mode_emission_unchanged(self):
@@ -289,6 +328,30 @@ class TestLoadModeEmission:
         load = self.load_config()
         assert compute.get_solver_labels() == load.get_solver_labels()
         assert create_outfile_catalog(compute).equals(create_outfile_catalog(load))
+
+    def test_multi_gamma_ops_emit_union_writer_and_conjugated_loaders(self):
+        config = self.load_config(
+            operations=OpList.from_dict(
+                {"pion_local": {"mass": ["l"]}, "vec_local": {"mass": ["l"]}}
+            ),
+            mass=MassDict.from_dict({"l": 0.002426}),
+        )
+        result = build_input_params(config)
+        w = result.modules["mfwrite_mass_l"]["options"]["spinTaste"]
+        # Union of REQUESTED strings with applyG5=true — the files stay
+        # keyed by the conjugated names (pion -> G1_G1_0_0_0.h5).
+        assert w["gammas"] == "(G5 G5) (GX GX) (GY GY) (GZ GZ)"
+        assert w["applyG5"] == "true"
+        for conj in ("G1_G1", "G5X_G5X", "G5Y_G5Y", "G5Z_G5Z"):
+            assert f"mfload_mass_l_{conj}" in result.modules
+        # One producer per op family; vec_local's outputs carry the
+        # multi-gamma suffixes (..._t{t}_GX_GX etc., GaugeProp grammar).
+        vec = result.modules["quark_ranLL_vec_local_mass_l"]["options"]
+        assert vec["spinTaste"]["gammas"] == "(GX GX) (GY GY) (GZ GZ)"
+        assert vec["spinTaste"]["applyG5"] == "true"
+        assert vec["mesonField"] == (
+            "mfload_mass_l_G5X_G5X mfload_mass_l_G5Y_G5Y mfload_mass_l_G5Z_G5Z"
+        )
 
 
 def _write_file(path, size):
@@ -317,8 +380,8 @@ class TestLoadModeSkipIfComplete:
         for m in ("l", "u"):
             assert f"mfwrite_mass_{m}" not in result.modules
             assert f"cbpairs_l_mass_{m}" not in result.modules
-            assert f"mfload_mass_{m}" in result.modules
-            assert f"stag_ranLL_mass_{m}" in result.modules
+            assert f"mfload_mass_{m}_G1_G1" in result.modules
+            assert f"quark_ranLL_pion_local_mass_{m}" in result.modules
 
     def test_partial_completion_skips_only_complete_masses(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -331,8 +394,8 @@ class TestLoadModeSkipIfComplete:
         result = build_input_params(config)
         assert "mfwrite_mass_l" in result.modules
         assert "mfwrite_mass_u" not in result.modules
-        assert "mfload_mass_l" in result.modules
-        assert "mfload_mass_u" in result.modules
+        assert "mfload_mass_l_G1_G1" in result.modules
+        assert "mfload_mass_u_G1_G1" in result.modules
 
     def test_no_pending_sources_omits_random_walls_not_chain(self, tmp_path, monkeypatch):
         monkeypatch.chdir(tmp_path)
@@ -345,10 +408,11 @@ class TestLoadModeSkipIfComplete:
 
         result = build_input_params(config)
         assert not any(n.startswith("noise_t") for n in result.modules)
-        # noise_fv stays: the always-emitted loader/solver chain references
-        # noise_fv_vec (solver self-check) — no dangling references.
+        # noise_fv stays: the always-emitted loader/producer chain
+        # references noise_fv_vec (producer self-check) — no dangling
+        # references.
         assert "noise_fv" in result.modules
         # Writers still gated on meson-field completeness (nothing written):
         assert "mfwrite_mass_l" in result.modules
-        assert "mfload_mass_l" in result.modules
-        assert "stag_ranLL_mass_l" in result.modules
+        assert "mfload_mass_l_G1_G1" in result.modules
+        assert "quark_ranLL_pion_local_mass_l" in result.modules
