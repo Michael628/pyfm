@@ -13,7 +13,7 @@ shared_params:
   tstart: 0 # first source time slice
   tstop: 3 # tstop = time - 1
   dt: 1 # spacing between source time slices
-  noise: 1 # leave this as 1
+  noise: 1 # > 1 supported with low_mode_method: load (producer nNoise)
   eigs: 100 # eigs <= sourceeigs. number of eigenvalues to use in calculation
   sourceeigs: 100 # number of eigenvalues in source file
   lanczos:

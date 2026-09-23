@@ -607,6 +607,34 @@ def test_generate_high_modes_load_method_input(tmp_path, monkeypatch, hadrons_pa
         )
 
 
+def test_generate_high_modes_load_method_noise_two_input(
+    tmp_path, monkeypatch, hadrons_params
+):
+    """low_mode_method=load with noise=2: nNoise threads end to end."""
+    monkeypatch.chdir(tmp_path)
+    tasks = hadrons_params["job_setup"]["high_modes"]["tasks"]["high_modes"]
+    tasks["low_mode_method"] = "load"
+    tasks["noise"] = 2
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+    assert "noise_fv" in modules
+    for m in ("l", "u"):
+        assert f"cbpairs_l_mass_{m}" in modules
+        assert f"mfload_mass_{m}_G1_G1" in modules
+        assert f"quark_ranLL_pion_local_mass_{m}" in modules
+
+    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
+    # Full noise count reaches every layer: the shared fv noise, the
+    # per-source walls, and the producers' window selection.
+    assert "<nsrc>2</nsrc>" in xml  # noise_fv (full_volume_noise)
+    assert "<nSrc>2</nSrc>" in xml  # RandomWalls
+    assert "<noiseIndex>0</noiseIndex>" in xml
+    assert "<nNoise>2</nNoise>" in xml  # StagLMAMesonFieldProp producers
+    assert "<noise>noise_fv_vec</noise>" in xml
+
+
 def test_lmi_rejects_conflicting_load_method_on_shared_mass(hadrons_params):
     """Two high_modes list entries sharing a mass label with different
     low_mode_method values would collide on the shared solver module name —

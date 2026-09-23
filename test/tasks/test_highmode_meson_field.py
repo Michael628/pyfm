@@ -65,7 +65,7 @@ class TestLowModeMethodValidation:
     def test_compute_default_passes(self):
         validate_config(make_config())
 
-    def test_load_mode_passes_with_outfile_and_noise_one(self):
+    def test_load_mode_passes_with_outfile(self):
         validate_config(
             make_config(low_mode_method="load", meson_stoch_proj=MESON_STOCH_PROJ)
         )
@@ -75,12 +75,15 @@ class TestLowModeMethodValidation:
         with pytest.raises(ValueError, match="low_mode_method"):
             validate_config(config)
 
-    def test_load_requires_noise_one(self):
-        config = make_config(
-            low_mode_method="load", noise=2, meson_stoch_proj=MESON_STOCH_PROJ
+    def test_load_accepts_noise_above_one(self):
+        # HadronsMILC 8ea54f1 reconstructs one propagator per noise
+        # window (nNoise), so noise > 1 is valid in load mode; the
+        # strategy threads config.noise through as nNoise.
+        validate_config(
+            make_config(
+                low_mode_method="load", noise=2, meson_stoch_proj=MESON_STOCH_PROJ
+            )
         )
-        with pytest.raises(ValueError, match="noise"):
-            validate_config(config)
 
     def test_load_rejects_nbias(self):
         config = make_config(
@@ -187,6 +190,7 @@ class TestModuleWrappers:
             gammas="(G5 G5)",
             apply_g5="true",
             noise="noise_fv_vec",
+            n_noise="2",
         )
         assert module["id"] == {
             "name": "quark_ranLL_pion_local_mass_l",
@@ -198,6 +202,7 @@ class TestModuleWrappers:
             "mesonField": "mfload_mass_l_G1_G1",
             "spinTaste": {"gammas": "(G5 G5)", "gauge": "", "applyG5": "true"},
             "noiseIndex": "0",
+            "nNoise": "2",
             "tA": "0",
             "tB": "3",
             "tStep": "1",
@@ -229,6 +234,7 @@ class TestLoadModeEmission:
             producer = result.modules[f"quark_ranLL_pion_local_mass_{m}"]
             assert producer["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
             assert producer["options"]["noiseIndex"] == "0"
+            assert producer["options"]["nNoise"] == "1"
             assert producer["options"]["tA"] == "0"
             assert producer["options"]["tB"] == "3"
             assert producer["options"]["tStep"] == "1"
@@ -257,6 +263,16 @@ class TestLoadModeEmission:
             result.modules["quark_ranLL_pion_local_mass_l"]["options"]["noise"]
             == "noise_fv_vec"
         )
+
+    def test_noise_two_threads_through_chain(self):
+        result = build_input_params(self.load_config(noise=2))
+        assert result.modules["noise_fv"]["options"]["nsrc"] == "2"
+        for t in range(4):
+            assert result.modules[f"noise_t{t}"]["options"]["nSrc"] == "2"
+        for m in ("l", "u"):
+            producer = result.modules[f"quark_ranLL_pion_local_mass_{m}"]
+            assert producer["options"]["noiseIndex"] == "0"
+            assert producer["options"]["nNoise"] == "2"
 
     def test_writer_chain_options(self):
         result = build_input_params(self.load_config())

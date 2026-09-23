@@ -297,6 +297,10 @@ def build_lma_meson_field_chain(
             gammas=g.gamma_string,
             apply_g5="true",
             noise="noise_fv_vec",
+            # Every noise window, from window 0 — the producer publishes
+            # one propagator per window; Grid aborts on a missing numeric
+            # node, so nNoise is always emitted (noise=1 included).
+            n_noise=str(config.noise),
         )
         schedule.append(producer)
 
@@ -604,14 +608,6 @@ def validate_config(config: HighModeConfig) -> None:
             f"{config.low_mode_method!r}."
         )
     if config.low_mode_method == "load" and not config.skip_low_modes:
-        if config.noise != 1:
-            raise ValueError(
-                "low_mode_method='load' requires noise == 1 (the "
-                "StagLMAMesonFieldProp producer reconstructs each color "
-                "from a window of 3 adjacent columns of a single "
-                "color-diluted source, noiseIndex=0); got "
-                f"noise={config.noise}."
-            )
         if config.nbias is not None:
             raise ValueError(
                 "low_mode_method='load' is incompatible with nbias (bias "

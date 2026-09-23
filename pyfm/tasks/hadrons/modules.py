@@ -455,24 +455,35 @@ def lma_meson_field_prop(
     apply_g5: str,
     noise_index: str = "0",
     noise: str = "",
+    n_noise: str = "1",
 ) -> t.Dict:
     """Wrap ``MFermion::StagLMAMesonFieldProp`` — eager low-mode producer.
 
-    Reconstructs one scalar ``PropagatorField`` per output name from
-    precomputed meson-field files (the GaugeProp-style replacement of the
-    former ``MSolver::StagLMAMesonField`` family, HadronsMILC dacc3fa):
-    outputs are ``<name>_t<t>`` for a single gamma (or empty ``gammas``)
-    and ``<name>_t<t>_<spin>_<taste>`` for multiple gammas, one per
-    ``t`` in ``[tA, tB]`` stride ``tStep`` — the raw gamma labels
-    (independent of ``applyG5``) name the per-gamma outputs, exactly
-    GaugeProp's per-gamma guess grammar. ``meson_field`` is a
-    whitespace-separated parallel list of ``MIO::LoadMesonField`` module
-    names, one per gamma in raw order (each loader must hold the file
-    produced under the applyG5-conjugated gamma; miswiring fails at the
-    execute-time metadata cross-check). ``gauge`` stays empty — the
-    module applies no spin-taste operator (fatal otherwise). ``noise``
-    names a ``<fvnoise>_vec`` object to enable the pairing/normalization
-    self-check.
+    Reconstructs one ``PropagatorField`` per output name from precomputed
+    meson-field files (the GaugeProp-style replacement of the former
+    ``MSolver::StagLMAMesonField`` family, HadronsMILC dacc3fa): outputs
+    are ``<name>_t<t>`` for a single gamma (or empty ``gammas``) and
+    ``<name>_t<t>_<spin>_<taste>`` for multiple gammas, one per ``t`` in
+    ``[tA, tB]`` stride ``tStep`` — the raw gamma labels (independent of
+    ``applyG5``) name the per-gamma outputs, exactly GaugeProp's
+    per-gamma guess grammar. ``meson_field`` is a whitespace-separated
+    parallel list of ``MIO::LoadMesonField`` module names, one per gamma
+    in raw order (each loader must hold the file produced under the
+    applyG5-conjugated gamma; miswiring fails at the execute-time
+    metadata cross-check). ``gauge`` stays empty — the module applies no
+    spin-taste operator (fatal otherwise). ``noise`` names a
+    ``<fvnoise>_vec`` object to enable the pairing/normalization
+    self-check (run once per noise window). ``noise_index``/``n_noise``
+    select the noise windows (HadronsMILC 8ea54f1): the module
+    reconstructs ``noise_index..noise_index+n_noise-1``, window n
+    reading three adjacent table columns (``noise_index`` counts noises,
+    not columns); the execute-time coverage check needs
+    ``(noise_index + n_noise) * 3`` columns. ``n_noise == 1`` publishes
+    a scalar ``PropagatorField`` per output name (legacy grammar);
+    ``n_noise > 1`` publishes a noise-major
+    ``std::vector<PropagatorField>`` — the element-wise vector contract
+    ``MContraction::Meson`` averages over, and the per-noise guess
+    alignment GaugeProp's vector overload provides.
     """
     return {
         "id": {
@@ -485,6 +496,7 @@ def lma_meson_field_prop(
             "mesonField": meson_field,
             "spinTaste": {"gammas": gammas, "gauge": "", "applyG5": apply_g5},
             "noiseIndex": noise_index,
+            "nNoise": n_noise,
             "tA": ta,
             "tB": tb,
             "tStep": tstep,

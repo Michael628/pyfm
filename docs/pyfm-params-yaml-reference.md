@@ -41,7 +41,7 @@ shared_params:
   time: 48
   eigs: 1000
   dt: 1
-  noise: 1
+  noise: 1  # > 1 supported with low_mode_method: load
   lattice: [32, 32, 32, 48]
   runid: "LMI-RW-series-{series}-{eigs}-eigs-{noise}-noise"
   logging_level: DEBUG
@@ -58,7 +58,7 @@ Merged into the nanny config **and** every job/task. These are the values most `
 | `space` / `time` | Spatial / temporal lattice extent | Config input (e.g. `SmearConfig`, `*.time`) |
 | `runid` | Run identifier string with `{series}/{eigs}/{noise}` | String template |
 | `dt` | Source-time-slice spacing, fills `{dt}`; ignored when `nbias` is set in a `high_modes` list entry | Config input (`HighModeConfig.dt`) + template key |
-| `noise` | Noise count (keep `1`), fills `{noise}` | Config input + template key |
+| `noise` | Noise count, fills `{noise}`; `low_mode_method: load` supports `> 1` (producer `nNoise`) | Config input + template key |
 | `eigs` | Number of eigenvalues used, fills `{eigs}` | Config input (`EpackConfig.eigs`) + template key |
 | `lattice` | `[nx, ny, nz, nt]` geometry | Config input (`JobConfig.lattice`) |
 
@@ -526,9 +526,12 @@ emitted. The producer time window is source-matched (`tA=tstart`,
 `tB=tstop`, `tStep=dt`). Random walls draw from one shared
 `MNoise::StagFullVolumeSpinColorDiagonal` module (`noise_fv`); the module name
 is part of the RNG stream, so renaming it changes the noise bits. With
-`nSrc=1` and `tStep=nt` the wall publishes a scalar `PropagatorField`
-(HadronsMILC RandomWall extension), matching the scalar producer outputs the
-ama guesses consume.
+`nSrc=1` and `tStep=nt` the wall publishes a scalar `PropagatorField`,
+matching the scalar producer outputs the ama guesses consume; with
+`noise > 1` walls and producer outputs are noise-major vectors (the
+producers' `nNoise` reconstructs one propagator per window,
+`noiseIndex=0`), ama solves run per noise, and the meson contraction
+averages the element-wise per-noise results.
 
 ```yaml
 tasks:
@@ -540,9 +543,14 @@ tasks:
 
 Constraints and interactions:
 
-- Requires `noise: 1` (validated loudly) — the producer reconstructs each
-  color from a window of 3 adjacent columns (`noiseIndex=0..2`) of a single
-  color-diluted source.
+- `noise` wires to the producers' `nNoise` (with `noiseIndex=0`): each
+  stochastic window becomes its own reconstructed propagator — scalar at
+  `noise: 1`, a noise-major vector above it — and the meson contractions
+  average the per-noise results. Moving an existing setup to
+  `noise > 1` needs fresh intermediates: tables must carry `3*noise`
+  columns, so carry the `{noise}` token in the stem (next bullet) or
+  delete the old files; a stale 3-column table aborts loudly at execute
+  time ("too few for noise windows").
 - Incompatible with `nbias` (validated loudly): bias source labels `n{i}`
   cannot bind to the producer's fixed `_t{t}` output-name grammar.
 - Requires a `files.meson_stoch_proj` entry (`filestem` with `{mass}`;
