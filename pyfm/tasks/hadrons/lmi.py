@@ -153,13 +153,16 @@ def route_params(params: t.Dict) -> t.Dict:
     return params | dict(_preprocessor=child_preprocessor)
 
 
-def validate_config(config: LMIConfig) -> None:
-    """Validate LMIConfig after construction and postprocessing.
+def validate_shared_config(config: CompositeConfig) -> None:
+    """Schema-agnostic LMIConfig-shaped validation, shared by ``lmi.py``
+    and ``lma_new.py`` (duck-typed against field names, not ``isinstance``
+    -gated — the same reuse contract ``grid/lma.py``'s ``GridLMAConfig``
+    already relies on for these hooks).
 
-    Validates that if epack is skipped, meson must also be skipped. Warns when
-    two high-mode entries bind the same files label: their outputs share a
-    filestem namespace, and only distinct source labels (e.g. bias block
-    labels) keep the files distinct.
+    Validates that if epack is skipped, meson must also be skipped. Warns
+    when two high-mode entries bind the same files label: their outputs
+    share a filestem namespace, and only distinct source labels (e.g. bias
+    block labels) keep the files distinct.
     """
     for k in ["meson", "high_modes", "epack"]:
         if getattr(config, f"skip_{k}", False):
@@ -179,54 +182,41 @@ def validate_config(config: LMIConfig) -> None:
                 "tasks.high_modes list entry to segregate them."
             )
 
-    # low_mode_method agreement across entries sharing a mass label: the
-    # solver module name (solver_name template) is shared, and the load-mode
-    # chain adds mass-keyed modules (cbpairs/mfwrite/mfload) — a
-    # compute/load mix, or two load entries with different filestems, would
-    # silently last-wins in the modules-dict merge.
-    for i, hm_i in enumerate(config.high_modes_config):
-        for hm_j in config.high_modes_config[:i]:
-            shared = sorted(set(hm_i.masses) & set(hm_j.masses))
-            if not shared:
-                continue
-            if hm_i.low_mode_method != hm_j.low_mode_method:
-                raise ValueError(
-                    f"high_modes_config entries bind the same mass label(s) "
-                    f"{shared} with different low_mode_method values "
-                    f"({hm_j.low_mode_method!r} vs {hm_i.low_mode_method!r}); "
-                    "the shared solver module name would silently take the "
-                    "last entry's solver type. Split the masses or align the "
-                    "method."
-                )
-            if (
-                hm_i.low_mode_method == "load"
-                and hm_i.meson_stoch_proj is not None
-                and hm_j.meson_stoch_proj is not None
-                and hm_i.meson_stoch_proj.filestem != hm_j.meson_stoch_proj.filestem
-            ):
-                raise ValueError(
-                    f"high_modes_config entries bind the same mass label(s) "
-                    f"{shared} in load mode with different meson_stoch_proj "
-                    "filestems; the chain module names collide and the merge "
-                    "silently keeps the last entry's options. Use one files "
-                    "entry per mass family."
-                )
-            if hm_i.low_mode_method == "load" and hm_j.low_mode_method == "load":
-                needed_i = highmode.needed_ranll_gammas(hm_i)
-                needed_j = highmode.needed_ranll_gammas(hm_j)
-                for mass in shared:
-                    gammas_i = {g.name for g in needed_i.get(mass, [])}
-                    gammas_j = {g.name for g in needed_j.get(mass, [])}
-                    if gammas_i != gammas_j:
-                        raise ValueError(
-                            f"high_modes_config entries bind mass label "
-                            f"'{mass}' in load mode with different "
-                            f"needed-gamma sets ({sorted(gammas_j)} vs "
-                            f"{sorted(gammas_i)}); the shared chain module "
-                            "names (writer/loader/producer) would silently "
-                            "take the last entry's options. Align the "
-                            "operations or split the masses."
-                        )
+
+def validate_config(config: LMIConfig) -> None:
+    """Validate LMIConfig after construction and postprocessing.
+
+    ``hadrons_lmi`` is on a deprecation path: it targets HadronsMILC's
+    develop-schema Legacy modules. ``low_mode_method="load"`` is rejected
+    outright — ``StagLMAMesonFieldProp`` has no develop-schema Legacy
+    sibling (always publishes ``TGammaMap`` outputs that
+    ``StagGaugePropLegacy``/``StagMesonLegacy`` cannot consume, and
+    ``StagA2AMesonFieldLegacy`` has no ``cbPairsLeft``/``cbPairsRight``
+    fields for the on-demand-checkerboard writer) — use ``hadrons_lma_new``
+    instead. The schema-agnostic checks (epack/meson consistency, filestem
+    collisions) live in :func:`validate_shared_config`, reused unchanged by
+    ``lma_new.py`` (which does NOT reject load-mode).
+    """
+    utils.get_logger().warning(
+        "hadrons_lmi is on a deprecation path: it targets HadronsMILC's "
+        "develop-schema Legacy modules (StagGaugePropLegacy/StagMesonLegacy/"
+        "StagA2AMesonFieldLegacy). Use hadrons_lma_new for new work "
+        "targeting the current (SpinTaste-module-based) HadronsMILC API."
+    )
+
+    for hm in config.high_modes_config:
+        if hm.low_mode_method == "load":
+            raise ValueError(
+                "hadrons_lmi does not support low_mode_method='load': "
+                "StagLMAMesonFieldProp has no develop-schema Legacy sibling "
+                "(always publishes TGammaMap outputs that "
+                "StagGaugePropLegacy/StagMesonLegacy cannot consume, and "
+                "StagA2AMesonFieldLegacy has no cbPairsLeft/cbPairsRight "
+                "fields for the on-demand-checkerboard writer). Use the "
+                "hadrons_lma_new task instead, or low_mode_method='compute'."
+            )
+
+    validate_shared_config(config)
 
 
 def build_input_params(config: LMIConfig) -> HadronsInput:

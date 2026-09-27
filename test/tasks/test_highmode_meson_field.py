@@ -130,7 +130,7 @@ class TestModuleWrappers:
             low_modes="evecs_mass_l", left="", right="noise_fv_vec",
             output="mfout", apply_g5="false",
         )
-        assert module["id"]["type"] == "MContraction::StagA2AMesonField"
+        assert module["id"]["type"] == "MContraction::StagA2AMesonFieldLegacy"
         assert "cbPairsLeft" not in module["options"]
         assert "cbPairsRight" not in module["options"]
 

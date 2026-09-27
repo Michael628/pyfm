@@ -110,7 +110,7 @@
     <module>
       <id>
         <name>mf_local_mass_l</name>
-        <type>MContraction::StagA2AMesonField</type>
+        <type>MContraction::StagA2AMesonFieldLegacy</type>
       </id>
       <options>
         <action>stag_mass_l</action>
@@ -132,7 +132,7 @@
     <module>
       <id>
         <name>mf_onelink_mass_l</name>
-        <type>MContraction::StagA2AMesonField</type>
+        <type>MContraction::StagA2AMesonFieldLegacy</type>
       </id>
       <options>
         <action>stag_mass_l</action>

@@ -558,87 +558,38 @@ def test_generate_high_modes_tiered_skips_dead_cg_solves(
     )
 
 
-# --- appended: low_mode_method='load' end-to-end (file-driven LMA) ---
-def test_generate_high_modes_load_method_input(tmp_path, monkeypatch, hadrons_params):
-    """low_mode_method=load: fv noise, producer chain, name-collision outputs."""
+# --- appended: low_mode_method='load' is rejected under hadrons_lmi ---
+# (hadrons_lmi targets HadronsMILC's develop-schema Legacy modules;
+# StagLMAMesonFieldProp has no Legacy sibling — see lmi.validate_config.
+# The file-driven LMA meson-field chain lives under hadrons_lma_new now.)
+def test_generate_high_modes_load_method_rejected(tmp_path, monkeypatch, hadrons_params):
+    """low_mode_method=load under hadrons_lmi raises at build time."""
     monkeypatch.chdir(tmp_path)
     hadrons_params["job_setup"]["high_modes"]["tasks"]["high_modes"][
         "low_mode_method"
     ] = "load"
 
-    write_input_file("high_modes", hadrons_params, "a", "20")
-
-    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
-    assert "noise_fv" in modules
-    for m in ("l", "u"):
-        assert f"cbpairs_l_mass_{m}" in modules
-        assert f"cbpairs_r_mass_{m}" in modules
-        assert f"mfwrite_mass_{m}" in modules
-        # loaders: one per (mass, conjugated gamma) — pion+vec ops need
-        # G1_G1 (conj of G5_G5) and the G5X/Y/Z pairs (conj of GX_GX...)
-        for conj in ("G1_G1", "G5X_G5X", "G5Y_G5Y", "G5Z_G5Z"):
-            assert f"mfload_mass_{m}_{conj}" in modules
-        # producers: one per op family — outputs collide with the
-        # quark_ranLL_* names contractions/guesses reference
-        assert f"quark_ranLL_pion_local_mass_{m}" in modules
-        assert f"quark_ranLL_vec_local_mass_{m}" in modules
-
-    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
-    assert "<type>MFermion::StagLMAMesonFieldProp</type>" in xml
-    assert "<type>MSolver::StagLMA</type>" not in xml
-    assert "<type>MSolver::StagLMAMesonField</type>" not in xml
-    assert "MIO::LoadMesonField" in xml
-    assert "<noise>noise_fv</noise>" in xml  # RandomWalls reference the fv module
-    assert "noise_fv_vec" in xml
-    # Producer outputs bind the per-source timeslices; ama guesses carry
-    # the BASE names in XML — GaugeProp appends the per-gamma key
-    # ("" single-gamma, "_<raw spin-taste>" multi) as a C++ runtime
-    # lookup, so only the bases appear as XML option values.
-    assert "quark_ranLL_pion_local_mass_l_t0" in xml
-    assert "quark_ranLL_vec_local_mass_l_t0" in xml
-
-    sched = (
-        tmp_path / "schedules" / "high-modes-a.20.sched"
-    ).read_text().splitlines()[1:]
-    for m in ("l", "u"):
-        assert sched.index(f"mfwrite_mass_{m}") < sched.index(f"mfload_mass_{m}_G1_G1")
-        assert sched.index(f"mfload_mass_{m}_G1_G1") < sched.index(
-            f"quark_ranLL_pion_local_mass_{m}"
-        )
+    with pytest.raises(ValueError, match="low_mode_method"):
+        write_input_file("high_modes", hadrons_params, "a", "20")
 
 
-def test_generate_high_modes_load_method_noise_two_input(
+def test_generate_high_modes_load_method_noise_two_rejected(
     tmp_path, monkeypatch, hadrons_params
 ):
-    """low_mode_method=load with noise=2: nNoise threads end to end."""
+    """low_mode_method=load with noise=2 is rejected the same way."""
     monkeypatch.chdir(tmp_path)
     tasks = hadrons_params["job_setup"]["high_modes"]["tasks"]["high_modes"]
     tasks["low_mode_method"] = "load"
     tasks["noise"] = 2
 
-    write_input_file("high_modes", hadrons_params, "a", "20")
-
-    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
-    assert "noise_fv" in modules
-    for m in ("l", "u"):
-        assert f"cbpairs_l_mass_{m}" in modules
-        assert f"mfload_mass_{m}_G1_G1" in modules
-        assert f"quark_ranLL_pion_local_mass_{m}" in modules
-
-    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
-    # Full noise count reaches every layer: the shared fv noise, the
-    # per-source walls, and the producers' window selection.
-    assert "<nsrc>2</nsrc>" in xml  # noise_fv (full_volume_noise)
-    assert "<nSrc>2</nSrc>" in xml  # RandomWalls
-    assert "<noiseIndex>0</noiseIndex>" in xml
-    assert "<nNoise>2</nNoise>" in xml  # StagLMAMesonFieldProp producers
-    assert "<noise>noise_fv_vec</noise>" in xml
+    with pytest.raises(ValueError, match="low_mode_method"):
+        write_input_file("high_modes", hadrons_params, "a", "20")
 
 
 def test_lmi_rejects_conflicting_load_method_on_shared_mass(hadrons_params):
-    """Two high_modes list entries sharing a mass label with different
-    low_mode_method values would collide on the shared solver module name —
-    lmi.validate_config raises instead of silently last-wins."""
+    """A high_modes entry using low_mode_method='load' is rejected by
+    lmi.validate_config's blanket guard, whether or not another entry in
+    the same list shares a mass label with it."""
     tasks = hadrons_params["job_setup"]["lma"]["tasks"]
     main = tasks["high_modes"]
     conflict = dict(main)
@@ -651,10 +602,9 @@ def test_lmi_rejects_conflicting_load_method_on_shared_mass(hadrons_params):
 
 
 def test_lmi_rejects_conflicting_gamma_sets_on_shared_mass(hadrons_params):
-    """Two load-mode high_modes entries sharing a mass label with
-    different op sets would collide on the shared chain module names
-    (writer/loader/producer) — lmi.validate_config raises instead of
-    silently last-wins."""
+    """Multiple load-mode high_modes entries are rejected outright by
+    lmi.validate_config's blanket low_mode_method='load' guard, regardless
+    of whether their op sets would otherwise collide."""
     hadrons_params["files"]["meson_stoch_proj"] = {
         "filestem": "lma-meson/m{mass}/mf_{series}",
         "good_size": 1286000,
@@ -667,7 +617,7 @@ def test_lmi_rejects_conflicting_gamma_sets_on_shared_mass(hadrons_params):
     conflict["gamma"] = ["pion_local"]  # subset → different needed set
     tasks["high_modes"] = [main, conflict]
 
-    with pytest.raises(ValueError, match="needed-gamma"):
+    with pytest.raises(ValueError, match="low_mode_method"):
         create_task("lma", hadrons_params, "a", "20")
 
 
