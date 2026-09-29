@@ -110,6 +110,14 @@ class HighModeConfig(SimpleConfig):
     meson_stoch_proj: Outfile | None = None
     blocksize: int = 12
     noise_name: str = "noise_fv"
+    # Set by lma_new.postprocess_config's dataclasses.replace; can also be
+    # routed directly from a tasks.high_modes YAML entry (route_params
+    # doesn't special-case this field), but lma_new.validate_config rejects
+    # it on entries that don't match postprocess_config's own predicate.
+    # True means build_input_params emits only this entry's full_volume_noise
+    # (the lh-cache writer's sole dependency) and skips the resume gate,
+    # solvers, and quark/contraction dispatch entirely.
+    cache_only: bool = False
 
     @property
     def tsource_range(self) -> t.List[int]:

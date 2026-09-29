@@ -123,22 +123,34 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
 
     # 4. HIGHMODE section: generate actions then compute, once per entry
     # (canonical schema).
-    if not config.skip_high_modes:
+    # skip_high_modes normally skips this whole section; build_lh_cache's
+    # cache-only entries (postprocess_config-flagged hm.cache_only) are the
+    # one exception — they still need highmode_v2.build_input_params to
+    # emit the writer's noise dependency, just without the per-entry
+    # action-module build the mass-loop/solver/quark/contract machinery
+    # needs (the noise module has no action/gauge reference of its own).
+    active_entries = [
+        hm
+        for hm in config.high_modes_config
+        if not config.skip_high_modes or hm.cache_only
+    ]
+    if active_entries:
         entry_sp_masses = [
-            hm.masses if hm.solver == "mpcg" else []
-            for hm in config.high_modes_config
+            hm.masses if hm.solver == "mpcg" and not hm.cache_only else []
+            for hm in active_entries
         ]
         if any(entry_sp_masses):
             sp_gauge = gauge.build_sp_gauge(config.gauge_config)
             modules |= sp_gauge.modules
             schedule += sp_gauge.schedule
 
-        for hm, sp_masses in zip(config.high_modes_config, entry_sp_masses):
-            actions = gauge.build_action_modules(
-                config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
-            )
-            modules |= actions.modules
-            schedule += actions.schedule
+        for hm, sp_masses in zip(active_entries, entry_sp_masses):
+            if not hm.cache_only:
+                actions = gauge.build_action_modules(
+                    config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
+                )
+                modules |= actions.modules
+                schedule += actions.schedule
 
             hm_input = highmode_v2.build_input_params(hm)
             modules |= hm_input.modules
@@ -148,6 +160,17 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     deduplicated_schedule = list(dict.fromkeys(schedule))
 
     return HadronsInput(modules=modules, schedule=deduplicated_schedule)
+
+
+def _needs_cache(hm: HighModeConfig) -> bool:
+    """Whether ``hm`` is a candidate for lh-cache synthesis/cache_only routing.
+
+    Single predicate shared by ``postprocess_config`` (which entries get a
+    synthesized writer / ``cache_only=True``) and ``validate_config`` (which
+    entries a direct, hand-set ``cache_only=True`` is valid on) — keeps both
+    checks from silently drifting apart.
+    """
+    return hm.low_mode_method == "load" and not hm.skip_low_modes
 
 
 def postprocess_config(config: LMANewConfig) -> LMANewConfig:
@@ -163,6 +186,11 @@ def postprocess_config(config: LMANewConfig) -> LMANewConfig:
     new branch, no cross-section SpinTaste-name coupling needed).
     ``skip_meson`` is flipped to ``False`` whenever at least one entry is
     synthesized, so ``validate_config``'s guards stay consistent.
+
+    When ``skip_high_modes`` is also set, the same entries additionally get
+    ``cache_only=True`` — ``build_input_params``'s HIGHMODE section then
+    still calls ``highmode_v2.build_input_params`` for them (emitting just
+    the writer's noise dependency) instead of skipping them outright.
     """
     if not config.build_lh_cache:
         return config
@@ -199,14 +227,22 @@ def postprocess_config(config: LMANewConfig) -> LMANewConfig:
             high_right_name=f"{hm.noise_name}_vec",
         )
         for hm in config.high_modes_config
-        if hm.low_mode_method == "load" and not hm.skip_low_modes
+        if _needs_cache(hm)
     ]
 
     if not synthesized:
         return config
 
+    high_modes_config = config.high_modes_config
+    if config.skip_high_modes:
+        high_modes_config = [
+            replace(hm, cache_only=True) if _needs_cache(hm) else hm
+            for hm in config.high_modes_config
+        ]
+
     return replace(
         config,
+        high_modes_config=high_modes_config,
         meson_config=list(config.meson_config) + synthesized,
         skip_meson=False,
     )
@@ -216,36 +252,74 @@ def validate_config(config: LMANewConfig) -> None:
     """Validate LMANewConfig after construction and postprocessing.
 
     Reuses the schema-agnostic checks (epack/meson consistency, filestem
-    collisions) from ``lmi.validate_shared_config`` unchanged, then adds
-    one ``lma_new``-specific guard: ``postprocess_config`` guarantees
-    ``skip_meson=False`` whenever it actually synthesizes an entry, so a
-    ``high_modes`` entry needing load-mode caching with ``skip_meson``
-    still true means neither ``build_lh_cache`` synthesis nor a
-    hand-authored ``tasks.meson`` entry covers it — the loader/producer
-    chain would reference a writer output nothing produces.
+    collisions) from ``lmi.validate_shared_config`` unchanged, then adds two
+    ``lma_new``-specific guards: (1) every load-mode, non-``skip_low_modes``
+    ``high_modes`` entry must set ``meson_stoch_proj`` — the loader/producer
+    chain (``highmode_v2.build_lma_meson_field_chain``) reads load-cache
+    files straight off disk by that entry's filestem, independent of
+    whether *this* job's ``meson_config``/``build_lh_cache`` wrote them or a
+    separate prior job did (the two-stage build-then-load workflow this
+    feature exists for); a missing ``meson_stoch_proj`` is the one thing
+    that's wrong in every case, so it's checked unconditionally rather than
+    only when ``skip_meson`` is true; (2) ``cache_only`` is only ever set by
+    ``postprocess_config`` on entries matching ``_needs_cache``, but
+    ``HighModeConfig`` fields route straight from YAML (``lmi.route_params``'s
+    ``high_modes_defaults | entry`` layering), so a hand-set
+    ``cache_only=True`` on a non-matching entry must be rejected rather than
+    silently under-building.
     """
     lmi.validate_shared_config(config)
 
-    if config.skip_meson:
-        needs_cache = any(
-            hm.low_mode_method == "load" and not hm.skip_low_modes
-            for hm in config.high_modes_config
-        )
-        if needs_cache:
+    for hm in config.high_modes_config:
+        if _needs_cache(hm) and hm.meson_stoch_proj is None:
             raise ValueError(
                 "A high_modes entry has low_mode_method='load' and "
-                "not skip_low_modes, but skip_meson is true (no meson "
-                "entries exist) and build_lh_cache is "
-                f"{config.build_lh_cache!r} — the load-mode loader/producer "
-                "chain would reference a writer output nothing produces. "
-                "Set build_lh_cache=True, or hand-author a tasks.meson "
-                "entry producing the required load-cache files."
+                "not skip_low_modes, but meson_stoch_proj is unset — the "
+                "load-mode loader/producer chain needs a files entry to "
+                "read the load-cache meson fields from (whether written by "
+                "this job's build_lh_cache synthesis or a prior job's). "
+                "Set high_modes.meson_stoch_proj to a files entry."
+            )
+
+    for hm in config.high_modes_config:
+        if hm.cache_only and not _needs_cache(hm):
+            raise ValueError(
+                "A high_modes entry has cache_only=True but "
+                f"low_mode_method={hm.low_mode_method!r} / "
+                f"skip_low_modes={hm.skip_low_modes!r} — cache_only is only "
+                "meaningful for low_mode_method='load' entries with low "
+                "modes enabled (the same predicate postprocess_config uses "
+                "to synthesize the lh-cache writer). Unset cache_only, or "
+                "fix low_mode_method/skip_low_modes."
             )
 
 
+def normalize_params(params: t.Dict) -> t.Dict:
+    """lma_new-specific wrapper around ``lmi.normalize_params``.
+
+    ``lmi.normalize_params`` always derives ``skip_high_modes`` from
+    ``tasks.high_modes``'s presence (``not entries``) — correct for
+    ``hadrons_lmi``, which has no ``build_lh_cache`` concept, but it means a
+    cache-only job (real ``tasks.high_modes`` entries, ``skip_high_modes``
+    forced ``True``) can never reach ``postprocess_config`` with both set:
+    the derived value always wins. ``build_lh_cache`` lives only on
+    ``LMANewConfig`` (not ``LMIConfig``), so this override lives here, not
+    in the shared ``lmi.py`` hook. When the raw params request both
+    ``build_lh_cache`` and ``skip_high_modes``, that explicit intent is
+    restored after ``lmi.normalize_params`` runs; otherwise this is a
+    pass-through.
+    """
+    build_lh_cache = params.get("build_lh_cache", False)
+    wants_skip_high_modes = params.get("skip_high_modes", False)
+    result = lmi.normalize_params(params)
+    if build_lh_cache and wants_skip_high_modes:
+        result = result | {"skip_high_modes": True}
+    return result
+
+
 # Register LMANewConfig, reusing lmi.py's schema-agnostic hooks by direct
-# reference (grid/lma.py's GridLMAConfig precedent) — only build_input_params,
-# postprocess_config, and validate_config are lma_new-specific.
+# reference (grid/lma.py's GridLMAConfig precedent) — build_input_params,
+# postprocess_config, validate_config, and normalize_params are lma_new-specific.
 register_task(
     "hadrons_lma_new",
     LMANewConfig,
@@ -253,7 +327,7 @@ register_task(
     build_input_params,
     lmi.build_aggregator_params,
     lmi.compare_outputs,
-    lmi.normalize_params,
+    normalize_params,
     lmi.route_params,
     postprocess_config,
     validate=validate_config,

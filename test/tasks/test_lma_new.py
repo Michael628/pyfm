@@ -13,9 +13,11 @@ from pyfm.tasks.hadrons.types import HighModeConfig
 from pyfm.tasks.hadrons.lma_new import (
     LMANewConfig,
     build_input_params,
+    normalize_params,
     postprocess_config,
     validate_config,
 )
+from pyfm.tasks.hadrons import lmi
 from pyfm.tasks.register import get_task_handler, get_task_key, list_registered_types
 
 MASS = MassDict.from_dict({"l": 0.002426})
@@ -171,15 +173,6 @@ class TestBuildLhCache:
         result = postprocess_config(config)
         assert result is config
 
-    def test_validate_rejects_unsynthesized_load_mode(self):
-        stoch = Outfile(
-            filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
-        )
-        config = make_config(low_mode_method="load", meson_stoch_proj=stoch)
-        config = dataclasses.replace(config, meson_config=[], skip_meson=True)
-        with pytest.raises(ValueError, match="build_lh_cache"):
-            validate_config(config)
-
     def test_validate_passes_when_build_lh_cache_synthesized(self):
         stoch = Outfile(
             filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
@@ -188,6 +181,142 @@ class TestBuildLhCache:
         config = dataclasses.replace(config, build_lh_cache=True, skip_epack=False)
         config = postprocess_config(config)
         validate_config(config)  # must not raise
+
+    def test_validate_passes_for_load_only_stage(self):
+        # The two-stage build-then-load workflow this feature exists for:
+        # a prior job already wrote the load-cache files (build_lh_cache=True
+        # there), this job just loads them (build_lh_cache=False,
+        # skip_meson=True — no tasks.meson block at all). validate_config
+        # must not treat "no meson entries in *this* job" as a
+        # misconfiguration.
+        stoch = Outfile(
+            filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
+        )
+        config = make_config(low_mode_method="load", meson_stoch_proj=stoch)
+        config = dataclasses.replace(
+            config, meson_config=[], skip_meson=True, skip_epack=False
+        )
+        validate_config(config)  # must not raise
+
+    def test_validate_rejects_missing_meson_stoch_proj_regardless_of_build_lh_cache(
+        self,
+    ):
+        # The one invariant that's always wrong: a load-mode entry with no
+        # files entry to read the (this-job- or prior-job-produced) cache
+        # from. Checked unconditionally, not just under build_lh_cache=True.
+        config = make_config(low_mode_method="load")
+        config = dataclasses.replace(
+            config, meson_config=[], skip_meson=True, skip_epack=False
+        )
+        with pytest.raises(ValueError, match="meson_stoch_proj"):
+            validate_config(config)
+
+
+class TestCacheOnlyPathway:
+    STOCH = Outfile(
+        filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
+    )
+
+    def test_postprocess_config_sets_cache_only_when_skip_high_modes(self):
+        config = make_config(low_mode_method="load", meson_stoch_proj=self.STOCH)
+        config = dataclasses.replace(config, build_lh_cache=True, skip_high_modes=True)
+        result = postprocess_config(config)
+        assert result.high_modes_config[0].cache_only is True
+
+    def test_postprocess_config_leaves_cache_only_false_without_skip_high_modes(self):
+        config = make_config(low_mode_method="load", meson_stoch_proj=self.STOCH)
+        config = dataclasses.replace(config, build_lh_cache=True)
+        result = postprocess_config(config)
+        assert result.high_modes_config[0].cache_only is False
+
+    def test_build_input_params_emits_noise_and_writer_without_quarks(self):
+        config = make_config(low_mode_method="load", meson_stoch_proj=self.STOCH)
+        config = dataclasses.replace(config, build_lh_cache=True, skip_high_modes=True)
+        config = postprocess_config(config)
+        result = build_input_params(config)
+        assert "noise_fv" in result.modules
+        assert "mf_local_mass_l" in result.modules
+        assert not any(name.startswith("quark_") for name in result.modules)
+        assert not any(
+            mod["id"]["type"] == "MContraction::StagMeson"
+            for mod in result.modules.values()
+        )
+
+    def test_validate_rejects_hand_set_cache_only_on_compute_mode_entry(self):
+        # cache_only routes straight from YAML like any other HighModeConfig
+        # field (lmi.route_params's high_modes_defaults | entry layering) —
+        # validate_config must reject a hand-set cache_only=True that
+        # doesn't match postprocess_config's own _needs_cache predicate.
+        config = make_config(cache_only=True)
+        config = dataclasses.replace(config, skip_epack=False)
+        with pytest.raises(ValueError, match="cache_only"):
+            validate_config(config)
+
+    def test_validate_rejects_hand_set_cache_only_with_skip_low_modes(self):
+        config = make_config(
+            low_mode_method="load", meson_stoch_proj=self.STOCH,
+            skip_low_modes=True, cache_only=True,
+        )
+        config = dataclasses.replace(config, skip_epack=False)
+        with pytest.raises(ValueError, match="cache_only"):
+            validate_config(config)
+
+    def test_validate_passes_cache_only_from_postprocess_config(self):
+        config = make_config(low_mode_method="load", meson_stoch_proj=self.STOCH)
+        config = dataclasses.replace(
+            config, build_lh_cache=True, skip_high_modes=True, skip_epack=False
+        )
+        config = postprocess_config(config)
+        validate_config(config)  # must not raise
+
+    def test_entries_not_needing_cache_stay_fully_skipped(self):
+        config = make_config()
+        config = dataclasses.replace(config, skip_high_modes=True)
+        result = build_input_params(config)
+        assert "sink" not in result.modules
+        assert "stag_ranLL_mass_l" not in result.modules
+
+    def test_aggregator_empty_for_cache_only_job(self):
+        # lma_new reuses lmi.build_aggregator_params verbatim (register_task,
+        # lma_new.py:322) — skip_high_modes=True (set alongside
+        # cache_only by postprocess_config) means no correlator files are
+        # ever scheduled, so aggregation must produce nothing rather than
+        # describing files that don't exist.
+        config = make_config(low_mode_method="load", meson_stoch_proj=self.STOCH)
+        config = dataclasses.replace(config, build_lh_cache=True, skip_high_modes=True)
+        config = postprocess_config(config)
+
+        assert lmi.build_aggregator_params(config, average=False) == {}
+
+
+class TestNormalizeParamsCacheOnly:
+    def test_preserves_skip_high_modes_when_build_lh_cache_set(self):
+        raw = {
+            "build_lh_cache": True,
+            "skip_high_modes": True,
+            "_preprocessor": {"high_modes": {"gamma": ["pion_local"], "mass": ["l"]}},
+        }
+        result = normalize_params(raw)
+        assert result["skip_high_modes"] is True
+        assert result["_preprocessor"]["high_modes"]
+
+    def test_pass_through_without_build_lh_cache(self):
+        raw = {
+            "skip_high_modes": True,
+            "_preprocessor": {"high_modes": {"gamma": ["pion_local"], "mass": ["l"]}},
+        }
+        result = normalize_params(raw)
+        assert result == lmi.normalize_params(raw)
+        assert result["skip_high_modes"] is False
+
+    def test_pass_through_without_wanting_skip_high_modes(self):
+        raw = {
+            "build_lh_cache": True,
+            "_preprocessor": {"high_modes": {"gamma": ["pion_local"], "mass": ["l"]}},
+        }
+        result = normalize_params(raw)
+        assert result == lmi.normalize_params(raw)
+        assert result["skip_high_modes"] is False
 
 
 class TestSplitMpiLayout:
@@ -218,3 +347,28 @@ def test_generate_lma_new_input_end_to_end(tmp_path, monkeypatch, hadrons_params
     assert "<type>MFermion::StagGaugePropLegacy</type>" not in xml
     assert "<type>MContraction::StagMeson</type>" in xml
     assert "<type>MContraction::StagMesonLegacy</type>" not in xml
+
+
+def test_cache_only_reachable_from_yaml_job_config(hadrons_params):
+    """build_lh_cache=True + skip_high_modes=True must survive routing even
+    with a real (non-empty) tasks.high_modes block — the reachability gap
+    lmi.normalize_params has for this composite-only flag combination."""
+    from pyfm.nanny.taskbuilder import create_task
+
+    hadrons_params["job_setup"]["lma_new_test"] = dict(
+        hadrons_params["job_setup"]["lma"]
+    )
+    hadrons_params["job_setup"]["lma_new_test"]["task_type"] = "lma_new"
+    hadrons_params["job_setup"]["lma_new_test"]["params"] = dict(
+        hadrons_params["job_setup"]["lma"].get("params", {}),
+        build_lh_cache=True,
+        skip_high_modes=True,
+    )
+    hadrons_params["submit"]["resources"]["lma_new_test"] = hadrons_params["submit"][
+        "resources"
+    ]["lma"]
+
+    task = create_task("lma_new_test", hadrons_params, "a", "20")
+
+    assert task.config.skip_high_modes is True
+    assert len(task.config.high_modes_config) == 1

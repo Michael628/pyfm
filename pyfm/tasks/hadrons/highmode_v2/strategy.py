@@ -117,6 +117,22 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     modules = {}
     schedule = []
 
+    if config.cache_only:
+        # Cache-only mode (lma_new's build_lh_cache + skip_high_modes path):
+        # the lh-cache writer (a synthesized MesonConfig entry, built in the
+        # meson section) references this entry's noise module by name
+        # (meson_v2.py's high_right_name) — full_volume_noise is its sole
+        # dependency here. Everything else below (resume gate, SpinTaste,
+        # sink, per-source noise, mass-loop solvers, quark/contraction
+        # dispatch) exists only to build quarks/correlators, which this
+        # pathway explicitly skips.
+        if config.masses:
+            modules[config.noise_name] = hadmods.full_volume_noise(
+                name=config.noise_name, nsrc=str(config.noise)
+            )
+            schedule.append(config.noise_name)
+        return HadronsInput(modules=modules, schedule=schedule)
+
     if not config.overwrite:
         df = create_outfile_catalog(config)
         if df.empty:

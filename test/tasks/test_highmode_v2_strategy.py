@@ -139,6 +139,58 @@ class TestBuildInputParamsV2ComputeMode:
         assert quark["options"]["gammas"] == "spintaste_pion_local"
 
 
+class TestBuildInputParamsV2CacheOnly:
+    def test_emits_only_the_noise_module(self):
+        config = make_config(
+            low_mode_method="load",
+            meson_stoch_proj=MESON_STOCH_PROJ,
+            cache_only=True,
+        )
+        result = strategy.build_input_params(config)
+        assert set(result.modules) == {"noise_fv"}
+        assert result.schedule == ["noise_fv"]
+        assert result.modules["noise_fv"]["id"]["type"] == (
+            "MNoise::StagFullVolumeSpinColorDiagonal"
+        )
+        assert not any(
+            mod["id"]["type"].endswith("Legacy") for mod in result.modules.values()
+        )
+
+    def test_noise_module_name_is_config_driven(self):
+        config = make_config(
+            low_mode_method="load",
+            meson_stoch_proj=MESON_STOCH_PROJ,
+            cache_only=True,
+            noise_name="custom_noise",
+        )
+        result = strategy.build_input_params(config)
+        assert set(result.modules) == {"custom_noise"}
+
+    def test_no_solver_quark_or_contraction_modules(self):
+        config = make_config(
+            low_mode_method="load",
+            meson_stoch_proj=MESON_STOCH_PROJ,
+            cache_only=True,
+            skip_cg=False,
+        )
+        result = strategy.build_input_params(config)
+        assert "sink" not in result.modules
+        assert not any(name.startswith("spintaste_") for name in result.modules)
+        assert not any(name.startswith("quark_") for name in result.modules)
+        assert not any(name.startswith("corr_") for name in result.modules)
+
+    def test_cache_only_ignored_when_masses_empty(self):
+        config = make_config(
+            low_mode_method="load",
+            meson_stoch_proj=MESON_STOCH_PROJ,
+            cache_only=True,
+            operations=OpList.from_dict({}),
+        )
+        result = strategy.build_input_params(config)
+        assert result.modules == {}
+        assert result.schedule == []
+
+
 class TestStrategyDispatch:
     def test_sib_strategy_rejected(self):
         config = make_config(correlator_strategy=CorrelatorStrategy.SIB)

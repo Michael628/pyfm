@@ -324,15 +324,24 @@ def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
     ]
     for mc in config.meson_config:
         catalogs.append(meson.create_outfile_catalog(mc))
-    for hm in config.high_modes_config:
-        if not hm.op_list:
-            continue  # degenerate entry: excluded, as the old sibling guard did
-        catalogs.append(highmode.create_outfile_catalog(hm))
+    # skip_high_modes means build_input_params never schedules any
+    # high-modes correlator module (lma_new.py's cache-only carve-out only
+    # ever calls highmode_v2.build_input_params in its noise-only reduced
+    # form) — so no entry's correlator files are ever written, and
+    # including their rows here would permanently poison
+    # validator.has_good_output's completion mask.
+    if not config.skip_high_modes:
+        for hm in config.high_modes_config:
+            if not hm.op_list:
+                continue  # degenerate entry: excluded, as the old sibling guard did
+            catalogs.append(highmode.create_outfile_catalog(hm))
     return pd.concat(catalogs, ignore_index=True)
 
 
 def build_aggregator_params(config: LMIConfig, average: bool) -> t.Dict:
     params: t.Dict = {}
+    if config.skip_high_modes:
+        return params
     for i, hm in enumerate(config.high_modes_config):
         # Entry 0 keeps today's unprefixed run keys (single-entry aggregation
         # byte-identical); later entries namespace under hm{i}_ so run keys

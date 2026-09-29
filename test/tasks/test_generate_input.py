@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -322,6 +323,37 @@ def test_split_grid_preserves_schedule_ordering(
 
 
 # --- composite high_modes list integration ---
+class TestSkipHighModesCatalogGating:
+    """lmi.create_outfile_catalog/build_aggregator_params must exclude
+    high-modes correlator rows when skip_high_modes is set — otherwise a
+    skip_high_modes=True job's completion check (validator.has_good_output)
+    is permanently poisoned by rows for files nothing schedules. Shared fix
+    in lmi.py, exercised here via hadrons_lmi (the "lma" job fixture)."""
+
+    def test_create_outfile_catalog_excludes_high_modes_rows_when_skipped(
+        self, hadrons_params
+    ):
+        task = create_task("lma", hadrons_params, "a", "20")
+        full_catalog = task.handler.create_outfile_catalog(task.config)
+
+        skipped_config = dataclasses.replace(task.config, skip_high_modes=True)
+        skipped_catalog = task.handler.create_outfile_catalog(skipped_config)
+
+        hm_catalog = highmode.create_outfile_catalog(task.config.high_modes_config[0])
+        assert len(skipped_catalog) == len(full_catalog) - len(hm_catalog)
+
+    def test_build_aggregator_params_empty_when_skipped(self, hadrons_params):
+        task = create_task("lma", hadrons_params, "a", "20")
+        full_params = task.handler.build_aggregator_params(task.config, average=False)
+        assert full_params  # sanity: non-empty for the real fixture
+
+        skipped_config = dataclasses.replace(task.config, skip_high_modes=True)
+        skipped_params = task.handler.build_aggregator_params(
+            skipped_config, average=False
+        )
+        assert skipped_params == {}
+
+
 class TestHighModesListComposite:
     @staticmethod
     def _append_bias_entry(
