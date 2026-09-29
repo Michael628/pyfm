@@ -75,3 +75,16 @@ class TestBuildInputParamsV2:
         for m in ("l", "u"):
             assert f"spintaste_mf_local_mass_{m}" in result.modules
             assert f"mf_local_mass_{m}" in result.modules
+
+    def test_left_right_default_to_empty_string(self):
+        result = meson_v2.build_input_params(make_config())
+        mf = result.modules["mf_local_mass_l"]
+        assert mf["options"]["left"] == ""
+        assert mf["options"]["right"] == ""
+
+    def test_high_left_right_names_are_threaded_through(self):
+        config = make_config(high_left_name="w_vec", high_right_name="noise_fv_vec")
+        result = meson_v2.build_input_params(config)
+        mf = result.modules["mf_local_mass_l"]
+        assert mf["options"]["left"] == "w_vec"
+        assert mf["options"]["right"] == "noise_fv_vec"

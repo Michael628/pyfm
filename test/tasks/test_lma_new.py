@@ -1,5 +1,7 @@
 """Tests for lma_new.py — LMANewConfig composite + registry wiring."""
 
+import dataclasses
+
 import pytest
 
 from pyfm.domain import MassDict, OpList, Outfile
@@ -8,7 +10,12 @@ from pyfm.tasks.hadrons.gauge import GaugeConfig, ActionType
 from pyfm.tasks.hadrons.epack import EpackConfig
 from pyfm.tasks.hadrons.meson import MesonConfig
 from pyfm.tasks.hadrons.types import HighModeConfig
-from pyfm.tasks.hadrons.lma_new import LMANewConfig, build_input_params
+from pyfm.tasks.hadrons.lma_new import (
+    LMANewConfig,
+    build_input_params,
+    postprocess_config,
+    validate_config,
+)
 from pyfm.tasks.register import get_task_handler, get_task_key, list_registered_types
 
 MASS = MassDict.from_dict({"l": 0.002426})
@@ -75,7 +82,7 @@ def make_config(**hm_overrides):
         runid="test",
         gauge_config=gauge_config,
         epack_config=epack_config,
-        meson_config=meson_config,
+        meson_config=[meson_config],
         high_modes_config=[hm],
         skip_epack=True,
     )
@@ -132,6 +139,55 @@ class TestBuildInputParams:
         assert result.modules["quark_ranLL_pion_local_mass_l"]["id"]["type"] == (
             "MFermion::StagLMAMesonFieldProp"
         )
+
+
+class TestBuildLhCache:
+    def test_postprocess_config_synthesizes_meson_entry(self):
+        stoch = Outfile(
+            filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
+        )
+        config = make_config(low_mode_method="load", meson_stoch_proj=stoch)
+        config = dataclasses.replace(config, build_lh_cache=True)
+
+        result = postprocess_config(config)
+
+        assert len(result.meson_config) == 2
+        assert result.skip_meson is False
+        synthesized = result.meson_config[-1]
+        assert synthesized.meson is stoch
+        assert synthesized.apply_g5 is True
+        assert synthesized.high_right_name == "noise_fv_vec"
+        assert synthesized.high_left_name == ""
+        assert synthesized.operations is config.high_modes_config[0].operations
+
+    def test_postprocess_config_noop_when_build_lh_cache_false(self):
+        config = make_config()
+        result = postprocess_config(config)
+        assert result is config
+
+    def test_postprocess_config_noop_when_no_load_mode_entries(self):
+        config = make_config()
+        config = dataclasses.replace(config, build_lh_cache=True)
+        result = postprocess_config(config)
+        assert result is config
+
+    def test_validate_rejects_unsynthesized_load_mode(self):
+        stoch = Outfile(
+            filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
+        )
+        config = make_config(low_mode_method="load", meson_stoch_proj=stoch)
+        config = dataclasses.replace(config, meson_config=[], skip_meson=True)
+        with pytest.raises(ValueError, match="build_lh_cache"):
+            validate_config(config)
+
+    def test_validate_passes_when_build_lh_cache_synthesized(self):
+        stoch = Outfile(
+            filestem="mesonfield/mf_{mass}", ext=".{cfg}/{gamma}_0_0_0.h5", good_size=1
+        )
+        config = make_config(low_mode_method="load", meson_stoch_proj=stoch)
+        config = dataclasses.replace(config, build_lh_cache=True, skip_epack=False)
+        config = postprocess_config(config)
+        validate_config(config)  # must not raise
 
 
 class TestSplitMpiLayout:

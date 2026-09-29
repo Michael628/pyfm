@@ -16,7 +16,7 @@ from .types import HighModeConfig
 class LMIConfig(CompositeConfig):
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig
-    meson_config: meson.MesonConfig
+    meson_config: t.List[meson.MesonConfig]
     high_modes_config: t.List[HighModeConfig]
     skip_epack: bool = False
     skip_meson: bool = False
@@ -50,104 +50,110 @@ class LMIConfig(CompositeConfig):
 
 
 _OPTIONAL_CONFIGS = ["meson", "high_modes", "epack"]
+_LIST_CONFIGS = ["high_modes", "meson"]
 
 
 def normalize_params(params: t.Dict) -> t.Dict:
     """Normalize LMIConfig input: derive ``skip_*`` flags and canonicalize
-    the ``high_modes`` task block to a list.
+    the ``high_modes``/``meson`` task blocks to lists.
 
-    ``tasks.high_modes`` accepts a single mapping (one entry) or a list of
-    mappings (multi-entry); the single-mapping form is coerced to a one-entry
-    list here (``DiagramConfig.mesons`` precedent, ``contract/diagram.py``).
-    ``skip_high_modes`` is derived from the canonicalized list's emptiness —
-    an absent block and an explicit ``high_modes: []`` are equivalent. The
-    incoming ``_preprocessor`` slice is *inspected* (and, for ``high_modes``,
-    canonically replaced) here — ``route_params`` owns its consumption.
+    Both ``tasks.high_modes`` and ``tasks.meson`` accept a single mapping
+    (one entry) or a list of mappings (multi-entry); the single-mapping form
+    is coerced to a one-entry list here. ``skip_high_modes``/``skip_meson``
+    are derived from each canonicalized list's emptiness — an absent block
+    and an explicit ``[]`` are equivalent. The incoming ``_preprocessor``
+    slice is *inspected* (and, for these two keys, canonically replaced)
+    here — ``route_params`` owns its consumption.
     """
     incoming = params.get("_preprocessor", {})
     skip_flags = {
         f"skip_{k}": True
         for k in _OPTIONAL_CONFIGS
-        if k != "high_modes" and k not in incoming
+        if k not in _LIST_CONFIGS and k not in incoming
     }
 
-    hm_raw = incoming.get("high_modes")
-    if hm_raw is None:
-        hm_entries = []
-    elif isinstance(hm_raw, dict):
-        hm_entries = [hm_raw]
-    elif isinstance(hm_raw, list):
-        hm_entries = hm_raw
-    else:
-        raise TypeError(
-            "tasks.high_modes must be a mapping or a list of mappings; got "
-            f"{type(hm_raw).__name__}."
-        )
-    if not all(isinstance(entry, dict) for entry in hm_entries):
-        raise TypeError(
-            "tasks.high_modes entries must all be mappings; got "
-            f"{[type(entry).__name__ for entry in hm_entries]}."
-        )
-    skip_flags["skip_high_modes"] = not hm_entries
+    canonical: t.Dict[str, t.List] = {}
+    for key in _LIST_CONFIGS:
+        raw = incoming.get(key)
+        if raw is None:
+            entries = []
+        elif isinstance(raw, dict):
+            entries = [raw]
+        elif isinstance(raw, list):
+            entries = raw
+        else:
+            raise TypeError(
+                f"tasks.{key} must be a mapping or a list of mappings; got "
+                f"{type(raw).__name__}."
+            )
+        if not all(isinstance(entry, dict) for entry in entries):
+            raise TypeError(
+                f"tasks.{key} entries must all be mappings; got "
+                f"{[type(entry).__name__ for entry in entries]}."
+            )
+        skip_flags[f"skip_{key}"] = not entries
+        if raw is not None and not isinstance(raw, list):
+            canonical[key] = entries
 
-    if hm_raw is not None and not isinstance(hm_raw, list):
-        params = params | {"_preprocessor": incoming | {"high_modes": hm_entries}}
+    if canonical:
+        params = params | {"_preprocessor": incoming | canonical}
     return params | skip_flags
 
 
 def route_params(params: t.Dict) -> t.Dict:
     """Route per-subtask input to the child configs, layering in name defaults.
 
-    ``high_modes`` is a LIST subconfig: every canonicalized entry is layered
-    over the shared defaults and routed as its own slice under
-    ``_preprocessor["high_modes_config"]``. A ``tasks.bias`` key now fails
-    loudly — the bias sibling is gone; bias is a list entry carrying
-    ``nbias``/``bias_seed``.
+    ``high_modes`` and ``meson`` are LIST subconfigs: every canonicalized
+    entry is layered over its section's shared defaults and routed as its
+    own slice under ``_preprocessor["high_modes_config"]``/
+    ``_preprocessor["meson_config"]``.
     """
 
     ACTION_NAME = "stag_mass_{mass}"
     SOLVER_NAME = "stag_{solver}_mass_{mass}"
     LOW_MODES_NAME = "evecs_mass_{mass}"
     SHIFT_GAUGE_NAME = "gauge_apbc"
+    NOISE_FV_NAME = "noise_fv"
 
-    # Incoming slice holds per-subtask input keyed by subtask name.
     preprocessor_params = params.pop("_preprocessor", {})
 
-    # Shared per-entry defaults for the high-mode children
     high_modes_defaults = dict(
         action_name=ACTION_NAME,
         low_modes_name=LOW_MODES_NAME,
         solver_name=SOLVER_NAME,
         shift_gauge_name=SHIFT_GAUGE_NAME,
+        noise_name=NOISE_FV_NAME,
         skip_low_modes="epack" not in preprocessor_params,
     )
+    meson_defaults = dict(
+        action_name=ACTION_NAME,
+        shift_gauge_name=SHIFT_GAUGE_NAME,
+        low_modes_name=LOW_MODES_NAME,
+    )
 
-    # Set defaults for child configs. high_modes_config is a list of
-    # per-entry slices (normalize_params canonicalized the shape; the
-    # isinstance guard keeps route total for direct callers).
-    entries = preprocessor_params.get("high_modes", [])
-    if isinstance(entries, dict):
-        entries = [entries]
+    hm_entries = preprocessor_params.get("high_modes", [])
+    if isinstance(hm_entries, dict):
+        hm_entries = [hm_entries]
+
+    meson_entries = preprocessor_params.get("meson", [])
+    if isinstance(meson_entries, dict):
+        meson_entries = [meson_entries]
+
     child_preprocessor = dict(
         gauge_config=dict(action_name=ACTION_NAME),
         epack_config=dict(
             action_name=ACTION_NAME,
             low_modes_name=LOW_MODES_NAME,
         ),
-        meson_config=dict(
-            action_name=ACTION_NAME,
-            shift_gauge_name=SHIFT_GAUGE_NAME,
-            low_modes_name=LOW_MODES_NAME,
-        ),
+        meson_config=[meson_defaults | entry for entry in meson_entries],
         high_modes_config=[
-            high_modes_defaults | entry for entry in entries
+            high_modes_defaults | entry for entry in hm_entries
         ],
     )
 
-    # Update child processor with corresponding params passed to parent
     for k, v in preprocessor_params.items():
-        if k == "high_modes":
-            continue  # already expanded into the list above
+        if k in ("high_modes", "meson"):
+            continue  # already expanded into the lists above
         child_preprocessor[f"{k}_config"] |= v
 
     return params | dict(_preprocessor=child_preprocessor)
@@ -249,10 +255,11 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
         modules |= epack_input.modules
         schedule += epack_input.schedule
 
-        # Handle epack mass shifts for meson and every high-mode entry
+        # Handle epack mass shifts for meson and every high-mode entry.
         epack_mass_shifts = []
         if not config.skip_meson:
-            epack_mass_shifts.extend(config.meson_config.masses)
+            for mc in config.meson_config:
+                epack_mass_shifts.extend(mc.masses)
         for hm in config.high_modes_config:
             epack_mass_shifts.extend(hm.masses)
 
@@ -263,18 +270,21 @@ def build_input_params(config: LMIConfig) -> HadronsInput:
             modules |= mass_shifts_input.modules
             schedule += mass_shifts_input.schedule
 
-    # 3. MESON section: generate actions then compute
+    # 3. MESON section: generate actions then compute, once per entry.
     if not config.skip_meson:
-        meson_masses = config.meson_config.masses
+        meson_masses = []
+        for mc in config.meson_config:
+            meson_masses.extend(mc.masses)
         actions = gauge.build_action_modules(
             config.gauge_config, dp_masses=meson_masses
         )
         modules |= actions.modules
         schedule += actions.schedule
 
-        meson_input = meson.build_input_params(config.meson_config)
-        modules |= meson_input.modules
-        schedule += meson_input.schedule
+        for mc in config.meson_config:
+            meson_input = meson.build_input_params(mc)
+            modules |= meson_input.modules
+            schedule += meson_input.schedule
 
     # 4. HIGHMODE section: generate actions then compute, once per entry.
     # Per-entry sp masses stay solver-scoped (an entry's masses join the sp
@@ -311,8 +321,9 @@ def create_outfile_catalog(config: LMIConfig) -> pd.DataFrame:
     catalogs = [
         gauge.create_outfile_catalog(config.gauge_config),
         epack.create_outfile_catalog(config.epack_config),
-        meson.create_outfile_catalog(config.meson_config),
     ]
+    for mc in config.meson_config:
+        catalogs.append(meson.create_outfile_catalog(mc))
     for hm in config.high_modes_config:
         if not hm.op_list:
             continue  # degenerate entry: excluded, as the old sibling guard did

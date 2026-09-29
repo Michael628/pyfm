@@ -1,5 +1,6 @@
 import typing as t
 
+import pandas as pd
 from pydantic.dataclasses import dataclass
 
 from pyfm import utils
@@ -31,6 +32,108 @@ class GridLMAConfig(CompositeConfig):
     skip_high_modes: bool = False
 
     solver_map: t.ClassVar[t.Dict[str, str]] = {"ranLL": "lma", "ama": "mpcg"}
+
+
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize GridLMAConfig input: derive ``skip_*`` flags and canonicalize
+    the ``high_modes`` task block to a list.
+
+    Diverges from the shared LMI normalizer only in not list-ifying
+    ``tasks.meson`` — Grid's ``meson_config`` stays a single mapping (Grid
+    was never extended to multi-entry meson; see this task's
+    ``build_a2a_params``/``GridLMAConfig.meson_config``).
+    """
+    incoming = params.get("_preprocessor", {})
+    skip_flags = {
+        f"skip_{k}": True for k in ["meson", "epack"] if k not in incoming
+    }
+
+    hm_raw = incoming.get("high_modes")
+    if hm_raw is None:
+        hm_entries = []
+    elif isinstance(hm_raw, dict):
+        hm_entries = [hm_raw]
+    elif isinstance(hm_raw, list):
+        hm_entries = hm_raw
+    else:
+        raise TypeError(
+            "tasks.high_modes must be a mapping or a list of mappings; got "
+            f"{type(hm_raw).__name__}."
+        )
+    if not all(isinstance(entry, dict) for entry in hm_entries):
+        raise TypeError(
+            "tasks.high_modes entries must all be mappings; got "
+            f"{[type(entry).__name__ for entry in hm_entries]}."
+        )
+    skip_flags["skip_high_modes"] = not hm_entries
+
+    if hm_raw is not None and not isinstance(hm_raw, list):
+        params = params | {"_preprocessor": incoming | {"high_modes": hm_entries}}
+    return params | skip_flags
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route per-subtask input to the child configs for GridLMAConfig.
+
+    ``meson_config`` stays a single mapping (not list-routed) — diverges
+    from the shared LMI router only in that respect; ``high_modes`` list
+    routing is unchanged.
+    """
+    ACTION_NAME = "stag_mass_{mass}"
+    SOLVER_NAME = "stag_{solver}_mass_{mass}"
+    LOW_MODES_NAME = "evecs_mass_{mass}"
+    SHIFT_GAUGE_NAME = "gauge_apbc"
+
+    preprocessor_params = params.pop("_preprocessor", {})
+
+    high_modes_defaults = dict(
+        action_name=ACTION_NAME,
+        low_modes_name=LOW_MODES_NAME,
+        solver_name=SOLVER_NAME,
+        shift_gauge_name=SHIFT_GAUGE_NAME,
+        noise_name="noise_fv",
+        skip_low_modes="epack" not in preprocessor_params,
+    )
+
+    entries = preprocessor_params.get("high_modes", [])
+    if isinstance(entries, dict):
+        entries = [entries]
+
+    child_preprocessor = dict(
+        gauge_config=dict(action_name=ACTION_NAME),
+        epack_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        meson_config=dict(
+            action_name=ACTION_NAME,
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        high_modes_config=[
+            high_modes_defaults | entry for entry in entries
+        ],
+    )
+
+    for k, v in preprocessor_params.items():
+        if k == "high_modes":
+            continue  # already expanded into the list above
+        child_preprocessor[f"{k}_config"] |= v
+
+    return params | dict(_preprocessor=child_preprocessor)
+
+
+def create_outfile_catalog(config: GridLMAConfig) -> pd.DataFrame:
+    catalogs = [
+        gauge.create_outfile_catalog(config.gauge_config),
+        epack.create_outfile_catalog(config.epack_config),
+        meson.create_outfile_catalog(config.meson_config),
+    ]
+    for hm in config.high_modes_config:
+        if not hm.op_list:
+            continue  # degenerate entry: excluded, as the old sibling guard did
+        catalogs.append(highmode.create_outfile_catalog(hm))
+    return pd.concat(catalogs, ignore_index=True)
 
 
 def hadrons_to_grid_filestem(filestem: str, series: str) -> str:
@@ -262,10 +365,10 @@ def validate_config(config: GridLMAConfig) -> None:
 register_task(
     "grid_lma",
     GridLMAConfig,
-    lmi.create_outfile_catalog,
+    create_outfile_catalog,
     build_input_params,
     lmi.build_aggregator_params,
-    lmi.normalize_params,
-    lmi.route_params,
+    normalize_params,
+    route_params,
     validate=validate_config,
 )

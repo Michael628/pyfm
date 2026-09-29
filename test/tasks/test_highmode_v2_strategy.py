@@ -37,26 +37,6 @@ def make_config(**overrides):
 
 
 class TestBuildLmaMesonFieldChain:
-    def test_writer_has_no_action_field_and_references_union_spintaste(self):
-        config = make_config()
-        _, names = twopoint.build_spintaste_modules(config)
-        result = strategy.build_lma_meson_field_chain(
-            config,
-            mass_label="l",
-            action="stag_mass_l",
-            low_modes="evecs_mass_l",
-            gammas=[Gamma.PION_LOCAL],
-            write=True,
-            spintaste_names=names,
-        )
-        writer = result.modules["mfwrite_mass_l"]
-        assert writer["id"]["type"] == "MContraction::StagA2AMesonField"
-        assert "action" not in writer["options"]
-        assert writer["options"]["gammas"] == "spintaste_mfwrite_mass_l"
-        assert writer["options"]["cbPairsLeft"] == "cbpairs_l_mass_l"
-        assert writer["options"]["cbPairsRight"] == "cbpairs_r_mass_l"
-        assert "spintaste_mfwrite_mass_l" in result.modules
-
     def test_producer_references_shared_spintaste_with_required_labels(self):
         config = make_config()
         _, names = twopoint.build_spintaste_modules(config)
@@ -66,7 +46,6 @@ class TestBuildLmaMesonFieldChain:
             action="stag_mass_l",
             low_modes="evecs_mass_l",
             gammas=[Gamma.PION_LOCAL],
-            write=True,
             spintaste_names=names,
         )
         producer = result.modules["quark_ranLL_pion_local_mass_l"]
@@ -75,7 +54,9 @@ class TestBuildLmaMesonFieldChain:
         assert producer["options"]["labels"] == "G5_G5"
         assert producer["options"]["mesonField"] == "mfload_mass_l_G1_G1"
 
-    def test_write_false_skips_writer_and_cbpairs(self):
+    def test_no_writer_or_cbpairs_modules(self):
+        # The writer (cbpairs + SpinTaste + meson_field_v2) moved entirely
+        # out of highmode_v2 — this function only loads and produces.
         config = make_config()
         _, names = twopoint.build_spintaste_modules(config)
         result = strategy.build_lma_meson_field_chain(
@@ -84,11 +65,12 @@ class TestBuildLmaMesonFieldChain:
             action="stag_mass_l",
             low_modes="evecs_mass_l",
             gammas=[Gamma.PION_LOCAL],
-            write=False,
             spintaste_names=names,
         )
         assert "mfwrite_mass_l" not in result.modules
         assert "cbpairs_l_mass_l" not in result.modules
+        assert "cbpairs_r_mass_l" not in result.modules
+        assert "spintaste_mfwrite_mass_l" not in result.modules
         assert "mfload_mass_l_G1_G1" in result.modules
         assert "quark_ranLL_pion_local_mass_l" in result.modules
 
@@ -123,17 +105,25 @@ class TestBuildInputParamsV2LoadMode:
             skip_cg=False,
         )
         result = strategy.build_input_params(config)
-        # The per-gamma module (built once, up front) must schedule before
-        # every module that references it by name: the producer and every
-        # contraction.
         base_idx = result.schedule.index("spintaste_pion_local")
         assert base_idx < result.schedule.index("quark_ranLL_pion_local_mass_l")
         assert base_idx < result.schedule.index("corr_ranLL_pion_local_mass_l_t0")
-        # The per-mass writer union module must schedule before its own
-        # writer module.
-        assert result.schedule.index("spintaste_mfwrite_mass_l") < result.schedule.index(
-            "mfwrite_mass_l"
+
+    def test_noise_module_name_is_config_driven(self):
+        config = make_config(
+            low_mode_method="load",
+            meson_stoch_proj=MESON_STOCH_PROJ,
+            overwrite=True,
+            skip_cg=False,
+            noise_name="custom_noise",
         )
+        result = strategy.build_input_params(config)
+        assert "custom_noise" in result.modules
+        assert result.modules["custom_noise"]["id"]["type"] == (
+            "MNoise::StagFullVolumeSpinColorDiagonal"
+        )
+        producer = result.modules["quark_ranLL_pion_local_mass_l"]
+        assert producer["options"]["noise"] == "custom_noise_vec"
 
 
 class TestBuildInputParamsV2ComputeMode:

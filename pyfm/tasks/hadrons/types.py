@@ -109,6 +109,7 @@ class HighModeConfig(SimpleConfig):
     low_mode_method: str = "compute"
     meson_stoch_proj: Outfile | None = None
     blocksize: int = 12
+    noise_name: str = "noise_fv"
 
     @property
     def tsource_range(self) -> t.List[int]:

@@ -12,11 +12,8 @@ from pyfm.tasks.hadrons.highmode_v2 import twopoint
 from pyfm.tasks.hadrons.highmode.strategy import (
     create_outfile_catalog,
     needed_ranll_gammas,
-    create_meson_field_catalog,
     sort_schedule,
 )
-
-from pyfm import utils
 
 
 def build_lma_meson_field_chain(
@@ -25,64 +22,21 @@ def build_lma_meson_field_chain(
     action: str,
     low_modes: str,
     gammas: t.List[Gamma],
-    write: bool,
     spintaste_names: t.Dict[Gamma, str],
 ) -> HadronsInput:
-    """Canonical-schema counterpart of
-    ``highmode.strategy.build_lma_meson_field_chain``.
+    """Loader + producer half of the load-mode meson-field chain.
 
-    Same writer/loader/producer shape and file-naming convention — the
-    module calls differ: the writer (``meson_field_v2``) has no ``action``
-    field at all (dropped from the canonical Par struct) and its gamma set
-    is published through a dedicated per-mass union ``SpinTaste`` module
-    (covering every gamma this mass needs, since one writer call spans all
-    of them); each producer (``lma_meson_field_prop_v2``) references the
-    SAME per-gamma SpinTaste module ``build_quarks``/``build_contractions``
-    already use (``spintaste_names[g]``, built once by
-    ``twopoint.build_spintaste_modules`` and threaded through) with a
-    REQUIRED ``labels`` list — ``g``'s own raw ``gamma_list``, positionally
-    parallel to the conjugated-gamma loader list (unchanged from today's
-    file-naming/loader convention).
+    The writer (cbpairs + SpinTaste + ``meson_field_v2``) that used to
+    live here has moved to the meson section — an ordinary ``MesonConfig``
+    entry, synthesized by ``LMANewConfig.postprocess_config`` when
+    ``build_lh_cache`` is set. This function only loads the resulting
+    files and builds the eager ``StagLMAMesonFieldProp`` producers;
+    ``gammas`` is this mass's demand set (:func:`needed_ranll_gammas`).
     """
     modules = {}
     schedule = []
     stem = config.meson_stoch_proj.filestem.format(mass=mass_label)
-
-    if write:
-        cbpairs_l = f"cbpairs_l_mass_{mass_label}"
-        cbpairs_r = f"cbpairs_r_mass_{mass_label}"
-        modules[cbpairs_l] = hadmods.eigen_pack_cb_pairs(
-            name=cbpairs_l, eigen_pack=low_modes, action=action
-        )
-        modules[cbpairs_r] = hadmods.eigen_pack_cb_pairs(
-            name=cbpairs_r, eigen_pack=low_modes, action=action
-        )
-        schedule += [cbpairs_l, cbpairs_r]
-
-        writer_spintaste = f"spintaste_mfwrite_mass_{mass_label}"
-        modules[writer_spintaste] = hadmods.spin_taste(
-            name=writer_spintaste,
-            gammas=" ".join(dict.fromkeys(g.gamma_string for g in gammas)),
-            gauge=(
-                "gauge" if all(g.local for g in gammas) else config.shift_gauge_name
-            ),
-            apply_g5="true",
-        )
-        schedule.append(writer_spintaste)
-
-        writer = f"mfwrite_mass_{mass_label}"
-        modules[writer] = hadmods.meson_field_v2(
-            name=writer,
-            block=str(config.blocksize),
-            gammas=writer_spintaste,
-            low_modes=low_modes,
-            left="",
-            right="noise_fv_vec",
-            output=stem,
-            cb_pairs_left=cbpairs_l,
-            cb_pairs_right=cbpairs_r,
-        )
-        schedule.append(writer)
+    noise_vec = f"{config.noise_name}_vec"
 
     for g in gammas:
         for conj in g.conjugate_gamma_list:
@@ -110,7 +64,7 @@ def build_lma_meson_field_chain(
             ta=str(config.tstart),
             tb=str(config.tstop),
             tstep=str(config.dt),
-            noise="noise_fv_vec",
+            noise=noise_vec,
             n_noise=str(config.noise),
         )
         schedule.append(producer)
@@ -181,14 +135,6 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     needed: t.Dict[str, t.List[Gamma]] = {}
     if use_meson_field:
         needed = needed_ranll_gammas(config)
-    incomplete_masses: t.Set[str] = set()
-    if use_meson_field and not config.overwrite:
-        mf_catalog = create_meson_field_catalog(config)
-        if not mf_catalog.empty:
-            bad = utils.io.get_bad_files(mf_catalog)
-            incomplete_masses = set(
-                mf_catalog[mf_catalog["filepath"].isin(bad)]["mass"]
-            )
 
     spintaste_modules, spintaste_names = twopoint.build_spintaste_modules(config)
     modules |= spintaste_modules
@@ -198,10 +144,10 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
     schedule.append("sink")
 
     if use_meson_field and config.masses:
-        modules["noise_fv"] = hadmods.full_volume_noise(
-            name="noise_fv", nsrc=str(config.noise)
+        modules[config.noise_name] = hadmods.full_volume_noise(
+            name=config.noise_name, nsrc=str(config.noise)
         )
-        schedule.append("noise_fv")
+        schedule.append(config.noise_name)
 
     quark_schedule = []
     for ref in run_refs:
@@ -211,7 +157,7 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
             nsrc=str(config.noise),
             t0=str(ref.t0),
             tstep=str(config.time),
-            noise="noise_fv" if use_meson_field else "",
+            noise=config.noise_name if use_meson_field else "",
         )
         quark_schedule.append(name)
 
@@ -226,7 +172,6 @@ def build_input_params(config: HighModeConfig) -> HadronsInput:
                     action=action,
                     low_modes=low_modes,
                     gammas=needed.get(mass_label, []),
-                    write=config.overwrite or mass_label in incomplete_masses,
                     spintaste_names=spintaste_names,
                 )
                 modules |= chain.modules

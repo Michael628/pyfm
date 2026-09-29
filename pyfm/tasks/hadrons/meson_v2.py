@@ -69,8 +69,8 @@ def build_input_params(config: MesonConfig) -> HadronsInput:
             block=config.blocksize,
             gammas=spintaste_name,
             low_modes=config.low_modes_name.format(mass=mass_label),
-            left="",
-            right="",
+            left=config.high_left_name,
+            right=config.high_right_name,
             output=output,
         )
 

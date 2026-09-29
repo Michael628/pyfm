@@ -1,4 +1,5 @@
 import typing as t
+from dataclasses import replace
 
 from pydantic.dataclasses import dataclass
 
@@ -25,11 +26,12 @@ class LMANewConfig(CompositeConfig):
 
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig
-    meson_config: meson.MesonConfig
+    meson_config: t.List[meson.MesonConfig]
     high_modes_config: t.List[HighModeConfig]
     skip_epack: bool = False
     skip_meson: bool = False
     skip_high_modes: bool = False
+    build_lh_cache: bool = False
 
     @property
     def split_mpi_layout(self) -> str | None:
@@ -90,7 +92,8 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         # Handle epack mass shifts for meson and every high-mode entry
         epack_mass_shifts = []
         if not config.skip_meson:
-            epack_mass_shifts.extend(config.meson_config.masses)
+            for mc in config.meson_config:
+                epack_mass_shifts.extend(mc.masses)
         for hm in config.high_modes_config:
             epack_mass_shifts.extend(hm.masses)
 
@@ -101,18 +104,22 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
             modules |= mass_shifts_input.modules
             schedule += mass_shifts_input.schedule
 
-    # 3. MESON section: generate actions then compute (canonical schema)
+    # 3. MESON section: generate actions then compute, once per entry
+    # (canonical schema).
     if not config.skip_meson:
-        meson_masses = config.meson_config.masses
+        meson_masses = []
+        for mc in config.meson_config:
+            meson_masses.extend(mc.masses)
         actions = gauge.build_action_modules(
             config.gauge_config, dp_masses=meson_masses
         )
         modules |= actions.modules
         schedule += actions.schedule
 
-        meson_input = meson_v2.build_input_params(config.meson_config)
-        modules |= meson_input.modules
-        schedule += meson_input.schedule
+        for mc in config.meson_config:
+            meson_input = meson_v2.build_input_params(mc)
+            modules |= meson_input.modules
+            schedule += meson_input.schedule
 
     # 4. HIGHMODE section: generate actions then compute, once per entry
     # (canonical schema).
@@ -143,9 +150,102 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     return HadronsInput(modules=modules, schedule=deduplicated_schedule)
 
 
+def postprocess_config(config: LMANewConfig) -> LMANewConfig:
+    """Synthesize a load-cache MesonConfig entry per applicable high_modes entry.
+
+    When ``build_lh_cache`` is set, every ``high_modes_config`` entry with
+    ``low_mode_method == 'load'`` and ``not skip_low_modes`` gets a matching
+    ``MesonConfig`` appended to ``meson_config`` — its ``operations``
+    copied verbatim from the high-modes entry's own. ``apply_g5=True``
+    reproduces the old writer's G5-folding through the existing,
+    unmodified per-shift-group loop in ``meson_v2.build_input_params``
+    (see the design's Decisions for why a verbatim copy suffices — no
+    new branch, no cross-section SpinTaste-name coupling needed).
+    ``skip_meson`` is flipped to ``False`` whenever at least one entry is
+    synthesized, so ``validate_config``'s guards stay consistent.
+    """
+    if not config.build_lh_cache:
+        return config
+
+    for hm in config.high_modes_config:
+        if (
+            hm.low_mode_method == "load"
+            and not hm.skip_low_modes
+            and hm.meson_stoch_proj is None
+        ):
+            raise ValueError(
+                "high_modes entry has low_mode_method='load' and "
+                "not skip_low_modes, but meson_stoch_proj is unset — "
+                "build_lh_cache synthesis needs a files entry to write the "
+                "load-cache meson fields to. Set high_modes.meson_stoch_proj "
+                "to a files entry."
+            )
+
+    synthesized = [
+        meson.MesonConfig(
+            formatting=hm.formatting,
+            logging_level=hm.logging_level,
+            runid=hm.runid,
+            action_name=hm.action_name,
+            low_modes_name=hm.low_modes_name,
+            mass=hm.mass,
+            blocksize=hm.blocksize,
+            operations=hm.operations,
+            meson=hm.meson_stoch_proj,
+            overwrite=hm.overwrite,
+            apply_g5=True,
+            shift_gauge_name=hm.shift_gauge_name,
+            high_left_name="",
+            high_right_name=f"{hm.noise_name}_vec",
+        )
+        for hm in config.high_modes_config
+        if hm.low_mode_method == "load" and not hm.skip_low_modes
+    ]
+
+    if not synthesized:
+        return config
+
+    return replace(
+        config,
+        meson_config=list(config.meson_config) + synthesized,
+        skip_meson=False,
+    )
+
+
+def validate_config(config: LMANewConfig) -> None:
+    """Validate LMANewConfig after construction and postprocessing.
+
+    Reuses the schema-agnostic checks (epack/meson consistency, filestem
+    collisions) from ``lmi.validate_shared_config`` unchanged, then adds
+    one ``lma_new``-specific guard: ``postprocess_config`` guarantees
+    ``skip_meson=False`` whenever it actually synthesizes an entry, so a
+    ``high_modes`` entry needing load-mode caching with ``skip_meson``
+    still true means neither ``build_lh_cache`` synthesis nor a
+    hand-authored ``tasks.meson`` entry covers it — the loader/producer
+    chain would reference a writer output nothing produces.
+    """
+    lmi.validate_shared_config(config)
+
+    if config.skip_meson:
+        needs_cache = any(
+            hm.low_mode_method == "load" and not hm.skip_low_modes
+            for hm in config.high_modes_config
+        )
+        if needs_cache:
+            raise ValueError(
+                "A high_modes entry has low_mode_method='load' and "
+                "not skip_low_modes, but skip_meson is true (no meson "
+                "entries exist) and build_lh_cache is "
+                f"{config.build_lh_cache!r} — the load-mode loader/producer "
+                "chain would reference a writer output nothing produces. "
+                "Set build_lh_cache=True, or hand-author a tasks.meson "
+                "entry producing the required load-cache files."
+            )
+
+
 # Register LMANewConfig, reusing lmi.py's schema-agnostic hooks by direct
-# reference (grid/lma.py's GridLMAConfig precedent) — only build_input_params
-# and the load-mode-permissive validate_shared_config are lma_new-specific.
+# reference (grid/lma.py's GridLMAConfig precedent) — only build_input_params,
+# postprocess_config, and validate_config are lma_new-specific.
 register_task(
     "hadrons_lma_new",
     LMANewConfig,
@@ -155,5 +255,6 @@ register_task(
     lmi.compare_outputs,
     lmi.normalize_params,
     lmi.route_params,
-    validate=lmi.validate_shared_config,
+    postprocess_config,
+    validate=validate_config,
 )

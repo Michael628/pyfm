@@ -27,6 +27,8 @@ class MesonConfig(SimpleConfig):
     overwrite: bool = False
     apply_g5: bool = False
     shift_gauge_name: str | None = None
+    high_left_name: str = ""
+    high_right_name: str = ""
 
     @property
     def op_list(self) -> t.List[OpList.Op]:
