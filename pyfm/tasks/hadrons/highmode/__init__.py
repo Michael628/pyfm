@@ -5,7 +5,6 @@ from pyfm.tasks.hadrons.highmode.strategy import (
     normalize_params,
     route_params,
     validate_config,
-    needed_ranll_gammas,
 )
 from pyfm.tasks.hadrons.highmode.compare import compare_outputs
 
@@ -17,5 +16,4 @@ __all__ = [
     "route_params",
     "validate_config",
     "compare_outputs",
-    "needed_ranll_gammas",
 ]

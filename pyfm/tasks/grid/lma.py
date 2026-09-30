@@ -91,7 +91,6 @@ def route_params(params: t.Dict) -> t.Dict:
         low_modes_name=LOW_MODES_NAME,
         solver_name=SOLVER_NAME,
         shift_gauge_name=SHIFT_GAUGE_NAME,
-        noise_name="noise_fv",
         skip_low_modes="epack" not in preprocessor_params,
     )
 
@@ -350,14 +349,6 @@ def validate_config(config: GridLMAConfig) -> None:
             f"{hm.residual}. solver_map resolves only ranLL and ama — "
             "per-residual ama_{r} labels have no Grid solver (and the mpcg "
             "block pins residual[0])."
-        )
-
-    if hm.low_mode_method == "load" and not hm.skip_low_modes:
-        raise ValueError(
-            "grid_lma does not support low_mode_method='load' (the "
-            "file-driven StagLMAMesonFieldProp producer chain is "
-            "Hadrons-only; grid's solver_map covers only ranLL and ama). "
-            "Use the Hadrons LMI task for meson-field low modes."
         )
 
 

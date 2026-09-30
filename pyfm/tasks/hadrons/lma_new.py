@@ -1,51 +1,53 @@
+import copy
 import typing as t
-from dataclasses import replace
 
+import pandas as pd
+from pydantic import Field
 from pydantic.dataclasses import dataclass
 
-from pyfm.tasks.hadrons.types import HadronsInput
+from pyfm import utils
 from pyfm.domain import CompositeConfig
+from pyfm.tasks.hadrons.types import HadronsInput
 from pyfm.tasks.register import register_task
 
-from . import gauge, meson, epack, meson_v2, highmode_v2, lmi
-from .types import HighModeConfig
+from . import gauge, meson, epack, meson_v2, highmode_v2
+from .highmode_v2.config import CacheMode, LMAHighModeConfig
 
 
 @dataclass(frozen=True)
 class LMANewConfig(CompositeConfig):
-    """HadronsMILC-SpinTaste-API-aware sibling of ``LMIConfig``.
+    """Own config tree for ``hadrons_lma_new`` (ADR 0001).
 
-    Reuses ``gauge.GaugeConfig``/``epack.EpackConfig``/``meson.MesonConfig``/
-    ``HighModeConfig`` as field types unchanged (mirrors
-    ``grid/lma.py``'s ``GridLMAConfig`` precedent) — a genuinely new class,
-    not a subclass or reuse of ``LMIConfig`` (``register.py``'s
-    ``_config_to_task_key`` reverse-lookup keys by class object; reusing
-    ``LMIConfig`` verbatim would silently steal ``hadrons_lmi``'s
-    registration).
+    Sections are presence-driven: an absent ``tasks.meson`` block builds
+    an empty list, an absent or empty ``tasks.high_modes`` an empty dict —
+    there are no stored ``skip_*`` flags and no legacy cache-build flag
+    (ADR Decision 2). ``epack_config`` is required: both jobs of a cache
+    workflow load or generate the eigenpack (the cache saves the
+    meson-field stencil work, not eigenvector I/O), so the two jobs of a
+    cache workflow must share ``runid`` for noise reproducibility.
+
+    A genuinely new class, not a subclass or reuse of the legacy LMI
+    config class (``register.py``'s ``_config_to_task_key`` reverse-lookup
+    keys by class object; reusing a sibling task's config class verbatim
+    would silently steal its registration).
     """
 
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig
-    meson_config: t.List[meson.MesonConfig]
-    high_modes_config: t.List[HighModeConfig]
-    skip_epack: bool = False
-    skip_meson: bool = False
-    skip_high_modes: bool = False
-    build_lh_cache: bool = False
+    meson_config: t.List[meson.MesonConfig] = Field(default_factory=list)
+    high_modes_config: t.Dict[str, LMAHighModeConfig] = Field(default_factory=dict)
 
     @property
     def split_mpi_layout(self) -> str | None:
-        """Re-expose the split-grid MPI layout from the high-modes subconfigs.
+        """Re-expose the split-grid MPI layout from the high-modes entries.
 
-        Identical semantics to ``LMIConfig.split_mpi_layout`` (duplicated,
-        not inherited — see the class docstring on why ``LMANewConfig``
-        isn't a subclass): the first entry that sets a layout wins;
-        conflicting layouts are a hard misconfiguration (one ``<split>`` per
-        XML job). ``None`` when no entry opts in or the list is empty.
+        The first entry that sets a layout wins; conflicting layouts are a
+        hard misconfiguration (one ``<split>`` per XML job). ``None`` when
+        no entry opts in or the dict is empty.
         """
         layouts = [
             hm.split_mpi_layout
-            for hm in self.high_modes_config
+            for hm in self.high_modes_config.values()
             if hm.split_mpi_layout is not None
         ]
         if not layouts:
@@ -58,15 +60,142 @@ class LMANewConfig(CompositeConfig):
         return layouts[0]
 
 
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize LMANewConfig input: canonicalize the task blocks.
+
+    ``tasks.meson`` accepts a single mapping or a list of mappings (the
+    single-mapping form is coerced to a one-entry list, matching the
+    legacy sibling task's convention). ``tasks.high_modes`` accepts a
+    keyed mapping — ``entries: {label: {...}}`` plus any number of shared
+    defaults layered under each entry — or, without the ``entries``
+    marker, a single unkeyed entry that gets label ``""`` (D5).
+    """
+    incoming = params.get("_preprocessor", {})
+    # Deep-copy: the route hooks below pop keys out of these nested blocks
+    # (``sources.grid``/``biased``, ``low_modes.meson_field``), and the
+    # ``shared | entry`` layering is shallow — without the copy the pops
+    # would mutate the caller's params dict, breaking a second
+    # ``create_task`` on the same YAML tree.
+    incoming = copy.deepcopy(incoming)
+    canonical: t.Dict[str, t.List | t.Dict] = {}
+
+    meson_raw = incoming.get("meson")
+    if isinstance(meson_raw, dict):
+        canonical["meson"] = [meson_raw]
+    elif meson_raw is not None and not isinstance(meson_raw, list):
+        raise TypeError(
+            f"tasks.meson must be a mapping or a list of mappings; got "
+            f"{type(meson_raw).__name__}."
+        )
+
+    hm_raw = incoming.get("high_modes")
+    if hm_raw is not None:
+        if not isinstance(hm_raw, dict):
+            raise TypeError(
+                "tasks.high_modes must be a mapping (keyed entries or one "
+                f"unkeyed entry); got {type(hm_raw).__name__}."
+            )
+        entries = hm_raw.get("entries")
+        if entries is None:
+            hm_entries = {"": hm_raw}
+        else:
+            if not isinstance(entries, dict):
+                raise TypeError(
+                    "tasks.high_modes.entries must be a mapping of label to "
+                    f"entry; got {type(entries).__name__}."
+                )
+            if not all(isinstance(entry, dict) for entry in entries.values()):
+                raise TypeError(
+                    "tasks.high_modes.entries values must all be mappings."
+                )
+            shared = {k: v for k, v in hm_raw.items() if k != "entries"}
+            hm_entries = {label: shared | entry for label, entry in entries.items()}
+        canonical["high_modes"] = hm_entries
+
+    if canonical:
+        params = params | {"_preprocessor": incoming | canonical}
+    return params
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route per-subtask input to the child configs, layering name defaults.
+
+    ``high_modes`` is a DICT subconfig: the per-key routing table
+    (``_preprocessor["high_modes_config"]``) carries each entry's mapping,
+    and the per-key params (``params["high_modes_config"][label]``) carry
+    ONLY the label — a plain scalar param that reaches the entry, every
+    sub-block, and the formatting map (D6), keeping the OpList ``mass``
+    key away from the ``MassDict`` param path.
+    """
+
+    ACTION_NAME = "stag_mass_{mass}"
+    LOW_MODES_NAME = "evecs_mass_{mass}"
+    SHIFT_GAUGE_NAME = "gauge_apbc"
+
+    preprocessor_params = params.pop("_preprocessor", {})
+
+    meson_defaults = dict(
+        action_name=ACTION_NAME,
+        shift_gauge_name=SHIFT_GAUGE_NAME,
+        low_modes_name=LOW_MODES_NAME,
+    )
+
+    meson_entries = preprocessor_params.get("meson", [])
+    if isinstance(meson_entries, dict):
+        meson_entries = [meson_entries]
+
+    hm_entries = preprocessor_params.get("high_modes", {})
+
+    child_preprocessor = dict(
+        gauge_config=dict(action_name=ACTION_NAME),
+        epack_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        meson_config=[meson_defaults | entry for entry in meson_entries],
+        high_modes_config=hm_entries,
+    )
+
+    for k, v in preprocessor_params.items():
+        if k in ("high_modes", "meson"):
+            continue  # already expanded into the routing tables above
+        child_preprocessor[f"{k}_config"] |= v
+
+    def entry_params(label: str, entry: t.Dict) -> t.Dict:
+        """Per-key DICT params: the label plus derived formatting tokens (D6).
+
+        ``nbias`` re-derives from the entry's biased-sources block so
+        output filestems may carry the ``{nbias}`` namespace token (the
+        legacy ``HighModeConfig.nbias`` field's role): it rides into the
+        builder's format-key map like ``label`` does, so the config
+        builder resolves it in every ``Outfile`` at build time.
+        """
+        params = {"label": label}
+        sources = entry.get("sources")
+        if isinstance(sources, dict):
+            biased = sources.get("biased")
+            if isinstance(biased, dict) and biased.get("n") is not None:
+                params["nbias"] = biased["n"]
+        return params
+
+    return params | {
+        # Per-key DICT params: label (+ derived tokens) as plain scalars (D6).
+        "high_modes_config": {
+            label: entry_params(label, entry) for label, entry in hm_entries.items()
+        },
+    } | dict(_preprocessor=child_preprocessor)
+
+
 def build_input_params(config: LMANewConfig) -> HadronsInput:
     """Generate input parameters for the full LMA-new task.
 
-    Structurally identical to ``lmi.build_input_params`` — same
-    gauge/epack orchestration (spin-taste-free, reused verbatim) — only the
-    meson and high-modes sections differ: ``meson_v2.build_input_params``
-    and ``highmode_v2.build_input_params`` target the canonical
-    (SpinTaste-module-based) HadronsMILC API instead of ``lmi.py``'s
-    Legacy modules.
+    Section order (design doc): base gauge → epack actions → epack →
+    epack mass shifts (meson + every entry) → user meson entries →
+    high-mode entries (per-entry actions, then the entry's own emission).
+    Sections are presence-driven — no stored ``skip_*`` flags (ADR
+    Decision 2); ``epack`` is required. Cache ``build_only`` entries skip
+    their action modules (the writer needs only the epack low modes and
+    the entry's noise) but still join the epack mass-shift set.
     """
     modules = {}
     schedule = []
@@ -76,43 +205,31 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     modules |= base_gauge.modules
     schedule += base_gauge.schedule
 
-    # 2. EPACK section: generate actions then compute
-    if not config.skip_epack:
-        epack_masses = config.epack_config.masses
-        actions = gauge.build_action_modules(
-            config.gauge_config, dp_masses=epack_masses
+    # 2. EPACK section (required)
+    epack_masses = config.epack_config.masses
+    actions = gauge.build_action_modules(config.gauge_config, dp_masses=epack_masses)
+    modules |= actions.modules
+    schedule += actions.schedule
+
+    epack_input = epack.build_input_params(config.epack_config)
+    modules |= epack_input.modules
+    schedule += epack_input.schedule
+
+    # Handle epack mass shifts for meson and every high-mode entry.
+    epack_mass_shifts = [m for mc in config.meson_config for m in mc.masses]
+    for hm in config.high_modes_config.values():
+        epack_mass_shifts.extend(hm.masses)
+    if epack_mass_shifts:
+        mass_shifts_input = epack.build_epack_mass_shifts(
+            config.epack_config, epack_mass_shifts
         )
-        modules |= actions.modules
-        schedule += actions.schedule
+        modules |= mass_shifts_input.modules
+        schedule += mass_shifts_input.schedule
 
-        epack_input = epack.build_input_params(config.epack_config)
-        modules |= epack_input.modules
-        schedule += epack_input.schedule
-
-        # Handle epack mass shifts for meson and every high-mode entry
-        epack_mass_shifts = []
-        if not config.skip_meson:
-            for mc in config.meson_config:
-                epack_mass_shifts.extend(mc.masses)
-        for hm in config.high_modes_config:
-            epack_mass_shifts.extend(hm.masses)
-
-        if epack_mass_shifts:
-            mass_shifts_input = epack.build_epack_mass_shifts(
-                config.epack_config, epack_mass_shifts
-            )
-            modules |= mass_shifts_input.modules
-            schedule += mass_shifts_input.schedule
-
-    # 3. MESON section: generate actions then compute, once per entry
-    # (canonical schema).
-    if not config.skip_meson:
-        meson_masses = []
-        for mc in config.meson_config:
-            meson_masses.extend(mc.masses)
-        actions = gauge.build_action_modules(
-            config.gauge_config, dp_masses=meson_masses
-        )
+    # 3. MESON section (presence-driven)
+    if config.meson_config:
+        meson_masses = [m for mc in config.meson_config for m in mc.masses]
+        actions = gauge.build_action_modules(config.gauge_config, dp_masses=meson_masses)
         modules |= actions.modules
         schedule += actions.schedule
 
@@ -121,40 +238,36 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
             modules |= meson_input.modules
             schedule += meson_input.schedule
 
-    # 4. HIGHMODE section: generate actions then compute, once per entry
-    # (canonical schema).
-    # skip_high_modes normally skips this whole section; build_lh_cache's
-    # cache-only entries (postprocess_config-flagged hm.cache_only) are the
-    # one exception — they still need highmode_v2.build_input_params to
-    # emit the writer's noise dependency, just without the per-entry
-    # action-module build the mass-loop/solver/quark/contract machinery
-    # needs (the noise module has no action/gauge reference of its own).
-    active_entries = [
-        hm
-        for hm in config.high_modes_config
-        if not config.skip_high_modes or hm.cache_only
+    # 4. HIGHMODE section, once per keyed entry. Per-entry sp masses stay
+    # solver-scoped (an entry's masses join the sp set only when that
+    # entry itself solves mixed-precision); build_only entries contribute
+    # none (they have no cg block).
+    entry_sp_masses = [
+        hm.masses
+        if hm.cg_config is not None and hm.cg_config.solver == "mpcg"
+        else []
+        for hm in config.high_modes_config.values()
     ]
-    if active_entries:
-        entry_sp_masses = [
-            hm.masses if hm.solver == "mpcg" and not hm.cache_only else []
-            for hm in active_entries
-        ]
-        if any(entry_sp_masses):
-            sp_gauge = gauge.build_sp_gauge(config.gauge_config)
-            modules |= sp_gauge.modules
-            schedule += sp_gauge.schedule
+    if any(entry_sp_masses):
+        sp_gauge = gauge.build_sp_gauge(config.gauge_config)
+        modules |= sp_gauge.modules
+        schedule += sp_gauge.schedule
 
-        for hm, sp_masses in zip(active_entries, entry_sp_masses):
-            if not hm.cache_only:
-                actions = gauge.build_action_modules(
-                    config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
-                )
-                modules |= actions.modules
-                schedule += actions.schedule
+    for hm, sp_masses in zip(config.high_modes_config.values(), entry_sp_masses):
+        build_only = (
+            hm.low_modes_config.meson_field_config is not None
+            and hm.low_modes_config.meson_field_config.cache is CacheMode.BUILD_ONLY
+        )
+        if not build_only:
+            actions = gauge.build_action_modules(
+                config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
+            )
+            modules |= actions.modules
+            schedule += actions.schedule
 
-            hm_input = highmode_v2.build_input_params(hm)
-            modules |= hm_input.modules
-            schedule += hm_input.schedule
+        hm_input = highmode_v2.build_input_params(hm)
+        modules |= hm_input.modules
+        schedule += hm_input.schedule
 
     # Deduplicate schedule: keep first occurrence of each module name
     deduplicated_schedule = list(dict.fromkeys(schedule))
@@ -162,173 +275,114 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     return HadronsInput(modules=modules, schedule=deduplicated_schedule)
 
 
-def _needs_cache(hm: HighModeConfig) -> bool:
-    """Whether ``hm`` is a candidate for lh-cache synthesis/cache_only routing.
-
-    Single predicate shared by ``postprocess_config`` (which entries get a
-    synthesized writer / ``cache_only=True``) and ``validate_config`` (which
-    entries a direct, hand-set ``cache_only=True`` is valid on) — keeps both
-    checks from silently drifting apart.
-    """
-    return hm.low_mode_method == "load" and not hm.skip_low_modes
-
-
-def postprocess_config(config: LMANewConfig) -> LMANewConfig:
-    """Synthesize a load-cache MesonConfig entry per applicable high_modes entry.
-
-    When ``build_lh_cache`` is set, every ``high_modes_config`` entry with
-    ``low_mode_method == 'load'`` and ``not skip_low_modes`` gets a matching
-    ``MesonConfig`` appended to ``meson_config`` — its ``operations``
-    copied verbatim from the high-modes entry's own. ``apply_g5=True``
-    reproduces the old writer's G5-folding through the existing,
-    unmodified per-shift-group loop in ``meson_v2.build_input_params``
-    (see the design's Decisions for why a verbatim copy suffices — no
-    new branch, no cross-section SpinTaste-name coupling needed).
-    ``skip_meson`` is flipped to ``False`` whenever at least one entry is
-    synthesized, so ``validate_config``'s guards stay consistent.
-
-    When ``skip_high_modes`` is also set, the same entries additionally get
-    ``cache_only=True`` — ``build_input_params``'s HIGHMODE section then
-    still calls ``highmode_v2.build_input_params`` for them (emitting just
-    the writer's noise dependency) instead of skipping them outright.
-    """
-    if not config.build_lh_cache:
-        return config
-
-    for hm in config.high_modes_config:
-        if (
-            hm.low_mode_method == "load"
-            and not hm.skip_low_modes
-            and hm.meson_stoch_proj is None
-        ):
-            raise ValueError(
-                "high_modes entry has low_mode_method='load' and "
-                "not skip_low_modes, but meson_stoch_proj is unset — "
-                "build_lh_cache synthesis needs a files entry to write the "
-                "load-cache meson fields to. Set high_modes.meson_stoch_proj "
-                "to a files entry."
-            )
-
-    synthesized = [
-        meson.MesonConfig(
-            formatting=hm.formatting,
-            logging_level=hm.logging_level,
-            runid=hm.runid,
-            action_name=hm.action_name,
-            low_modes_name=hm.low_modes_name,
-            mass=hm.mass,
-            blocksize=hm.blocksize,
-            operations=hm.operations,
-            meson=hm.meson_stoch_proj,
-            overwrite=hm.overwrite,
-            apply_g5=True,
-            shift_gauge_name=hm.shift_gauge_name,
-            high_left_name="",
-            high_right_name=f"{hm.noise_name}_vec",
-        )
-        for hm in config.high_modes_config
-        if _needs_cache(hm)
+def create_outfile_catalog(config: LMANewConfig) -> pd.DataFrame:
+    catalogs = [
+        gauge.create_outfile_catalog(config.gauge_config),
+        epack.create_outfile_catalog(config.epack_config),
     ]
+    for mc in config.meson_config:
+        catalogs.append(meson.create_outfile_catalog(mc))
+    for hm in config.high_modes_config.values():
+        # build_only entries catalog nothing (strategy returns an empty
+        # frame); degenerate empty-op entries likewise contribute no rows.
+        catalogs.append(highmode_v2.create_outfile_catalog(hm))
+    return pd.concat(catalogs, ignore_index=True)
 
-    if not synthesized:
-        return config
 
-    high_modes_config = config.high_modes_config
-    if config.skip_high_modes:
-        high_modes_config = [
-            replace(hm, cache_only=True) if _needs_cache(hm) else hm
-            for hm in config.high_modes_config
-        ]
+def build_aggregator_params(config: LMANewConfig, average: bool) -> t.Dict:
+    params: t.Dict = {}
+    for hm in config.high_modes_config.values():
+        entry = highmode_v2.build_aggregator_params(hm, average)
+        params = {
+            **params,
+            **entry,
+            "run": params.get("run", []) + entry.get("run", []),
+        }
+    return params
 
-    return replace(
-        config,
-        high_modes_config=high_modes_config,
-        meson_config=list(config.meson_config) + synthesized,
-        skip_meson=False,
-    )
+
+def compare_outputs(
+    config_a: LMANewConfig, config_b: LMANewConfig, *, rtol: float = 1e-9, atol: float = 1e-12
+) -> pd.DataFrame:
+    """Compare LMA-new outputs between two configs.
+
+    High-mode entries are compared pairwise by LABEL (not position); both
+    configs must present the same label set. Delegates to the high-mode
+    correlator comparison only (the primary output); meson/epack
+    comparison is deferred.
+    """
+    labels_a = set(config_a.high_modes_config)
+    labels_b = set(config_b.high_modes_config)
+    if labels_a != labels_b:
+        raise ValueError(
+            "compare_outputs requires the same high_modes entry labels on "
+            f"both sides; got {sorted(labels_a)} and {sorted(labels_b)}."
+        )
+    reports = [
+        highmode_v2.compare_outputs(
+            config_a.high_modes_config[label],
+            config_b.high_modes_config[label],
+            rtol=rtol,
+            atol=atol,
+        )
+        for label in sorted(labels_a)
+    ]
+    if not reports:
+        return pd.DataFrame(
+            columns=[
+                "gamma_label",
+                "mass",
+                "tsource",
+                "dset",
+                "filepath_a",
+                "filepath_b",
+                "max_abs_diff",
+                "max_rel_diff",
+                "within_tolerance",
+                "status",
+            ]
+        )
+    return pd.concat(reports, ignore_index=True)
 
 
 def validate_config(config: LMANewConfig) -> None:
-    """Validate LMANewConfig after construction and postprocessing.
+    """Validate LMANewConfig after construction.
 
-    Reuses the schema-agnostic checks (epack/meson consistency, filestem
-    collisions) from ``lmi.validate_shared_config`` unchanged, then adds two
-    ``lma_new``-specific guards: (1) every load-mode, non-``skip_low_modes``
-    ``high_modes`` entry must set ``meson_stoch_proj`` — the loader/producer
-    chain (``highmode_v2.build_lma_meson_field_chain``) reads load-cache
-    files straight off disk by that entry's filestem, independent of
-    whether *this* job's ``meson_config``/``build_lh_cache`` wrote them or a
-    separate prior job did (the two-stage build-then-load workflow this
-    feature exists for); a missing ``meson_stoch_proj`` is the one thing
-    that's wrong in every case, so it's checked unconditionally rather than
-    only when ``skip_meson`` is true; (2) ``cache_only`` is only ever set by
-    ``postprocess_config`` on entries matching ``_needs_cache``, but
-    ``HighModeConfig`` fields route straight from YAML (``lmi.route_params``'s
-    ``high_modes_defaults | entry`` layering), so a hand-set
-    ``cache_only=True`` on a non-matching entry must be rejected rather than
-    silently under-building.
+    Cross-entry checks only — per-entry state was validated when each
+    ``LMAHighModeConfig`` was built: (1) conflicting ``split_mpi_layout``
+    across entries (one ``<split>`` per XML job — enforced by the property,
+    touched here so the misconfiguration surfaces at build time);
+    (2) a warning when two entries bind the same output files label
+    (their correlators share a filestem namespace — bind a distinct files
+    entry per keyed entry).
     """
-    lmi.validate_shared_config(config)
+    _ = config.split_mpi_layout
 
-    for hm in config.high_modes_config:
-        if _needs_cache(hm) and hm.meson_stoch_proj is None:
-            raise ValueError(
-                "A high_modes entry has low_mode_method='load' and "
-                "not skip_low_modes, but meson_stoch_proj is unset — the "
-                "load-mode loader/producer chain needs a files entry to "
-                "read the load-cache meson fields from (whether written by "
-                "this job's build_lh_cache synthesis or a prior job's). "
-                "Set high_modes.meson_stoch_proj to a files entry."
-            )
-
-    for hm in config.high_modes_config:
-        if hm.cache_only and not _needs_cache(hm):
-            raise ValueError(
-                "A high_modes entry has cache_only=True but "
-                f"low_mode_method={hm.low_mode_method!r} / "
-                f"skip_low_modes={hm.skip_low_modes!r} — cache_only is only "
-                "meaningful for low_mode_method='load' entries with low "
-                "modes enabled (the same predicate postprocess_config uses "
-                "to synthesize the lh-cache writer). Unset cache_only, or "
-                "fix low_mode_method/skip_low_modes."
+    stems = [
+        hm.output_config.file.filestem
+        for hm in config.high_modes_config.values()
+        if hm.output_config is not None
+    ]
+    for i, stem in enumerate(stems):
+        if stem in stems[:i]:
+            utils.get_logger().warning(
+                f"high_modes entry binding files label with filestem {stem!r} "
+                "is shared with another entry; their outputs share a filestem "
+                "namespace. Bind a distinct files entry per keyed entry."
             )
 
 
-def normalize_params(params: t.Dict) -> t.Dict:
-    """lma_new-specific wrapper around ``lmi.normalize_params``.
-
-    ``lmi.normalize_params`` always derives ``skip_high_modes`` from
-    ``tasks.high_modes``'s presence (``not entries``) — correct for
-    ``hadrons_lmi``, which has no ``build_lh_cache`` concept, but it means a
-    cache-only job (real ``tasks.high_modes`` entries, ``skip_high_modes``
-    forced ``True``) can never reach ``postprocess_config`` with both set:
-    the derived value always wins. ``build_lh_cache`` lives only on
-    ``LMANewConfig`` (not ``LMIConfig``), so this override lives here, not
-    in the shared ``lmi.py`` hook. When the raw params request both
-    ``build_lh_cache`` and ``skip_high_modes``, that explicit intent is
-    restored after ``lmi.normalize_params`` runs; otherwise this is a
-    pass-through.
-    """
-    build_lh_cache = params.get("build_lh_cache", False)
-    wants_skip_high_modes = params.get("skip_high_modes", False)
-    result = lmi.normalize_params(params)
-    if build_lh_cache and wants_skip_high_modes:
-        result = result | {"skip_high_modes": True}
-    return result
-
-
-# Register LMANewConfig, reusing lmi.py's schema-agnostic hooks by direct
-# reference (grid/lma.py's GridLMAConfig precedent) — build_input_params,
-# postprocess_config, validate_config, and normalize_params are lma_new-specific.
+# Register LMANewConfig with lma_new-owned hooks throughout (ADR Decision 1,
+# D7): no legacy imports, no config-synthesis hook (the cache writer is
+# emitted per entry inside highmode_v2.build_input_params).
 register_task(
     "hadrons_lma_new",
     LMANewConfig,
-    lmi.create_outfile_catalog,
+    create_outfile_catalog,
     build_input_params,
-    lmi.build_aggregator_params,
-    lmi.compare_outputs,
+    build_aggregator_params,
+    compare_outputs,
     normalize_params,
-    lmi.route_params,
-    postprocess_config,
+    route_params,
     validate=validate_config,
 )

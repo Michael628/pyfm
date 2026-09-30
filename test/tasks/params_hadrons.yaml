@@ -13,7 +13,7 @@ shared_params:
   tstart: 0 # first source time slice
   tstop: 3 # tstop = time - 1
   dt: 1 # spacing between source time slices
-  noise: 1 # > 1 supported with low_mode_method: load (producer nNoise)
+  noise: 1
   eigs: 100 # eigs <= sourceeigs. number of eigenvalues to use in calculation
   sourceeigs: 100 # number of eigenvalues in source file
   lanczos:
@@ -52,6 +52,9 @@ submit:
       nodes: 1
       geom: [1, 1, 1, 2]
     meson:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+    lma_new:
       nodes: 1
       geom: [1, 1, 1, 2]
 
@@ -128,6 +131,51 @@ job_setup:
           - axial_vec_onelink
         mass:
           - "l" 
+  lma_new:
+    run: hadrons.sh
+    io: "full-lma-new"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: lma_new
+    tasks:
+      epack:
+        load: true
+        save_evals: true
+        save_eigs: false
+      high_modes:
+        gamma:
+          - pion_local
+        mass:
+          - "l"
+        entries:
+          sloppy:
+            sources:
+              time: 4
+              noise: 1
+              grid: true
+            low_modes:
+              meson_field:
+                file: meson_stoch_proj
+                cache: build_and_load
+            cg:
+              solver: mpcg
+              residual: [1e-8]
+            output:
+              file: high_modes
+          bias:
+            sources:
+              time: 4
+              noise: 1
+              biased:
+                n: 2
+                seed: "seed_{series}_{cfg}"
+                replace: false
+            low_modes: solve
+            cg:
+              solver: mpcg
+              residual: [1e-8]
+            output:
+              file: bias_modes
   high_modes:
     run: hadrons.sh
     io: "high-modes"

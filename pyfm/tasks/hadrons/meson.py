@@ -29,6 +29,10 @@ class MesonConfig(SimpleConfig):
     shift_gauge_name: str | None = None
     high_left_name: str = ""
     high_right_name: str = ""
+    # Emit |e+o>/|e-o> checkerboard pair rows (2*nEvec) via two
+    # MUtilities::EigenPackCBPairs per mass; required by any meson field
+    # consumed by MFermion::StagLMAMesonFieldProp.
+    cb_pairs: bool = False
 
     @property
     def op_list(self) -> t.List[OpList.Op]:

@@ -200,14 +200,6 @@ def build_quarks(config: HighModeConfig, run_refs: t.List[SourceRef]) -> Hadrons
     modules = {}
     for ref in run_refs:
         for op in set(quark_gen(config)):
-            if op.solver == "ranLL" and config.low_mode_method == "load":
-                # Load mode: no GaugeProp middleman — the eager producer
-                # emitted by build_lma_meson_field_chain
-                # (quark_ranLL_{glabel}_mass_{m}) already creates the
-                # <name>_t{t0}[_<raw label>] outputs this module would
-                # have solved for; contractions and ama guesses fetch
-                # them by name.
-                continue
             glabel = op.gamma.name.lower()
             quark = f"quark_{op.solver}_{glabel}_mass_{op.mass}_{ref.label}"
             source = f"noise_{ref.label}"

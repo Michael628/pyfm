@@ -1,0 +1,46 @@
+{
+  "defaults": { "model": "claude-bridge/claude-opus-5-5", "thinking": "low" },
+  "agents": {
+    "artifact-code-reviewer": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" },
+    "artifact-coverage-reviewer": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" },
+    "claim-verifier": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+    "peer-comparator": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+    "slice-verifier": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" },
+
+    "codebase-analyzer": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+    "codebase-pattern-finder": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+    "integration-scanner": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+    "scope-tracer": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+    "precedent-locator": { "model": "zai/glm-5.3", "thinking": "low" },
+    "artifacts-analyzer": { "model": "zai/glm-5.3", "thinking": "low" },
+    "web-search-researcher": { "model": "zai/glm-5.3", "thinking": "xhigh" },
+
+    "codebase-locator": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" },
+    "artifacts-locator": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" },
+    "diff-auditor": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" }
+  },
+    "skills": {
+      "design": { "model": "zai/glm-5.3", "thinking": "xhigh" },
+      "blueprint": { "model": "zai/glm-5.3", "thinking": "xhigh" },
+      "plan": { "model": "zai/glm-5.3", "thinking": "xhigh" },
+      "architecture-review": { "model": "zai/glm-5.3", "thinking": "xhigh" },
+      "research": { "model": "zai/glm-5.3", "thinking": "xhigh" },
+      "explore": { "model": "zai/glm-5.3-flash", "thinking": "xhigh" },
+
+      "implement": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "revise": { "model": "zai/glm-5.3-flash", "thinking": "xhigh" },
+      "validate": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "code-review": { "model": "kimi-coding/kimi-for-coding", "thinking": "low" },
+      "discover": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "annotate-guidance": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "annotate-inline": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "frontend-design": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "create-handoff": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+      "resume-handoff": { "model": "zai/glm-5.3-flash", "thinking": "low" },
+
+      "commit": "claude-bridge/claude-haiku-4-5",
+      "changelog": "claude-bridge/claude-haiku-4-5",
+      "pr-triage": "claude-bridge/claude-haiku-4-5",
+      "migrate-to-guidance": "claude-bridge/claude-haiku-4-5"
+  }
+}

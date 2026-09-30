@@ -113,7 +113,6 @@ def route_params(params: t.Dict) -> t.Dict:
     SOLVER_NAME = "stag_{solver}_mass_{mass}"
     LOW_MODES_NAME = "evecs_mass_{mass}"
     SHIFT_GAUGE_NAME = "gauge_apbc"
-    NOISE_FV_NAME = "noise_fv"
 
     preprocessor_params = params.pop("_preprocessor", {})
 
@@ -122,7 +121,6 @@ def route_params(params: t.Dict) -> t.Dict:
         low_modes_name=LOW_MODES_NAME,
         solver_name=SOLVER_NAME,
         shift_gauge_name=SHIFT_GAUGE_NAME,
-        noise_name=NOISE_FV_NAME,
         skip_low_modes="epack" not in preprocessor_params,
     )
     meson_defaults = dict(
@@ -193,15 +191,9 @@ def validate_config(config: LMIConfig) -> None:
     """Validate LMIConfig after construction and postprocessing.
 
     ``hadrons_lmi`` is on a deprecation path: it targets HadronsMILC's
-    develop-schema Legacy modules. ``low_mode_method="load"`` is rejected
-    outright — ``StagLMAMesonFieldProp`` has no develop-schema Legacy
-    sibling (always publishes ``TGammaMap`` outputs that
-    ``StagGaugePropLegacy``/``StagMesonLegacy`` cannot consume, and
-    ``StagA2AMesonFieldLegacy`` has no ``cbPairsLeft``/``cbPairsRight``
-    fields for the on-demand-checkerboard writer) — use ``hadrons_lma_new``
-    instead. The schema-agnostic checks (epack/meson consistency, filestem
-    collisions) live in :func:`validate_shared_config`, reused unchanged by
-    ``lma_new.py`` (which does NOT reject load-mode).
+    develop-schema Legacy modules. The schema-agnostic checks (epack/meson
+    consistency, filestem collisions) live in :func:`validate_shared_config`,
+    reused unchanged by ``lma_new.py``.
     """
     utils.get_logger().warning(
         "hadrons_lmi is on a deprecation path: it targets HadronsMILC's "
@@ -209,18 +201,6 @@ def validate_config(config: LMIConfig) -> None:
         "StagA2AMesonFieldLegacy). Use hadrons_lma_new for new work "
         "targeting the current (SpinTaste-module-based) HadronsMILC API."
     )
-
-    for hm in config.high_modes_config:
-        if hm.low_mode_method == "load":
-            raise ValueError(
-                "hadrons_lmi does not support low_mode_method='load': "
-                "StagLMAMesonFieldProp has no develop-schema Legacy sibling "
-                "(always publishes TGammaMap outputs that "
-                "StagGaugePropLegacy/StagMesonLegacy cannot consume, and "
-                "StagA2AMesonFieldLegacy has no cbPairsLeft/cbPairsRight "
-                "fields for the on-demand-checkerboard writer). Use the "
-                "hadrons_lma_new task instead, or low_mode_method='compute'."
-            )
 
     validate_shared_config(config)
 

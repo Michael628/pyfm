@@ -191,6 +191,15 @@ def epack_modify(name: str, eigen_pack: str, mass: str) -> t.Dict:
     }
 
 
+def eigen_pack_cb_pairs(name: str, eigen_pack: str, action: str) -> t.Dict:
+    """Wrap ``MUtilities::EigenPackCBPairs`` — on-demand CB pair source over a
+    checkerboarded eigenpack (odd partner filled from Meooe on demand)."""
+    return {
+        "id": {"name": name, "type": "MUtilities::EigenPackCBPairs"},
+        "options": {"action": action, "eigenPack": eigen_pack},
+    }
+
+
 def spin_taste(
     name: str, gammas: str, gauge: str, apply_g5: str, labels: str = ""
 ) -> t.Dict:
