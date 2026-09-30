@@ -179,7 +179,11 @@ def build_lma_meson_field_chain(
     modules = {}
     schedule = []
     mf = config.low_modes_config.meson_field_config
-    stem = mf.file.filestem.format(mass=mass_label)
+    # {mass} is filled with the prefix-removed mass VALUE (the writer's
+    # output grammar, meson_v2), never the raw massdict key.
+    stem = mf.file.filestem.format(
+        mass=config.mass.to_string(mass_label, remove_prefix=True)
+    )
     noise_vec = f"{config.noise_name}_vec"
 
     for g in gammas:

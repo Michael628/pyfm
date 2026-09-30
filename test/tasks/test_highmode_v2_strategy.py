@@ -128,6 +128,17 @@ class TestBuildLmaMesonFieldChain:
         assert producer["options"]["tStep"] == "1"
         assert producer["options"]["noise"] == "noise_fv_vec"
 
+    def test_loader_file_mass_is_prefix_removed_value(self):
+        result = self._chain(self._config())
+        loader = result.modules["mfload_mass_l_G1_G1"]
+        # {mass} in the cache-file filestem is filled with the prefix-removed
+        # mass VALUE ("002426"), byte-matching the writer's output grammar
+        # (meson_v2 / MesonField config behavior) — never the raw massdict
+        # key ("l").
+        assert loader["options"]["file"] == (
+            "mesonfield/mf_002426.@traj@/G1_G1_0_0_0.h5"
+        )
+
     def test_no_writer_or_cbpairs_modules(self):
         result = self._chain(self._config())
         assert "mfwrite_mass_l" not in result.modules
