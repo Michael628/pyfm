@@ -56,7 +56,7 @@ class TestKeyedEntries:
     def test_shared_defaults_layer_under_entries(self, hadrons_params):
         task = create_task("lma_new", hadrons_params, "a", "20")
         for hm in task.config.high_modes_config.values():
-            assert hm.op_list[0].gamma.name == "PION_LOCAL"  # shared gamma/mass
+            assert hm.op_list[0].gamma.name == "PION_LOCAL"  # shared operations
             assert hm.masses == ["l"]
 
     def test_unkeyed_single_entry_gets_empty_label(self, hadrons_params):
@@ -64,12 +64,35 @@ class TestKeyedEntries:
         tasks = params["job_setup"]["lma_new"]["tasks"]
         entry = tasks["high_modes"]["entries"]["sloppy"]
         tasks["high_modes"] = {
-            "gamma": ["pion_local"],
-            "mass": ["l"],
+            "operations": {"gamma": ["pion_local"], "mass": ["l"]},
         } | entry
         task = create_task("lma_new", params, "a", "20")
         assert set(task.config.high_modes_config) == {""}
         assert task.config.high_modes_config[""].label == ""
+
+    def test_entry_operations_replace_shared(self, hadrons_params):
+        params = copy.deepcopy(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        entries["bias"]["operations"] = {"vec_local": {"mass": ["l"]}}
+        task = create_task("lma_new", params, "a", "20")
+        bias = task.config.high_modes_config["bias"]
+        sloppy = task.config.high_modes_config["sloppy"]
+        assert [op.gamma.name for op in bias.op_list] == ["VEC_LOCAL"]  # no merge
+        assert [op.gamma.name for op in sloppy.op_list] == ["PION_LOCAL"]
+
+    @pytest.mark.parametrize("key, value", [("gamma", ["pion_local"]), ("mass", ["l"])])
+    def test_bare_shared_op_key_rejected(self, hadrons_params, key, value):
+        params = copy.deepcopy(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["high_modes"][key] = value
+        with pytest.raises(ValueError, match="must be nested under `operations:`"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_unknown_entry_key_rejected(self, hadrons_params):
+        params = copy.deepcopy(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        entries["sloppy"]["low_mode_method"] = "load"
+        with pytest.raises(ValueError, match="Unknown high_modes entry keys"):
+            create_task("lma_new", params, "a", "20")
 
     def test_empty_entries_means_no_high_modes(self, hadrons_params):
         params = copy.deepcopy(hadrons_params)
@@ -97,7 +120,9 @@ class TestModuleIdentity:
         params = copy.deepcopy(hadrons_params)
         tasks = params["job_setup"]["lma_new"]["tasks"]
         entry = tasks["high_modes"]["entries"]["sloppy"]
-        tasks["high_modes"] = {"gamma": ["pion_local"], "mass": ["l"]} | entry
+        tasks["high_modes"] = {
+            "operations": {"gamma": ["pion_local"], "mass": ["l"]},
+        } | entry
         task = create_task("lma_new", params, "a", "20")
         result = build_input_params(task.config)
         assert "noise_fv" in result.modules

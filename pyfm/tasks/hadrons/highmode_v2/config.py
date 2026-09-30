@@ -527,8 +527,13 @@ def route_params(params: t.Dict) -> t.Dict:
       defaults),
     * ``output`` → ``_preprocessor["output_config"]`` (mapping required).
 
-    Non-field keys (``gamma``, ``mass`` for the OpList) land in
-    ``operations`` exactly as before — the legacy ``cross_terms``
+    * ``operations`` → the ``operations`` field (mapping required; parsed
+      by ``OpList.from_dict``, list or per-gamma form).
+
+    Every other key must be an entry field. A bare ``gamma``/``mass`` is
+    rejected with a pointer to ``operations:``, and any other leftover
+    (typos, stale ``low_mode_method``, raw ``*_config`` names) raises —
+    nothing is swept into the OpList. The legacy ``cross_terms``
     translation is deliberately NOT ported (ADR Decision 1: old
     ``hadrons_lma_new`` YAML breaks; use ``mass_cross_terms`` and
     ``output.solve_cross_terms``).
@@ -584,27 +589,48 @@ def route_params(params: t.Dict) -> t.Dict:
             )
         child_prep["output_config"] = output
 
-    # Get field names from LMAHighModeConfig, excluding 'mass'
-    # - 'mass' comes from top-level params (MassDict)
-    # !NOTE: Don't squash params['mass']
-    config_fields = {f.name for f in fields(LMAHighModeConfig) if f.name != "mass"}
+    operations = prep.pop("operations", None)
+    if operations is None:
+        operations = {}
+    elif not isinstance(operations, dict):
+        raise TypeError(
+            f"operations must be a mapping; got {type(operations).__name__}."
+        )
 
-    return (
-        params
-        | {
-            "operations": {
-                k: v for k, v in prep.items() if k not in config_fields
-            },
-        }
-        | {k: v for k, v in prep.items() if k in config_fields}
-        | {"_preprocessor": child_prep}
-    )
+    # The entry `mass` field is the top-level MassDict, which arrives
+    # through `params`; a `mass` (or `gamma`) in the slice is an OpList key
+    # written at the wrong level.
+    misplaced = sorted(k for k in ("gamma", "mass") if k in prep)
+    if misplaced:
+        raise ValueError(
+            f"high_modes entry keys {misplaced} must be nested under "
+            "`operations:` (e.g. operations: {gamma: [pion_local], "
+            "mass: [l]})."
+        )
+
+    # Sub-block fields are filled only from child_prep.
+    entry_fields = {
+        f.name
+        for f in fields(LMAHighModeConfig)
+        if f.name not in ("mass", "operations") and not f.name.endswith("_config")
+    }
+    unknown = sorted(k for k in prep if k not in entry_fields)
+    if unknown:
+        raise ValueError(
+            f"Unknown high_modes entry keys: {unknown}. Operations belong "
+            "under `operations:`; allowed entry keys are "
+            f"{sorted(entry_fields | {'operations', 'sources', 'low_modes', 'cg', 'output'})}."
+        )
+
+    return params | prep | {"operations": operations, "_preprocessor": child_prep}
 
 
 def validate_config(config: LMAHighModeConfig) -> None:
     """Validate LMAHighModeConfig after construction (design doc rules).
 
     Entry:
+    - Empty ``operations`` → error (every entry, ``build_only`` included —
+      the cache writer consumes the OpList).
     - ``low_modes`` ``none`` with no ``cg`` block → error (nothing to solve).
     - ``cg.precon != none`` with ``low_modes`` ``none`` → error (guesses
       reference the low-mode propagator).
@@ -621,6 +647,12 @@ def validate_config(config: LMAHighModeConfig) -> None:
     has_output = config.output_config is not None
     meson_field = config.low_modes_config.meson_field_config
 
+    if not config.operations.op_list:
+        raise ValueError(
+            "high_modes entry has no operations — provide an `operations:` "
+            "block with at least one gamma and mass (e.g. operations: "
+            "{gamma: [pion_local], mass: [l]})."
+        )
     if method is LowModeMethod.NONE and not has_cg:
         raise ValueError(
             "high_modes entry has low_modes 'none' and no cg block — there "

@@ -373,8 +373,7 @@ MASS = MassDict.from_dict({"l": 0.002426, "u": 0.001524})
 
 def entry_slice(**overrides):
     slice_ = {
-        "gamma": ["pion_local"],
-        "mass": ["l"],
+        "operations": {"gamma": ["pion_local"], "mass": ["l"]},
         "sources": {"time": 4, "grid": {"tstart": 0, "tstop": 3, "dt": 1}},
         "low_modes": "solve",
         "cg": {"solver": "mpcg", "residual": [1e-8]},
@@ -484,7 +483,8 @@ class TestLMAHighModeConfigSolverLabels:
 
     def test_mass_cross_terms_labels(self):
         config = build_entry(
-            mass=["l", "u"], mass_cross_terms=True,
+            operations={"gamma": ["pion_local"], "mass": ["l", "u"]},
+            mass_cross_terms=True,
             output={"file": "high_modes"},
         )
         op = config.op_list[0]
@@ -495,7 +495,68 @@ class TestLMAHighModeConfigSolverLabels:
         ]
 
 
+class TestLMAHighModeConfigOperations:
+    def test_list_form(self):
+        config = build_entry(operations={"gamma": ["pion_local", "vec_local"], "mass": ["l"]})
+        assert [op.gamma.name for op in config.op_list] == ["PION_LOCAL", "VEC_LOCAL"]
+        assert config.masses == ["l"]
+
+    def test_per_gamma_form(self):
+        config = build_entry(operations={"pion_local": {"mass": ["l", "u"]}})
+        assert config.op_list[0].gamma.name == "PION_LOCAL"
+        assert list(config.op_list[0].mass) == ["l", "u"]
+
+    def test_non_mapping_rejected(self):
+        with pytest.raises(TypeError, match="operations must be a mapping"):
+            build_entry(operations=["pion_local"])
+
+    def test_bare_gamma_rejected(self):
+        with pytest.raises(ValueError, match=r"\['gamma'\] must be nested under `operations:`"):
+            build_entry(gamma=["pion_local"])
+
+    def test_bare_mass_rejected(self):
+        with pytest.raises(ValueError, match=r"\['mass'\] must be nested under `operations:`"):
+            build_entry(mass=["l"])
+
+    def test_typo_key_rejected(self):
+        with pytest.raises(ValueError, match=r"Unknown high_modes entry keys: \['opertions'\]"):
+            build_entry(opertions={"gamma": ["pion_local"], "mass": ["l"]})
+
+    def test_stale_low_mode_method_rejected(self):
+        with pytest.raises(ValueError, match="low_mode_method"):
+            build_entry(low_mode_method="load")
+
+    def test_raw_sub_config_name_rejected(self):
+        with pytest.raises(ValueError, match="cg_config"):
+            build_entry(cg_config={"solver": "mpcg"})
+
+    def test_entry_fields_still_accepted(self):
+        config = build_entry(mass_cross_terms=True, subgrid_ranks=2, split_mpi_layout="1.1.1.2")
+        assert config.mass_cross_terms is True
+        assert config.subgrid_ranks == 2
+
+
 class TestLMAHighModeConfigValidation:
+    def test_empty_operations_rejected(self):
+        with pytest.raises(ValueError, match="no operations"):
+            build_entry(operations={})
+
+    def test_missing_operations_rejected(self):
+        slice_ = entry_slice()
+        del slice_["operations"]
+        params = make_params(mass=MASS, _preprocessor=slice_)
+        with pytest.raises(ValueError, match="no operations"):
+            build_config(LMAHighModeConfig, params, file_params=FILES)
+
+    def test_build_only_empty_operations_rejected(self):
+        with pytest.raises(ValueError, match="no operations"):
+            build_entry(
+                operations={},
+                low_modes={"meson_field": {"file": "meson_field_cache", "cache": "build_only"}},
+                cg=None,
+                output=None,
+            )
+
     def test_none_low_modes_without_cg_rejected(self):
         with pytest.raises(ValueError, match="nothing to solve"):
             build_entry(low_modes="none", cg=None)
@@ -550,7 +611,10 @@ class TestLMAHighModeConfigValidation:
 
     def test_nonlocal_ops_require_shift_gauge(self):
         with pytest.raises(ValueError, match="shift_gauge_name"):
-            build_entry(gamma=["vec_onelink"], shift_gauge_name=None)
+            build_entry(
+                operations={"gamma": ["vec_onelink"], "mass": ["l"]},
+                shift_gauge_name=None,
+            )
 
     def test_nonpositive_subgrid_ranks_rejected(self):
         # Both split keys present so the both-or-neither strip doesn't eat

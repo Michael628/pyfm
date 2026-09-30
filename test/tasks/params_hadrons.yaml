@@ -143,10 +143,11 @@ job_setup:
         save_evals: true
         save_eigs: false
       high_modes:
-        gamma:
-          - pion_local
-        mass:
-          - "l"
+        operations:
+          gamma:
+            - pion_local
+          mass:
+            - "l"
         entries:
           sloppy:
             sources:

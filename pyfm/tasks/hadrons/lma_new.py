@@ -284,7 +284,7 @@ def create_outfile_catalog(config: LMANewConfig) -> pd.DataFrame:
         catalogs.append(meson.create_outfile_catalog(mc))
     for hm in config.high_modes_config.values():
         # build_only entries catalog nothing (strategy returns an empty
-        # frame); degenerate empty-op entries likewise contribute no rows.
+        # frame). Empty-op entries are rejected by validate_config.
         catalogs.append(highmode_v2.create_outfile_catalog(hm))
     return pd.concat(catalogs, ignore_index=True)
 
