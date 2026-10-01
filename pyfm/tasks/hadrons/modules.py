@@ -401,8 +401,9 @@ def lma_meson_field_prop_v2(
     module's ``_map`` at setup (fatal if missing). ``meson_field`` is a
     whitespace-separated list of ``MIO::LoadMesonField`` module names, one
     per label. Outputs are one ``TGammaMap`` per ``t`` in ``[tA, tB]``
-    stride ``tStep``, named ``<name>_t<t>`` (gamma-free: the label is the
-    map key). No develop-schema equivalent exists — this module is
+    stride ``tStep``, named ``<name>_t<t>`` — or just ``<name>`` when
+    exactly one timeslice is produced (``tA=tB``, the per-slice form
+    ``hadrons_lma_new`` emits). Gamma-free: the label is the map key. No develop-schema equivalent exists — this module is
     feature-branch-only (absent from ``develop`` entirely).
     """
     return {

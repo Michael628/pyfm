@@ -1,8 +1,6 @@
 """Tests for highmode_v2/twopoint.py — own op algebra, precon-driven
 quark_gen, label-prefixed module emission (D4/D6/D8)."""
 
-import pytest
-
 from pyfm.domain import Gamma, MassDict, OpList, Outfile
 from pyfm.tasks.hadrons.types import SolveCrossTerms, SourceRef
 from pyfm.tasks.hadrons.highmode_v2.config import (
@@ -314,17 +312,15 @@ class TestBuildContractionsV2:
 
 class TestNameHelpers:
     def test_meson_field_producer_names(self):
+        from pyfm.tasks.hadrons.highmode_v2 import twopoint
         from pyfm.tasks.hadrons.highmode_v2.twopoint import (
-            meson_field_output_name,
             meson_field_producer_name,
             quark_name,
         )
 
         config = make_config(low_modes_config=meson_field_low_modes())
-        assert meson_field_producer_name(config, "vec_local", "l") == (
-            "quark_ranLL_vec_local_mass_l"
-        )
-        assert meson_field_output_name(config, "vec_local", "l", REF) == (
+        # grid label t{t0} already carries the time: producer == output
+        assert meson_field_producer_name(config, "vec_local", "l", REF) == (
             "quark_ranLL_vec_local_mass_l_t0"
         )
         assert quark_name(config, "ranLL", "vec_local", "l", REF) == (
@@ -333,9 +329,13 @@ class TestNameHelpers:
         assert quark_name(config, "ama", "vec_local", "l", REF) == (
             "quark_ama_vec_local_mass_l_t0"
         )
+        assert not hasattr(twopoint, "meson_field_output_name")
 
     def test_biased_meson_field_producer_names(self):
-        from pyfm.tasks.hadrons.highmode_v2.twopoint import meson_field_producer_name
+        from pyfm.tasks.hadrons.highmode_v2.twopoint import (
+            meson_field_producer_name,
+            quark_name,
+        )
 
         config = make_config(
             low_modes_config=meson_field_low_modes(),
@@ -346,11 +346,13 @@ class TestNameHelpers:
                 )
             ),
         )
-        assert meson_field_producer_name(config, "vec_local", "l", REF) == (
-            "quark_ranLL_vec_local_mass_l_t0"
+        ref = SourceRef(label="n1", axis="n1", t0=3)
+        assert meson_field_producer_name(config, "vec_local", "l", ref) == (
+            "quark_ranLL_vec_local_mass_l_n1_t3"
         )
-        with pytest.raises(ValueError, match="SourceRef"):
-            meson_field_producer_name(config, "vec_local", "l", None)
+        assert quark_name(config, "ranLL", "vec_local", "l", ref) == (
+            "quark_ranLL_vec_local_mass_l_n1_t3"
+        )
 
     def test_solver_template_label_offered_and_prefixed(self):
         from pyfm.tasks.hadrons.highmode_v2.twopoint import solver_module_name

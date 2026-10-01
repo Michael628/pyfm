@@ -98,39 +98,21 @@ def solver_module_name(config: LMAHighModeConfig, solver: str, mass: str) -> str
 
 
 def meson_field_producer_name(
-    config: LMAHighModeConfig, gamma_label: str, mass: str, ref: SourceRef | None = None
+    config: LMAHighModeConfig, gamma_label: str, mass: str, ref: SourceRef
 ) -> str:
-    """Registered ``StagLMAMesonFieldProp`` module name for (mass, gamma).
+    """Registered ``StagLMAMesonFieldProp`` module name for (mass, gamma, ref).
 
-    Grid sources share ONE producer across the whole ``tstart``/``tstop``/
-    ``dt`` range, so ``ref`` is irrelevant there (omit it); biased sources
-    need one producer PER SLICE — the producer's ``tA=tB=t`` single-time
-    grammar can't cover a non-contiguous seeded draw — so ``ref.label``
-    (``n{i}``) keeps them from colliding, and ``ref`` is required.
+    One producer per source slice (``tA=tB=ref.t0``). A single-slice
+    instance publishes its ``TGammaMap`` under its own module name, so
+    this is also the propagator object contractions and the ama guess
+    chain reference. Grid labels (``t{t0}``) already carry the time;
+    biased labels (``n{i}``) get ``_t{t0}`` appended, and keep ``n{i}``
+    so with-replacement draws of the same ``t0`` stay distinct.
     """
     base = config.module_name(f"quark_ranLL_{gamma_label}_mass_{mass}")
     if config.sources_config.biased_config is None:
-        return base
-    if ref is None:
-        raise ValueError(
-            "biased sources require a SourceRef for the meson-field producer name"
-        )
-    return f"{base}_{ref.label}"
-
-
-def meson_field_output_name(
-    config: LMAHighModeConfig, gamma_label: str, mass: str, ref: SourceRef
-) -> str:
-    """The propagator object a meson-field producer publishes for ``ref``.
-
-    ``StagLMAMesonFieldProp`` always suffixes its own module name with
-    ``_t<t>`` per requested time, so this is exactly
-    ``meson_field_producer_name(...) + "_t" + ref.t0`` in both source
-    modes: grid's shared producer publishes one such object per point in
-    its ``[tA, tB]`` stride; a biased slice's dedicated producer
-    (``tA=tB=ref.t0``) publishes exactly one.
-    """
-    return f"{meson_field_producer_name(config, gamma_label, mass, ref)}_t{ref.t0}"
+        return f"{base}_{ref.label}"
+    return f"{base}_{ref.label}_t{ref.t0}"
 
 
 def quark_name(
@@ -144,11 +126,11 @@ def quark_name(
     solver under ``meson_field`` low modes has no GaugeProp middleman —
     ``build_quarks`` skips it entirely — so any reference to it (an ama
     guess, or either side of a contraction) instead resolves to the
-    meson-field producer's published output
-    (:func:`meson_field_output_name`).
+    per-slice meson-field producer (:func:`meson_field_producer_name`),
+    whose module name is its published output.
     """
     if solver == "ranLL" and config.use_meson_field:
-        return meson_field_output_name(config, gamma_label, mass, ref)
+        return meson_field_producer_name(config, gamma_label, mass, ref)
     return config.module_name(f"quark_{solver}_{gamma_label}_mass_{mass}_{ref.label}")
 
 

@@ -6,6 +6,7 @@ import pandas as pd
 import pytest
 
 from pyfm.domain import Gamma, MassDict, OpList, Outfile
+from pyfm.tasks.hadrons.types import HadronsInput
 from pyfm.tasks.hadrons.highmode_v2 import (
     build_aggregator_params,
     compare_outputs,
@@ -105,7 +106,7 @@ class TestBuildLmaMesonFieldChain:
             output_config=None,
         )
 
-    def _chain(self, config):
+    def _split(self, config, refs=None):
         _, names = twopoint.build_spintaste_modules(config)
         return strategy.build_lma_meson_field_chain(
             config,
@@ -114,19 +115,48 @@ class TestBuildLmaMesonFieldChain:
             low_modes="evecs_mass_l",
             gammas=[Gamma.PION_LOCAL],
             spintaste_names=names,
+            refs=config.sources_config.source_refs if refs is None else refs,
+        )
+
+    def _chain(self, config, refs=None):
+        loaders, producers = self._split(config, refs)
+        return HadronsInput(
+            modules=loaders.modules | producers.modules,
+            schedule=loaders.schedule + producers.schedule,
         )
 
     def test_grid_producer_references_shared_spintaste_with_required_labels(self):
         result = self._chain(self._config())
-        producer = result.modules["quark_ranLL_pion_local_mass_l"]
+        producer = result.modules["quark_ranLL_pion_local_mass_l_t2"]
         assert producer["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
         assert producer["options"]["gammas"] == "spintaste_pion_local"
         assert producer["options"]["labels"] == "G5_G5"
         assert producer["options"]["mesonField"] == "mfload_mass_l_G1_G1"
-        assert producer["options"]["tA"] == "0"
-        assert producer["options"]["tB"] == "3"
+        assert producer["options"]["tA"] == "2"
+        assert producer["options"]["tB"] == "2"
         assert producer["options"]["tStep"] == "1"
         assert producer["options"]["noise"] == "noise_fv_vec"
+
+    def test_grid_emits_one_single_slice_producer_per_source(self):
+        result = self._chain(self._config())
+        producers = sorted(n for n in result.modules if n.startswith("quark_ranLL_"))
+        assert producers == [f"quark_ranLL_pion_local_mass_l_t{t}" for t in range(4)]
+        # no doubled time suffix: module name == published object
+        assert not any("_t0_t0" in n for n in producers)
+
+    def test_split_return_separates_loaders_from_producers(self):
+        loaders, producers = self._split(self._config())
+        assert loaders.schedule == ["mfload_mass_l_G1_G1"]
+        assert set(loaders.modules) == {"mfload_mass_l_G1_G1"}
+        assert producers.schedule == [
+            f"quark_ranLL_pion_local_mass_l_t{t}" for t in range(4)
+        ]
+
+    def test_producers_follow_given_refs_only(self):
+        config = self._config()
+        refs = config.sources_config.source_refs
+        _, producers = self._split(config, refs=[refs[1]])
+        assert producers.schedule == ["quark_ranLL_pion_local_mass_l_t1"]
 
     def test_loader_file_mass_is_prefix_removed_value(self):
         result = self._chain(self._config())
@@ -144,12 +174,12 @@ class TestBuildLmaMesonFieldChain:
         assert "mfwrite_mass_l" not in result.modules
         assert "cbpairs_l_mass_l" not in result.modules
         assert "mfload_mass_l_G1_G1" in result.modules
-        assert "quark_ranLL_pion_local_mass_l" in result.modules
+        assert "quark_ranLL_pion_local_mass_l_t0" in result.modules
 
     def test_labeled_entry_prefixes_loaders_and_producers(self):
         result = self._chain(self._config(label="sloppy"))
         assert "sloppy_mfload_mass_l_G1_G1" in result.modules
-        producer = result.modules["sloppy_quark_ranLL_pion_local_mass_l"]
+        producer = result.modules["sloppy_quark_ranLL_pion_local_mass_l_t0"]
         assert producer["options"]["noise"] == "sloppy_noise_fv_vec"
         assert producer["options"]["mesonField"] == "sloppy_mfload_mass_l_G1_G1"
 
@@ -158,17 +188,19 @@ class TestBuildLmaMesonFieldChain:
             grid_config=None,
             biased_config=BiasedSourceConfig(**sub_kwargs(n=2, seed="s")),
         )
-        result = self._chain(self._config(sources_config=biased))
+        config = self._config(sources_config=biased)
+        refs = config.sources_config.source_refs
+        result = self._chain(config)
         producers = sorted(n for n in result.modules if n.startswith("quark_ranLL_"))
         assert producers == [
-            "quark_ranLL_pion_local_mass_l_n0",
-            "quark_ranLL_pion_local_mass_l_n1",
+            f"quark_ranLL_pion_local_mass_l_n0_t{refs[0].t0}",
+            f"quark_ranLL_pion_local_mass_l_n1_t{refs[1].t0}",
         ]
-        for name in producers:
+        for name, ref in zip(producers, refs):
             # tA=tB=drawn t0: a single-time window per slice
-            assert result.modules[name]["options"]["tA"] == result.modules[name][
-                "options"
-            ]["tB"]
+            assert result.modules[name]["options"]["tA"] == str(ref.t0)
+            assert result.modules[name]["options"]["tB"] == str(ref.t0)
+            assert result.modules[name]["options"]["tStep"] == "1"
         # loaders shared: exactly one
         assert [n for n in result.modules if n.startswith("mfload_")] == [
             "mfload_mass_l_G1_G1"
@@ -222,9 +254,10 @@ class TestBuildInputParamsMesonField:
     def test_end_to_end_load_mode_shape(self):
         config = self._mf_config()
         result = strategy.build_input_params(config)
-        assert result.modules["quark_ranLL_pion_local_mass_l"]["id"]["type"] == (
+        assert result.modules["quark_ranLL_pion_local_mass_l_t0"]["id"]["type"] == (
             "MFermion::StagLMAMesonFieldProp"
         )
+        assert "quark_ranLL_pion_local_mass_l" not in result.modules
         assert all(
             mod["id"]["type"] != "MSolver::StagLMA"
             for mod in result.modules.values()
@@ -237,8 +270,33 @@ class TestBuildInputParamsMesonField:
         config = self._mf_config(cache=CacheMode.BUILD_AND_LOAD)
         result = strategy.build_input_params(config)
         sched = result.schedule
-        assert sched.index("noise_fv") < sched.index("quark_ranLL_pion_local_mass_l")
+        assert sched.index("noise_fv") < sched.index("quark_ranLL_pion_local_mass_l_t0")
         assert sched.index("noise_fv") < sched.index("mf_local_mass_l")
+
+    def test_grid_producers_interleave_with_their_slice_consumers(self):
+        config = self._mf_config()
+        sched = strategy.build_input_params(config).schedule
+        for t in range(4):
+            producer = sched.index(f"quark_ranLL_pion_local_mass_l_t{t}")
+            assert sched.index("mfload_mass_l_G1_G1") < producer
+            assert producer < sched.index(f"corr_ranLL_pion_local_mass_l_t{t}")
+            assert producer < sched.index(f"quark_ama_pion_local_mass_l_t{t}")
+            if t > 0:
+                assert sched.index(f"corr_ranLL_pion_local_mass_l_t{t - 1}") < producer
+
+    def test_resume_gate_skips_producers_for_done_slices(self, monkeypatch):
+        catalog = pd.DataFrame(
+            {"tsource": ["0", "1", "2", "3"], "exists": [True, False, True, True]}
+        )
+        monkeypatch.setattr(strategy, "create_outfile_catalog", lambda config: catalog)
+        config = self._mf_config(output_config=make_output(overwrite=False))
+        result = strategy.build_input_params(config)
+        producers = [
+            n
+            for n, m in result.modules.items()
+            if m["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
+        ]
+        assert producers == ["quark_ranLL_pion_local_mass_l_t1"]
 
     def test_build_and_load_emits_writer_after_noise(self):
         config = self._mf_config(cache=CacheMode.BUILD_AND_LOAD)
@@ -315,13 +373,23 @@ class TestBuildInputParamsBiasedMesonField:
         refs = config.sources_config.source_refs
         assert "noise_n0" in result.modules
         assert result.modules["noise_n0"]["options"]["t0"] == str(refs[0].t0)
-        assert "quark_ranLL_pion_local_mass_l_n0" in result.modules
+        producer = f"quark_ranLL_pion_local_mass_l_n0_t{refs[0].t0}"
+        assert producer in result.modules
+        assert "quark_ranLL_pion_local_mass_l_n0" not in result.modules
         corr = result.modules["corr_ranLL_pion_local_mass_l_n0"]
         # contraction resolves the producer's published output, never a
         # dangling quark_..._n0 GaugeProp name
-        assert corr["options"]["source"] == (
-            f"quark_ranLL_pion_local_mass_l_n0_t{refs[0].t0}"
-        )
+        assert corr["options"]["source"] == producer
+
+    def test_biased_producers_interleave_with_their_block_consumers(self):
+        config = self._biased_config()
+        refs = config.sources_config.source_refs
+        sched = strategy.build_input_params(config).schedule
+        p0 = sched.index(f"quark_ranLL_pion_local_mass_l_n0_t{refs[0].t0}")
+        p1 = sched.index(f"quark_ranLL_pion_local_mass_l_n1_t{refs[1].t0}")
+        c0 = sched.index("corr_ranLL_pion_local_mass_l_n0")
+        c1 = sched.index("corr_ranLL_pion_local_mass_l_n1")
+        assert p0 < c0 < p1 < c1
 
     def test_biased_ama_guess_resolves_producer_output(self):
         config = self._biased_config(cg_config=CgConfig(**sub_kwargs()))
@@ -333,8 +401,9 @@ class TestBuildInputParamsBiasedMesonField:
     def test_labeled_biased_chain_disjoint_from_other_entries(self):
         config = self._biased_config(label="bias")
         result = strategy.build_input_params(config)
+        refs = config.sources_config.source_refs
         assert "bias_noise_n0" in result.modules
-        assert "bias_quark_ranLL_pion_local_mass_l_n0" in result.modules
+        assert f"bias_quark_ranLL_pion_local_mass_l_n0_t{refs[0].t0}" in result.modules
 
 
 class TestCreateOutfileCatalog:

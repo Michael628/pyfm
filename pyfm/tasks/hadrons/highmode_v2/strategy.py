@@ -4,7 +4,8 @@ Fully separate from the legacy ``highmode/`` package (D4): owns the entry
 catalog (:func:`create_outfile_catalog`, serving the resume gate here and
 aggregation/comparison from the task level), the ranLL gamma demand set
 (:func:`needed_ranll_gammas`), the schedule sort, the loader/producer
-meson-field chain (biased-aware: one producer per drawn slice), and the
+meson-field chain (one producer per source slice, scheduled with that
+slice's consumers), and the
 per-entry emission order from the design doc — SpinTaste + sink →
 full-volume noise (meson_field) → cache writer (``build_and_load`` /
 ``build_only``) → stop for ``build_only`` → per-source noise → per-mass
@@ -61,8 +62,9 @@ def needed_ranll_gammas(config: LMAHighModeConfig) -> t.Dict[str, t.List[Gamma]]
     Derived from ``twopoint.quark_gen`` — the same demand-driven set the
     quark emission uses — so the producer set can never drift from the
     consumer references: each (gamma, mass) entry here corresponds exactly
-    to a ``quark_ranLL_{glabel}_mass_{m}`` producer whose outputs are the
-    propagators contractions and the ama guess chain reference.
+    to the per-slice ``quark_ranLL_{glabel}_mass_{m}_{label}[_t{t0}]``
+    producers, each of whose module name is the propagator contractions
+    and the ama guess chain reference.
     """
     needed: t.Dict[str, t.List[Gamma]] = {}
     for op in twopoint.quark_gen(config):
@@ -107,8 +109,15 @@ def sort_schedule(config: LMAHighModeConfig, module_names: t.List[str]) -> t.Lis
     def mixed_mass_last(name):
         return len(re.findall(r"_mass", name))
 
+    # Biased labels are n{i} and a biased producer is ..._n{i}_t{t0}: key
+    # on the block index so it sorts with its ..._n{i} consumers. Grid
+    # labels (and producers) carry t{t0} directly.
+    slice_pattern = (
+        r"_n(\d+)" if config.sources_config.biased_config is not None else r"_t(\d+)"
+    )
+
     def tslice_order(name):
-        time = re.findall(r"_t(\d+)", name)
+        time = re.findall(slice_pattern, name)
         if len(time):
             return int(time[0])
         else:
@@ -162,22 +171,25 @@ def build_lma_meson_field_chain(
     low_modes: str,
     gammas: t.List[Gamma],
     spintaste_names: t.Dict[Gamma, str],
-) -> HadronsInput:
-    """Loader + producer half of the meson-field chain (per entry).
+    refs: t.List[SourceRef],
+) -> t.Tuple[HadronsInput, HadronsInput]:
+    """Loader + producer halves of the meson-field chain (per entry).
 
     Loaders: one per (mass, conjugated gamma), label-prefixed, reading the
-    entry's cache files by the writer's filestem grammar. Producers: one
-    per (gamma, mass) in grid mode (a single ``tstart..tstop`` stride
-    ``dt`` window); biased sources emit one producer per drawn slice
-    (``tA=tB=t0``, sharing the loaders) — a documented ADR consequence
-    (one producer per slice until ``StagLMAMesonFieldProp`` accepts a
-    time-slice list). Producer/output naming goes through
-    ``twopoint.meson_field_producer_name`` so contractions and the ama
-    guess chain resolve the published objects (``_t{t0}``) regardless of
-    source mode.
+    entry's cache files by the writer's filestem grammar, shared by every
+    slice. Producers: one per (gamma, mass, ref) in both source modes, a
+    single-time window ``tA=tB=ref.t0`` (``tStep=1``). A single-slice
+    ``StagLMAMesonFieldProp`` publishes under its own module name, so
+    ``twopoint.meson_field_producer_name`` is both the module and the
+    object contractions and the ama guess chain reference.
+
+    Returned as ``(loaders, producers)``: loaders join the entry's main
+    schedule; producers join the per-source quark schedule so
+    ``sort_schedule`` interleaves each slice's producer with its
+    consumers and Hadrons frees it before the next slice is built.
     """
-    modules = {}
-    schedule = []
+    loader_modules = {}
+    loader_schedule = []
     mf = config.low_modes_config.meson_field_config
     # {mass} is filled with the prefix-removed mass VALUE (the writer's
     # output grammar, meson_v2), never the raw massdict key.
@@ -189,58 +201,43 @@ def build_lma_meson_field_chain(
     for g in gammas:
         for conj in g.conjugate_gamma_list:
             loader = config.module_name(f"mfload_mass_{mass_label}_{conj}")
-            if loader not in modules:
-                modules[loader] = hadmods.load_meson_field(
+            if loader not in loader_modules:
+                loader_modules[loader] = hadmods.load_meson_field(
                     name=loader,
                     file=f"{stem}.@traj@/{conj}_0_0_0.h5",
                     dataset=f"{conj}_0_0_0",
                 )
-                schedule.append(loader)
+                loader_schedule.append(loader)
 
-    is_biased = config.sources_config.biased_config is not None
-    # One (ref, tA, tB, tStep) window per producer to emit: grid shares a
-    # single producer over the whole configured range (no ref needed);
-    # biased draws one dedicated single-time producer per slice.
-    windows = (
-        [
-            (ref, str(ref.t0), str(ref.t0), "1")
-            for ref in config.sources_config.source_refs
-        ]
-        if is_biased
-        else [
-            (
-                None,
-                str(config.sources_config.grid_config.tstart),
-                str(config.sources_config.grid_config.tstop),
-                str(config.sources_config.grid_config.dt),
-            )
-        ]
-    )
-
+    producer_modules = {}
+    producer_schedule = []
     for g in gammas:
         glabel = g.name.lower()
         meson_field_refs = " ".join(
             config.module_name(f"mfload_mass_{mass_label}_{conj}")
             for conj in g.conjugate_gamma_list
         )
-        for ref, ta, tb, tstep in windows:
+        for ref in refs:
             producer = twopoint.meson_field_producer_name(config, glabel, mass_label, ref)
-            modules[producer] = hadmods.lma_meson_field_prop_v2(
+            producer_modules[producer] = hadmods.lma_meson_field_prop_v2(
                 name=producer,
                 action=action,
                 low_modes=low_modes,
                 meson_field=meson_field_refs,
                 gammas=spintaste_names[g],
                 labels=" ".join(g.gamma_list),
-                ta=ta,
-                tb=tb,
-                tstep=tstep,
+                ta=str(ref.t0),
+                tb=str(ref.t0),
+                tstep="1",
                 noise=noise_vec,
                 n_noise=str(config.sources_config.noise),
             )
-            schedule.append(producer)
+            producer_schedule.append(producer)
 
-    return HadronsInput(modules=modules, schedule=schedule)
+    return (
+        HadronsInput(modules=loader_modules, schedule=loader_schedule),
+        HadronsInput(modules=producer_modules, schedule=producer_schedule),
+    )
 
 
 def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
@@ -325,16 +322,20 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
         if config.low_modes_config.method is not LowModeMethod.NONE:
             low_modes = config.low_modes_name.format(mass=mass_label)
             if config.use_meson_field:
-                chain = build_lma_meson_field_chain(
+                loaders, producers = build_lma_meson_field_chain(
                     config,
                     mass_label=mass_label,
                     action=action,
                     low_modes=low_modes,
                     gammas=needed.get(mass_label, []),
                     spintaste_names=spintaste_names,
+                    refs=run_refs,
                 )
-                modules |= chain.modules
-                schedule += chain.schedule
+                modules |= loaders.modules
+                schedule += loaders.schedule
+                # per-slice producers sort with their slice's consumers
+                modules |= producers.modules
+                quark_schedule += producers.schedule
             else:
                 name = twopoint.solver_module_name(config, "ranLL", mass_label)
                 modules[name] = hadmods.lma_solver(

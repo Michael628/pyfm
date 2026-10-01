@@ -128,7 +128,13 @@ class TestModuleIdentity:
         assert "noise_fv" in result.modules
         assert "mf_local_mass_l" in result.modules
         assert "mfload_mass_l_G1_G1" in result.modules
-        assert "quark_ranLL_pion_local_mass_l" in result.modules
+        # one single-slice producer per source, named ..._t{t0}
+        assert any(
+            n.startswith("quark_ranLL_pion_local_mass_l_t")
+            and m["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
+            for n, m in result.modules.items()
+        )
+        assert "quark_ranLL_pion_local_mass_l" not in result.modules
         assert not any(n.startswith("sloppy_") for n in result.modules)
 
     def test_epack_always_emitted_and_mass_shifts_cover_entries(self, hadrons_params):
@@ -178,7 +184,11 @@ class TestTwoStageCacheWorkflow:
         assert not any(
             n.startswith("sloppy_quark_ranLL") for n in build_result.modules
         )
-        assert "sloppy_quark_ranLL_pion_local_mass_l" in load_result.modules
+        assert any(
+            n.startswith("sloppy_quark_ranLL_pion_local_mass_l_t")
+            and m["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
+            for n, m in load_result.modules.items()
+        )
 
 
 class TestValidation:
