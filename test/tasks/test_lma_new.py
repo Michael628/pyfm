@@ -161,6 +161,13 @@ class TestTwoStageCacheWorkflow:
         ]["sloppy"]
         load_entry["low_modes"]["meson_field"]["cache"] = "load"
 
+        # Drop the mpcg bias entry from the build job so `istag_mass_l`'s
+        # absence is attributable to the build_only sloppy entry (action
+        # names are mass-based and shared across entries).
+        del build_params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"][
+            "bias"
+        ]
+
         build_task = create_task("lma_new", build_params, "a", "20")
         load_task = create_task("lma_new", load_params, "a", "20")
 
@@ -178,6 +185,14 @@ class TestTwoStageCacheWorkflow:
         # Per-source noise only exists past the build_only stop.
         assert not any(n.startswith("sloppy_noise_t") for n in build_result.modules)
         assert any(n.startswith("sloppy_noise_t") for n in load_result.modules)
+
+        # build_only still emits the entry's dp action modules: the cache
+        # writer's EigenPackCBPairs modules reference stag_mass_<mass>.
+        assert build_result.modules["stag_mass_l"]["id"]["type"] == (
+            "MAction::ImprovedStaggeredMILC"
+        )
+        assert "istag_mass_l" not in build_result.modules  # no cg → no sp action
+        assert "stag_mass_l" in load_result.modules
 
         # build_only writes the cache and stops; load keeps the producers
         assert "sloppy_mf_local_mass_l" in build_result.modules

@@ -11,7 +11,7 @@ from pyfm.tasks.hadrons.types import HadronsInput
 from pyfm.tasks.register import register_task
 
 from . import gauge, meson, epack, meson_v2, highmode_v2
-from .highmode_v2.config import CacheMode, LMAHighModeConfig
+from .highmode_v2.config import LMAHighModeConfig
 
 
 @dataclass(frozen=True)
@@ -193,9 +193,12 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     epack mass shifts (meson + every entry) → user meson entries →
     high-mode entries (per-entry actions, then the entry's own emission).
     Sections are presence-driven — no stored ``skip_*`` flags (ADR
-    Decision 2); ``epack`` is required. Cache ``build_only`` entries skip
-    their action modules (the writer needs only the epack low modes and
-    the entry's noise) but still join the epack mass-shift set.
+    Decision 2); ``epack`` is required. Every entry — ``build_only``
+    included — gets its per-mass dp action modules: the cache writer's
+    ``EigenPackCBPairs`` modules reference ``stag_mass_<mass>`` by name,
+    so the action must exist even when no solver consumes it.
+    ``build_only`` entries contribute no sp masses (no cg block) and
+    stop after the writer; they still join the epack mass-shift set.
     """
     modules = {}
     schedule = []
@@ -254,16 +257,14 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         schedule += sp_gauge.schedule
 
     for hm, sp_masses in zip(config.high_modes_config.values(), entry_sp_masses):
-        build_only = (
-            hm.low_modes_config.meson_field_config is not None
-            and hm.low_modes_config.meson_field_config.cache is CacheMode.BUILD_ONLY
+        # Unconditional — build_only entries need their dp actions too:
+        # the writer's EigenPackCBPairs modules reference stag_mass_<mass>
+        # (sp_masses is [] for them: no cg block, nothing solver-scoped).
+        actions = gauge.build_action_modules(
+            config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
         )
-        if not build_only:
-            actions = gauge.build_action_modules(
-                config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
-            )
-            modules |= actions.modules
-            schedule += actions.schedule
+        modules |= actions.modules
+        schedule += actions.schedule
 
         hm_input = highmode_v2.build_input_params(hm)
         modules |= hm_input.modules
