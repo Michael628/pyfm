@@ -121,11 +121,17 @@ def process_files(
 
         # Preprocess `fstring` to handle duplicate keys in regex replacements
         fstring_keys: t.List[str] = format_keys(fstring)
+        # Filter to keys that occur in the filestem BEFORE the emptiness check:
+        # a brace-free stem with non-matching replacements (e.g. the
+        # skip-existing re-read passes {"series": ..., "format": ...} against
+        # "out/corr.csv") must yield the plain stem, not crash on an empty
+        # product inside zip(*(...)).
+        if replacements:
+            replacements = {k: v for k, v in replacements.items() if k in fstring_keys}
         if not replacements:
             yield freeze({}), fstring
             return
 
-        replacements = {k: v for k, v in replacements.items() if k in fstring_keys}
         keys, repls = zip(
             *(
                 (k, map(str, r)) if isinstance(r, t.List) else (k, [str(r)])
@@ -292,7 +298,9 @@ def catalog_files(
 def get_processed_filename(filename: str, remove: t.List[str], suffix: str = "") -> str:
 
     subdir = "processed/{format}" + suffix
-    result: str = filename.replace("correlators", subdir)
+    prefix, sep, rest = filename.partition("correlators/")
+    _, _, name = rest.rpartition("/")
+    result: str = f"{prefix}{subdir}/{name}" if sep else filename.replace("correlators", subdir)
     for r in remove:
         result = re.sub(f"_[a-z]?{{{r}}}", "", result)
 

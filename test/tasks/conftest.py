@@ -34,11 +34,18 @@ def contract_params(tasks_data_dir):
     return utils.io.load_param(str(tasks_data_dir / "params_contract.yaml"))
 
 
+def _strip_provenance(root):
+    for elem in root.findall("provenance"):
+        root.remove(elem)
+
+
 @pytest.fixture
 def assert_xml_equal():
     def _compare(actual_path, expected_path):
         actual = ET.parse(actual_path).getroot()
         expected = ET.parse(expected_path).getroot()
+        _strip_provenance(actual)
+        _strip_provenance(expected)
         xml_diff.normalize_element(actual)
         xml_diff.normalize_element(expected)
         equal, diffs = xml_diff.elements_equal(actual, expected)

@@ -4,7 +4,7 @@ import itertools
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import OpList, Gamma, MassDict
-from pyfm.tasks.hadrons.types import CrossTerms, HighModeConfig
+from pyfm.tasks.hadrons.types import CrossTerms, HighModeConfig, SourceRef
 
 
 _AXIAL_GAMMAS = frozenset(
@@ -183,24 +183,24 @@ def contraction_gen(
             )
 
 
-def build_quarks(config: HighModeConfig, run_tsources: t.List[str]) -> HadronsInput:
+def build_quarks(config: HighModeConfig, run_refs: t.List[SourceRef]) -> HadronsInput:
     modules = {}
-    for tsource in run_tsources:
+    for ref in run_refs:
         for op in set(quark_gen(config)):
             glabel = op.gamma.name.lower()
-            quark = f"quark_{op.solver}_{glabel}_mass_{op.mass}_t{tsource}"
-            source = f"noise_t{tsource}"
+            quark = f"quark_{op.solver}_{glabel}_mass_{op.mass}_{ref.label}"
+            source = f"noise_{ref.label}"
             solver = config.solver_name.format(solver=op.solver, mass=op.mass)
 
             if op.precon:
-                guess = f"quark_{op.precon}_{glabel}_mass_{op.mass}_t{tsource}"
+                guess = f"quark_{op.precon}_{glabel}_mass_{op.mass}_{ref.label}"
             else:
                 guess = ""
 
             # Split-grid: tag CG-solve propagators (solver segment "ama"/"ama_{r}")
             # with their subgrid index; ranLL (low-mode/LMA solve) is excluded.
             if config.subgrid_ranks is not None and "ama" in op.solver:
-                subgrid = int(tsource) % config.subgrid_ranks
+                subgrid = ref.t0 % config.subgrid_ranks
             else:
                 subgrid = None
 
@@ -218,12 +218,10 @@ def build_quarks(config: HighModeConfig, run_tsources: t.List[str]) -> HadronsIn
     return HadronsInput(modules=modules, schedule=list(modules.keys()))
 
 
-def build_contractions(
-    config: HighModeConfig, run_tsources: t.List[str]
-) -> HadronsInput:
+def build_contractions(config: HighModeConfig, run_refs: t.List[SourceRef]) -> HadronsInput:
     modules = {}
 
-    for tsource in run_tsources:
+    for ref in run_refs:
         for op, con_set in set(contraction_gen(config)):
             glabel = op.gamma.name.lower()
             quark_glabel = con_set.quark.gamma.name.lower()
@@ -231,9 +229,9 @@ def build_contractions(
             mlabel1 = con_set.quark.mass
             mlabel2 = con_set.antiquark.mass
             quark = (
-                f"quark_{con_set.quark.solver}_{quark_glabel}_mass_{mlabel1}_t{tsource}"
+                f"quark_{con_set.quark.solver}_{quark_glabel}_mass_{mlabel1}_{ref.label}"
             )
-            antiquark = f"quark_{con_set.antiquark.solver}_{antiquark_glabel}_mass_{mlabel2}_t{tsource}"
+            antiquark = f"quark_{con_set.antiquark.solver}_{antiquark_glabel}_mass_{mlabel2}_{ref.label}"
 
             mass_output = con_set.mass_label(config.mass)
             solver_label = con_set.solver_label
@@ -244,29 +242,29 @@ def build_contractions(
                 mass_label = f"mass_{mlabel1}_mass_{mlabel2}"
 
             output = config.high_modes.filestem.format(
-                mass=mass_output, dset=solver_label, gamma_label=glabel, tsource=tsource
+                mass=mass_output, dset=solver_label, gamma_label=glabel, tsource=ref.axis
             )
 
             # Split-grid: tag contractions that source a CG-solve propagator
             # (either quark or antiquark side) to that CG subgrid. A cross-term
-            # contraction (e.g. corr_ranLL_ama) sits at a single tsource, so both
-            # quarks share the same tsource % subgrid_ranks; the ranLL propagator
+            # contraction (e.g. corr_ranLL_ama) sits at a single source, so both
+            # quarks share the same t0 % subgrid_ranks; the ranLL propagator
             # is scattered onto the subgrid by Hadrons at runtime.
             if config.subgrid_ranks is not None and (
                 "ama" in con_set.quark.solver
                 or "ama" in con_set.antiquark.solver
             ):
-                subgrid = int(tsource) % config.subgrid_ranks
+                subgrid = ref.t0 % config.subgrid_ranks
             else:
                 subgrid = None
 
-            name = f"corr_{solver_label}_{glabel}_{mass_label}_t{tsource}"
+            name = f"corr_{solver_label}_{glabel}_{mass_label}_{ref.label}"
             modules[name] = hadmods.prop_contract(
                 name=name,
                 source=quark,
                 sink=antiquark,
                 sink_fn="sink",
-                source_shift=f"noise_t{tsource}_shift",
+                source_shift=f"noise_{ref.label}_shift",
                 source_gammas=con_set.quark.gamma.gamma_string,
                 sink_gammas=con_set.sink.gamma.gamma_string,
                 apply_g5=str(con_set.sink.apply_g5).lower(),

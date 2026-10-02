@@ -57,7 +57,7 @@ Merged into the nanny config **and** every job/task. These are the values most `
 | `ens` | Ensemble tag, fills `{ens}` everywhere | Template key |
 | `space` / `time` | Spatial / temporal lattice extent | Config input (e.g. `SmearConfig`, `*.time`) |
 | `runid` | Run identifier string with `{series}/{eigs}/{noise}` | String template |
-| `dt` | Source-time-slice spacing, fills `{dt}` | Config input (`HighModeConfig.dt`) + template key |
+| `dt` | Source-time-slice spacing, fills `{dt}`; ignored when `nbias` is set (see `tasks.bias`) | Config input (`HighModeConfig.dt`) + template key |
 | `noise` | Noise count (keep `1`), fills `{noise}` | Config input + template key |
 | `eigs` | Number of eigenvalues used, fills `{eigs}` | Config input (`EpackConfig.eigs`) + template key |
 | `lattice` | `[nx, ny, nz, nt]` geometry | Config input (`JobConfig.lattice`) |
@@ -380,8 +380,44 @@ This is the richest task. `LMIConfig` is composite: each `tasks` sub-block route
 | `epack` | `EpackConfig` | `load` (load vs. IRL-solve), `save_evals`, `save_eigs` |
 | `meson` | `MesonConfig` | `gamma` (list of gamma structures), `mass` (label list) |
 | `high_modes` | `HighModeConfig` | per-operator (`vec_local`, `pion_local`, ...) → `mass` list (CG solves + deflation) |
+| `bias` | `HighModeConfig` (second sibling, `bias_config`) | `nbias`, `bias_seed`, `bias_replace` (default `true`: with-replacement draws), `high_modes` (files-label rebind), per-operator `mass` lists |
 
 Validation: if `epack` is skipped, `meson` must be skipped too (no eigenvectors → no meson fields).
+
+---
+
+## `job_setup.hadrons.tasks.bias` — bias sources (`HighModeConfig`)
+
+Optional second `HighModeConfig` sibling (`bias_config`). When `nbias` is set, source
+placement switches from `dt`-spaced times to `nbias` random time slices drawn **with
+replacement by default** — duplicate times are distinct sources with distinct outputs (block labels
+`n0..n{nbias-1}` fill the `{tsource}` placeholder; module names `noise_n0`, outputs
+`..._n0_{series}`).
+
+```yaml
+tasks:
+  bias:
+    nbias: 8
+    bias_seed: lmi4444-v1
+    residual: [1.0e-4, 1.0e-8]
+    high_modes: bias_modes     # rebind to the bias files entry (warns if forgotten)
+    pion_local:
+      mass: ["l"]
+```
+
+- `bias_seed` is composed with `series`/`cfg` at config-build time
+  (`{bias_seed}_{series}_{cfg}`), independent of `runid`; the same (seed, series, cfg)
+  always re-derives the same draws, so resume/completion/aggregation stay coherent.
+- Do **not** reference `{bias_seed}` in filestems — the aggregation path builds configs
+  without series/cfg and would format a different value. Use `{nbias}` to namespace
+  (e.g. `nb{nbias}`).
+- `bias_replace` (default `true`) toggles the draw mode: with replacement (duplicate times
+  allowed) or without (`rng.sample`; rejects `nbias > time` with a clear error). Block labels,
+  outputs, and aggregation are identical in structure across both modes — only the drawn
+  times differ.
+- Aggregation run keys are prefixed `bias_` and merged alongside the high-mode family.
+- `grid_lma` shares the routing: a `tasks.bias` block routes but is silently unused
+  there (Grid bias support is deferred).
 
 ---
 
@@ -492,6 +528,7 @@ The single source of truth for every input/output path. Each label becomes an `O
 | `eig` / `eigdir` | Eigenvector file / directory |
 | `eval` | Eigenvalue file |
 | `high_modes` | High-mode correlator output |
+| `bias_modes` | Bias-sampler correlator output (label must contain a known substring such as `modes`) |
 | `meson` | Meson-field output |
 | `contract` | A2A correlator output |
 

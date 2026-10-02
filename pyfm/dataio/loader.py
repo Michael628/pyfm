@@ -1,3 +1,5 @@
+import dataclasses
+import math
 import os
 import typing as t
 
@@ -12,15 +14,101 @@ except ImportError:
 
 from pyfm.domain import LoadDictConfig, LoadH5Config
 
-from pyfm.dataio.converter import data_to_frame
+from pyfm.dataio.converter import (
+    data_to_frame,
+    build_hdf5_template,
+    _fill_hdf5_frame,
+    Hdf5FrameTemplate,
+)
 from pyfm.domain import WrappedDataPipe
 from pyfm import utils
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from functools import partial
+
+import multiprocessing
+import time
 
 dataFrameFn = t.Callable[[np.ndarray], pd.DataFrame]
 loadFn = t.Callable[[str, t.Dict], pd.DataFrame]
+
+_PYTABLES_ROOT_ATTR = "PYTABLES_FORMAT_VERSION"
+
+# D10: pinned multiprocessing start method for the chunked load pool. Never
+# rely on interpreter defaults (Python 3.14 flips the Linux default to
+# forkserver; Aurora's 3.12 defaults to fork). "fork" is the measured cheapest
+# (≈22 ms pool startup vs ≈430–450 ms for spawn/forkserver); the parent's
+# already-initialized HDF5 library makes fork's COW inheritance an
+# empirically-cleared risk class (workers open files only in-child; the format
+# probe's `with` block closed before pool construction). Cleared by the Aurora
+# fork-arm acceptance gate; fallback if it deadlocks: "forkserver" + raise
+# _POOL_MIN_FILES to ~1000.
+_MP_START_METHOD = "fork"
+
+# D9: minimum file count for the process pool to engage (executor startup
+# dominates below this). Initial value sits inside the measured fork
+# crossover bracket (N* ≈ 5–20 files); recalibrate from the Aurora grid —
+# changing it is a one-constant edit. Bench override: pool_threshold kwarg.
+_POOL_MIN_FILES = 8
+
+
+@dataclasses.dataclass(frozen=True)
+class ResolvedHdf5Context:
+    """Per-batch HDF5 context, resolved ONCE and shared across all files.
+
+    Built by `_resolve_load_context`. Carries the build-once index template
+    (D1, for raw Grid files), the PyTables flag (D2), the resolved
+    `LoadH5Config` so every file reuses the same index and config object, and
+    the per-open HDF5 locking mode (D3 guard): ``False`` when the batch loads
+    concurrently (a writer holding any file cannot serialize the pool), ``None``
+    (HDF5 default) otherwise.
+    """
+
+    is_pytables: bool
+    h5_config: t.Optional[LoadH5Config]
+    template: t.Optional[Hdf5FrameTemplate]
+    locking: bool | None = None
+
+
+@dataclasses.dataclass(frozen=True)
+class ResolvedLoadContext:
+    """Per-batch resolved context shared by legacy and chunked load paths.
+
+    Holds the resolved `file_loader` (a `partial` bound with the kwargs needed
+    for a single file) plus, for HDF5, the per-batch HDF5 context. Built once by
+    `_resolve_load_context` and reused across every file in the batch (D1 win for
+    both paths; D2 single format probe).
+    """
+
+    file_loader: loadFn
+    h5_context: t.Optional[ResolvedHdf5Context] = None
+
+
+def _detect_hdf5_format(
+    filename: str, *, locking: bool | None = None
+) -> t.Literal["pytables", "raw"]:
+    """Detect the internal format of an HDF5 file via a single O(1) root probe.
+
+    PyTables output (`writer.py:116` `to_hdf(key="corr", mode="w")`, default
+    `format="fixed"`) carries a root-group attribute `PYTABLES_FORMAT_VERSION`
+    (empirically `b'2.1'`) and, as a fallback marker, a top-level group with a
+    `pandas_type` attribute. Raw Grid files have empty root attrs (`{}`) and
+    carry physics attrs on their datasets — so the discriminator tests for
+    PyTables PRESENCE, not attribute absence (a naive "has attrs" check would
+    falsely classify raw Grid as PyTables). Returns "pytables" if either marker
+    is found, else "raw".
+
+    `locking` is forwarded to the probe open (see `_resolve_load_context`).
+    """
+    with h5py.File(filename, locking=locking) as file:
+        if _PYTABLES_ROOT_ATTR in file.attrs:
+            return "pytables"
+        # Fallback: top-level group carrying a pandas_type attribute.
+        for name in file:
+            obj = file[name]
+            if isinstance(obj, h5py.Group) and "pandas_type" in obj.attrs:
+                return "pytables"
+    return "raw"
 
 
 def get_pickle_loader(filename: str, _: t.Dict, **kwargs):
@@ -48,40 +136,47 @@ def get_parquet_loader(filename: str, _: t.Dict[str, str], **kwargs):
     return pq.read_table(filename, use_threads=True).to_pandas()
 
 
-def get_hdf5_loader(filename: str, repl: t.Dict[str, str], **kwargs):
-    """
-    Loads data from an HDF5 file and returns it as a DataFrame.
+def get_hdf5_loader(
+    filename: str,
+    repl: t.Dict[str, str],
+    *,
+    is_pytables: bool | None = None,
+    locking: bool | None = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Loads data from an HDF5 file and returns it as a DataFrame.
+
+    Format-aware dispatch (D2): a single first-file root-attr probe determines
+    whether the batch is PyTables output (route to ``pd.read_hdf``) or raw Grid
+    HDF5 (route to ``h5py.File`` + the index template). The probe is O(1) and is
+    performed once per batch by ``_resolve_load_context`` and threaded in via the
+    ``is_pytables`` hint; when called directly without a hint, the file is probed
+    individually (backward-compatible).
 
     Args:
-        filename (str): Path to the HDF5 file.
-        repl (Dict[str, str]): A dictionary of string replacements to apply to the configuration.
-        **kwargs: Additional keyword arguments passed to LoadH5Config.
+        filename: Path to the HDF5 file.
+        repl: String replacements applied to the configuration.
+        is_pytables: Optional pre-resolved format hint. When ``None`` the file is
+            probed individually. When truthy, routes straight to ``pd.read_hdf``.
+            When falsy, skips the probe and opens via ``h5py.File``.
+        locking: HDF5 open-time locking mode forwarded to ``h5py.File``. ``None``
+            (default) uses HDF5's own default; ``False`` skips locking (used when
+            the batch loads concurrently). Ignored on the PyTables branch
+            (``pd.read_hdf`` has no such kwarg).
+        **kwargs: Additional keyword arguments passed to ``LoadH5Config``.
 
     Returns:
-        pd.DataFrame: The loaded data as a pandas DataFrame.
-
+        pd.DataFrame: The loaded data.
     """
+    if is_pytables is None:
+        is_pytables = _detect_hdf5_format(filename, locking=locking) == "pytables"
 
-    data = None
-    try:
+    if is_pytables:
         return pd.read_hdf(filename)
-    except (ValueError, NotImplementedError):
-        pass
 
-    with h5py.File(filename) as file:
+    with h5py.File(filename, locking=locking) as file:
         h5_config = LoadH5Config.create(**kwargs).format_data_strings(repl)
-        try:
-            data = data_to_frame(file, h5_config)
-        except ValueError as e:
-            utils.get_logger().debug(f"Error loading HDF5 file: {e}")
-            raise
-            # h5_config = h5_config.search_for_dataset_label(file)
-            # data = data_to_frame(file, h5_config)
-
-    if data is not None:
-        return data
-    else:
-        raise ValueError(f"File {filename} could not be loaded.")
+        return data_to_frame(file, h5_config)
 
 
 def get_file_loader(file_path: str):
@@ -100,6 +195,124 @@ def get_file_loader(file_path: str):
             raise ValueError(
                 "File must have extension '.p', '.h5', '.csv', or '.parquet'"
             )
+
+
+def _resolve_load_context(
+    file_repls: t.List[t.Tuple[str, t.Dict]],
+    max_workers: int = 1,
+    **kwargs,
+) -> ResolvedLoadContext:
+    """Resolve per-batch load context once: format probe + build-once template.
+
+    For HDF5 batches: probes the first file's format once (D2), and for raw Grid
+    builds the index template once (D1) so the legacy and chunked paths both
+    reuse a single index/config object across all files. For non-HDF5 formats
+    (`h5_context is None`) the legacy partial is returned unchanged.
+
+    `max_workers` derives the HDF5 locking mode (D3 guard): concurrent batches
+    (>1 worker) open raw files with `locking=False` so a writer holding any
+    file cannot serialize the pool; single-worker batches keep HDF5's default
+    locking (fail-fast on held files). An environment-variable guard is NOT an
+    alternative here — HDF5 reads `HDF5_USE_FILE_LOCKING` at library init,
+    which precedes any set this process could make after `import h5py`.
+
+    `max_workers` must be passed positionally-or-by-name here, never inside
+    `kwargs` (top-level kwarg, never a dict entry — baking it into
+    `LoadArrayConfig.create` would TypeError).
+    """
+    file_loader_fn = get_file_loader(file_repls[0][0])
+    h5_locking: bool | None = False if max_workers > 1 else None
+    h5_context = None
+    if file_loader_fn is get_hdf5_loader:
+        is_pytables = (
+            _detect_hdf5_format(file_repls[0][0], locking=h5_locking) == "pytables"
+        )
+        h5_config = None
+        template = None
+        if not is_pytables:
+            h5_config = LoadH5Config.create(**kwargs).format_data_strings(
+                dict(file_repls[0][1])
+            )
+            template = build_hdf5_template(h5_config)
+        h5_context = ResolvedHdf5Context(
+            is_pytables=is_pytables,
+            h5_config=h5_config,
+            template=template,
+            locking=h5_locking,
+        )
+    if h5_context is not None:
+        # Bind the resolved format hint and locking mode into the partial so
+        # every file in a PyTables batch routes straight to pd.read_hdf without
+        # re-probing (D2's single O(1) probe per batch), and every raw open
+        # carries the batch's locking mode. Non-HDF5 loaders accept neither.
+        file_loader = partial(
+            file_loader_fn,
+            is_pytables=h5_context.is_pytables,
+            locking=h5_context.locking,
+            **kwargs,
+        )
+    else:
+        file_loader = partial(file_loader_fn, **kwargs)
+    return ResolvedLoadContext(file_loader=file_loader, h5_context=h5_context)
+
+
+def _load_one_raw_hdf5(
+    filename: str,
+    repl: t.Dict[str, str],
+    template: Hdf5FrameTemplate,
+    locking: bool | None = None,
+) -> pd.DataFrame:
+    """Worker for one raw Grid HDF5 file using the pre-built index template.
+
+    Opens the file, reads arrays (GIL-released), and assembles the frame in O(1)
+    by reusing `template`'s cached MultiIndex by reference (no index construction
+    on the hot path), then attaches the replacement columns. The template is
+    read-only and never mutated, so it is safe to share across threads. Returns
+    only the per-file DataFrame; the caller owns GroupTuple construction so the
+    legacy yield path and the chunked concat path share one worker body.
+
+    `locking` is forwarded to the open (see `_resolve_load_context`).
+    """
+    with h5py.File(filename, locking=locking) as file:
+        df = _fill_hdf5_frame(file, template)
+    if repl:
+        df[list(repl.keys())] = tuple(repl.values())
+    return df
+
+
+def _load_chunk(
+    chunk: t.List[t.Tuple[str, t.Dict]],
+    ctx: ResolvedLoadContext,
+) -> pd.DataFrame:
+    """Worker for one chunk of files: load each and concat in-child (D8).
+
+    Module-scope so `ProcessPoolExecutor.submit` can pickle it (the old
+    per-file closure lived inside `load_files_chunked` and could not cross a
+    process boundary). Raw Grid files reuse `_load_one_raw_hdf5` unchanged;
+    every other format goes through the picklable `ctx.file_loader` partial
+    with the replacement columns attached. The chunk's `pd.concat` runs
+    in-child (D8), collapsing N per-file pickle round-trips into one frame
+    per chunk. `ctx` (and the template it carries) is pickled per chunk-task
+    — read-only and never mutated, so per-child copies are safe. Returns only
+    the chunk frame; the caller owns the terminal concat. Doubles as the W=1
+    serial fast path, where it runs in-process over the whole batch.
+    """
+    frames = []
+    for filename, repl in chunk:
+        utils.get_logger().debug(f"Loading file: {filename}")
+        if ctx.h5_context is not None and ctx.h5_context.template is not None:
+            df = _load_one_raw_hdf5(
+                filename,
+                repl,
+                ctx.h5_context.template,
+                locking=ctx.h5_context.locking,
+            )
+        else:
+            df = ctx.file_loader(filename, repl)
+            if repl:
+                df[list(repl.keys())] = tuple(repl.values())
+        frames.append(df)
+    return pd.concat(frames)
 
 
 def load_files(
@@ -125,15 +338,23 @@ def load_files(
 
         max_workers = min(kwargs.pop("max_workers", 1), len(file_repls))
 
-        file_loader = partial(get_file_loader(file_repls[0][0]), **kwargs)
+        ctx = _resolve_load_context(file_repls, max_workers, **kwargs)
         group_cols = list(file_repls[0][1].keys())
         GroupTuple = utils.create_group_tuple(*group_cols)
 
         def load_one(filename, repl):
             utils.get_logger().debug(f"Loading file: {filename}")
-            df = file_loader(filename, repl)
-            if repl:
-                df[list(repl.keys())] = tuple(repl.values())
+            if ctx.h5_context is not None and ctx.h5_context.template is not None:
+                df = _load_one_raw_hdf5(
+                    filename,
+                    repl,
+                    ctx.h5_context.template,
+                    locking=ctx.h5_context.locking,
+                )
+            else:
+                df = ctx.file_loader(filename, repl)
+                if repl:
+                    df[list(repl.keys())] = tuple(repl.values())
             return repl, df
 
         with ThreadPoolExecutor(max_workers=max_workers) as pool:
@@ -146,3 +367,130 @@ def load_files(
         return WrappedDataPipe(file_factory).agg()
     else:
         return WrappedDataPipe(file_factory)
+
+
+def load_files_chunked(
+    filestem: str | t.List[str],
+    replacements: t.Dict | None = None,
+    regex: t.Dict | None = None,
+    wildcard_fill: bool = False,
+    skip_file_set: t.List[str] | None = None,
+    max_workers: int = 1,
+    pool_threshold: int = _POOL_MIN_FILES,
+    start_method: str = _MP_START_METHOD,
+    stats: t.Dict[str, t.Any] | None = None,
+    **kwargs,
+) -> pd.DataFrame:
+    """Load, concat, and return one DataFrame using a chunked process pool.
+
+    Chunk-aware entry point (D3/D4/D8): resolves the load context once
+    (template + format probe), then executes worker-aligned chunks of
+    ``ceil(N/max_workers)`` files. When ``max_workers > 1`` AND
+    ``n_files >= pool_threshold`` (D9) it owns a `ProcessPoolExecutor` with
+    its mp_context pinned to ``start_method`` (D10): every chunk-task is
+    submitted up front (no per-chunk barrier), each chunk is loaded and
+    concatenated IN-CHILD by the module-scope `_load_chunk` worker (D8 —
+    this removes both the HDF5-build thread serialization and the W−1 chunk
+    barriers, and collapses N per-file pickle round-trips into W chunk
+    frames), and chunk frames are drained in submission order (never in
+    completion order — row order is load-bearing) and concatenated once in the
+    parent. Bounds peak RAM to one chunk's worth of frames in flight per
+    worker plus the terminal-concat floor.
+
+    Otherwise — ``max_workers == 1`` (the default) or a small batch below
+    the threshold — it is a plain serial pass through the same `_load_chunk`
+    in-process, with no executor at all. The D9 clamp happens BEFORE
+    `_resolve_load_context` sees the worker count, so non-concurrent runs
+    keep ``locking=None`` fail-fast semantics (see `_resolve_load_context`).
+
+    When the batch runs concurrently, raw HDF5 files open with
+    ``locking=False`` (see `_resolve_load_context`); no environment-variable
+    guard is needed or effective.
+
+    Args:
+        max_workers: worker processes for the pool. Strictly opt-in
+            (default 1 = serial).
+        pool_threshold: minimum ``n_files`` for the pool to engage (D9).
+            Smaller batches clamp to the serial path regardless of
+            ``max_workers`` — executor startup would dominate. Tuning/bench
+            override; production callers never pass it.
+        start_method: multiprocessing start method pinned into the pool's
+            mp_context (D10). Never rely on interpreter defaults.
+        stats: optional caller-owned dict, filled with bench observability:
+            ``effective_workers`` (post-clamp, post-threshold),
+            ``pool_used``, ``start_method``, ``n_files``, and per-phase wall
+            seconds (``enumerate_seconds``/``resolve_seconds``/
+            ``submit_seconds``/``drain_seconds``/``concat_seconds``).
+
+    Like ``max_workers``, the tuning kwargs must be passed by name, never
+    inside ``kwargs`` (top-level kwargs, never dict entries — baking them
+    into `LoadArrayConfig.create` would TypeError).
+    """
+    t_start = time.perf_counter()
+    file_repls = utils.io.process_files(
+        filestem, lambda f, r: (f, r), replacements, regex, wildcard_fill
+    )
+
+    if skip_file_set:
+        file_repls = [f for f in file_repls if f[0] not in skip_file_set]
+
+    if not file_repls:
+        file0 = filestem if isinstance(filestem, str) else filestem[0] + ", ..."
+        raise ValueError(f"No files found for file search pattern: {file0}")
+
+    t_enum = time.perf_counter()
+    n_files = len(file_repls)
+    max_workers = max(1, min(max_workers, n_files))
+    if n_files < pool_threshold:
+        # D9: small batches never pay executor startup. Clamp BEFORE
+        # _resolve_load_context so the locking mode reverts to None too.
+        max_workers = 1
+
+    ctx = _resolve_load_context(file_repls, max_workers, **kwargs)
+    t_resolve = time.perf_counter()
+
+    if max_workers == 1:
+        # Serial fast path: the same worker body in-process, no executor —
+        # per-file ValueErrors stay fully in-process and every h5py open is
+        # observable by in-process instrumentation.
+        chunks_out = [_load_chunk(file_repls, ctx)]
+        t_drain = time.perf_counter()
+        submit_seconds = 0.0
+        drain_seconds = t_drain - t_resolve
+    else:
+        chunk_size = max(1, math.ceil(n_files / max_workers))
+        chunks = [
+            file_repls[i : i + chunk_size] for i in range(0, n_files, chunk_size)
+        ]
+        with ProcessPoolExecutor(
+            max_workers=max_workers,
+            mp_context=multiprocessing.get_context(start_method),
+        ) as pool:
+            futures = [pool.submit(_load_chunk, chunk, ctx) for chunk in chunks]
+            t_submit = time.perf_counter()
+            chunks_out = [fut.result() for fut in futures]
+            t_drain = time.perf_counter()
+        submit_seconds = t_submit - t_resolve
+        drain_seconds = t_drain - t_submit
+
+    if not chunks_out:
+        result = pd.DataFrame()
+    else:
+        result = pd.concat(chunks_out)
+    t_concat = time.perf_counter()
+
+    if stats is not None:
+        stats.update(
+            {
+                "effective_workers": max_workers,
+                "pool_used": max_workers > 1,
+                "start_method": start_method if max_workers > 1 else None,
+                "n_files": n_files,
+                "enumerate_seconds": round(t_enum - t_start, 4),
+                "resolve_seconds": round(t_resolve - t_enum, 4),
+                "submit_seconds": round(submit_seconds, 4),
+                "drain_seconds": round(drain_seconds, 4),
+                "concat_seconds": round(t_concat - t_drain, 4),
+            }
+        )
+    return result
