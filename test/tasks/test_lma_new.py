@@ -11,6 +11,8 @@ from pyfm.nanny import write_input_file
 from pyfm.nanny.taskbuilder import create_task
 from pyfm.tasks.hadrons.lma_new import (
     LMANewConfig,
+    DEFAULT_HM_LABEL,
+    _merge_modules,
     build_aggregator_params,
     build_input_params,
     compare_outputs,
@@ -59,7 +61,7 @@ class TestKeyedEntries:
             assert hm.op_list[0].gamma.name == "PION_LOCAL"  # shared operations
             assert hm.masses == ["l"]
 
-    def test_unkeyed_single_entry_gets_empty_label(self, hadrons_params):
+    def test_unkeyed_single_entry_gets_default_label(self, hadrons_params):
         params = copy.deepcopy(hadrons_params)
         tasks = params["job_setup"]["lma_new"]["tasks"]
         entry = tasks["high_modes"]["entries"]["sloppy"]
@@ -67,8 +69,9 @@ class TestKeyedEntries:
             "operations": {"gamma": ["pion_local"], "mass": ["l"]},
         } | entry
         task = create_task("lma_new", params, "a", "20")
-        assert set(task.config.high_modes_config) == {""}
-        assert task.config.high_modes_config[""].label == ""
+        assert DEFAULT_HM_LABEL == "hm"
+        assert set(task.config.high_modes_config) == {"hm"}
+        assert task.config.high_modes_config["hm"].label == "hm"
 
     def test_entry_operations_replace_shared(self, hadrons_params):
         params = copy.deepcopy(hadrons_params)
@@ -115,8 +118,12 @@ class TestModuleIdentity:
         assert "bias_noise_n0" in result.modules
         assert "noise_fv" not in result.modules  # nothing unprefixed dangles
         assert "sloppy_mf_local_mass_l" in result.modules  # per-entry writer
+        # CB pairs are shared per mass, never label-prefixed.
+        assert "cbpairs_l_mass_l" in result.modules
+        assert "cbpairs_r_mass_l" in result.modules
+        assert "sloppy_cbpairs_l_mass_l" not in result.modules
 
-    def test_unkeyed_modules_match_legacy_grammar(self, hadrons_params):
+    def test_unkeyed_modules_get_default_label_prefix(self, hadrons_params):
         params = copy.deepcopy(hadrons_params)
         tasks = params["job_setup"]["lma_new"]["tasks"]
         entry = tasks["high_modes"]["entries"]["sloppy"]
@@ -125,16 +132,21 @@ class TestModuleIdentity:
         } | entry
         task = create_task("lma_new", params, "a", "20")
         result = build_input_params(task.config)
-        assert "noise_fv" in result.modules
-        assert "mf_local_mass_l" in result.modules
-        assert "mfload_mass_l_G1_G1" in result.modules
+        assert "hm_noise_fv" in result.modules
+        assert "hm_mf_local_mass_l" in result.modules
+        assert "hm_spintaste_mf_local_mass_l" in result.modules
+        assert "hm_mfload_mass_l_G1_G1" in result.modules
         # one single-slice producer per source, named ..._t{t0}
         assert any(
-            n.startswith("quark_ranLL_pion_local_mass_l_t")
+            n.startswith("hm_quark_ranLL_pion_local_mass_l_t")
             and m["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
             for n, m in result.modules.items()
         )
-        assert "quark_ranLL_pion_local_mass_l" not in result.modules
+        # Nothing entry-owned is left unprefixed; CB pairs stay shared.
+        for name in ("noise_fv", "mf_local_mass_l", "mfload_mass_l_G1_G1"):
+            assert name not in result.modules
+        assert "cbpairs_l_mass_l" in result.modules
+        assert "hm_cbpairs_l_mass_l" not in result.modules
         assert not any(n.startswith("sloppy_") for n in result.modules)
 
     def test_epack_always_emitted_and_mass_shifts_cover_entries(self, hadrons_params):
@@ -144,6 +156,83 @@ class TestModuleIdentity:
             "MIO::StagLoadFermionEigenPack"
         )
         assert "evecs_mass_l" in result.modules  # epack mass shift
+
+
+class TestMesonStanzaWithCacheWriter:
+    """A ``meson:`` stanza next to an unkeyed ``build_only`` entry: the
+    entry's cache writer must not overwrite the stanza's modules."""
+
+    @staticmethod
+    def _params(hadrons_params, meson_extra=None):
+        params = copy.deepcopy(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"] = {
+            "gauge": {"action_type": "load"},
+            "epack": {"load": False, "save_evals": True, "save_eigs": True},
+            "meson": {"gamma": ["pion_local", "vec_local"], "mass": ["l"]}
+            | (meson_extra or {}),
+            "high_modes": {
+                "operations": {
+                    "pion_local": {"mass": ["l"]},
+                    "vec_local": {"mass": ["l"]},
+                },
+                "sources": {"grid": True},
+                "low_modes": {
+                    "meson_field": {
+                        "file": "meson_stoch_proj",
+                        "cache": "build_only",
+                        "blocksize": 60,
+                    }
+                },
+            },
+        }
+        return params
+
+    def test_stanza_and_writer_modules_both_survive(self, hadrons_params):
+        task = create_task("lma_new", self._params(hadrons_params), "a", "20")
+        result = build_input_params(task.config)
+        stanza = result.modules["mf_local_mass_l"]
+        writer = result.modules["hm_mf_local_mass_l"]
+        stanza_st = result.modules["spintaste_mf_local_mass_l"]["options"]
+        writer_st = result.modules["hm_spintaste_mf_local_mass_l"]["options"]
+        # Stanza keeps its own options: no CB pairs, unfolded spin-taste.
+        assert "cbPairsLeft" not in stanza["options"]
+        assert stanza_st["spinTaste"]["applyG5"] == "false"
+        # Writer reads the entry's noise and the shared per-mass CB pairs.
+        assert writer["options"]["right"] == "hm_noise_fv_vec"
+        assert writer["options"]["cbPairsLeft"] == "cbpairs_l_mass_l"
+        assert writer_st["spinTaste"]["applyG5"] == "true"
+        assert stanza["options"]["output"] != writer["options"]["output"]
+        for name in ("mf_local_mass_l", "hm_mf_local_mass_l"):
+            assert result.schedule.count(name) == 1
+
+    def test_stanza_with_cb_pairs_shares_writer_pairs(self, hadrons_params):
+        params = self._params(hadrons_params, meson_extra={"cb_pairs": True})
+        task = create_task("lma_new", params, "a", "20")
+        result = build_input_params(task.config)
+        assert result.modules["mf_local_mass_l"]["options"]["cbPairsLeft"] == (
+            "cbpairs_l_mass_l"
+        )
+        assert [n for n in result.modules if "cbpairs" in n] == [
+            "cbpairs_l_mass_l",
+            "cbpairs_r_mass_l",
+        ]
+        assert result.schedule.count("cbpairs_l_mass_l") == 1
+
+
+class TestMergeModules:
+    def test_identical_duplicate_is_allowed(self):
+        module = {"id": {"name": "stag_mass_l"}, "options": {"mass": "0.1"}}
+        modules = {"stag_mass_l": dict(module)}
+        _merge_modules(modules, {"stag_mass_l": dict(module)})
+        assert modules == {"stag_mass_l": module}
+
+    def test_conflicting_duplicate_raises(self):
+        modules = {"mf_local_mass_l": {"options": {"applyG5": "false"}}}
+        with pytest.raises(ValueError, match="'mf_local_mass_l'"):
+            _merge_modules(
+                modules, {"mf_local_mass_l": {"options": {"applyG5": "true"}}}
+            )
+        assert modules["mf_local_mass_l"]["options"]["applyG5"] == "false"
 
 
 class TestTwoStageCacheWorkflow:

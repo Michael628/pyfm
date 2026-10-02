@@ -13,6 +13,11 @@ from pyfm.tasks.register import register_task
 from . import gauge, meson, epack, meson_v2, highmode_v2
 from .highmode_v2.config import LMAHighModeConfig
 
+# Label given to an unkeyed ``tasks.high_modes`` entry. Non-empty so the
+# entry's cache writer (``{label}_mf_*``) never aliases the ``meson:``
+# stanza's unprefixed ``mf_*`` modules.
+DEFAULT_HM_LABEL = "hm"
+
 
 @dataclass(frozen=True)
 class LMANewConfig(CompositeConfig):
@@ -68,7 +73,8 @@ def normalize_params(params: t.Dict) -> t.Dict:
     legacy sibling task's convention). ``tasks.high_modes`` accepts a
     keyed mapping — ``entries: {label: {...}}`` plus any number of shared
     defaults layered under each entry — or, without the ``entries``
-    marker, a single unkeyed entry that gets label ``""`` (D5).
+    marker, a single unkeyed entry that gets label ``DEFAULT_HM_LABEL``
+    (``"hm"``) so its modules never alias the ``meson:`` stanza's.
     """
     incoming = params.get("_preprocessor", {})
     # Deep-copy: the route hooks below pop keys out of these nested blocks
@@ -97,7 +103,7 @@ def normalize_params(params: t.Dict) -> t.Dict:
             )
         entries = hm_raw.get("entries")
         if entries is None:
-            hm_entries = {"": hm_raw}
+            hm_entries = {DEFAULT_HM_LABEL: hm_raw}
         else:
             if not isinstance(entries, dict):
                 raise TypeError(
@@ -186,6 +192,23 @@ def route_params(params: t.Dict) -> t.Dict:
     } | dict(_preprocessor=child_preprocessor)
 
 
+def _merge_modules(modules: t.Dict, new: t.Dict) -> None:
+    """Merge ``new`` into ``modules`` in place, rejecting name collisions.
+
+    A name already present must map to an identical module — the benign
+    shared case (``stag_mass_*`` actions, per-mass ``cbpairs_*``). Any
+    other collision would silently replace the earlier module's options
+    (Hadrons runs one module per name), so it raises instead.
+    """
+    for name, module in new.items():
+        if name in modules and modules[name] != module:
+            raise ValueError(
+                f"Module name collision in hadrons_lma_new input: {name!r} is "
+                "emitted twice with different options."
+            )
+    modules |= new
+
+
 def build_input_params(config: LMANewConfig) -> HadronsInput:
     """Generate input parameters for the full LMA-new task.
 
@@ -205,17 +228,17 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
 
     # 1. Always start with base gauge
     base_gauge = gauge.build_base_gauge(config.gauge_config)
-    modules |= base_gauge.modules
+    _merge_modules(modules, base_gauge.modules)
     schedule += base_gauge.schedule
 
     # 2. EPACK section (required)
     epack_masses = config.epack_config.masses
     actions = gauge.build_action_modules(config.gauge_config, dp_masses=epack_masses)
-    modules |= actions.modules
+    _merge_modules(modules, actions.modules)
     schedule += actions.schedule
 
     epack_input = epack.build_input_params(config.epack_config)
-    modules |= epack_input.modules
+    _merge_modules(modules, epack_input.modules)
     schedule += epack_input.schedule
 
     # Handle epack mass shifts for meson and every high-mode entry.
@@ -226,19 +249,19 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         mass_shifts_input = epack.build_epack_mass_shifts(
             config.epack_config, epack_mass_shifts
         )
-        modules |= mass_shifts_input.modules
+        _merge_modules(modules, mass_shifts_input.modules)
         schedule += mass_shifts_input.schedule
 
     # 3. MESON section (presence-driven)
     if config.meson_config:
         meson_masses = [m for mc in config.meson_config for m in mc.masses]
         actions = gauge.build_action_modules(config.gauge_config, dp_masses=meson_masses)
-        modules |= actions.modules
+        _merge_modules(modules, actions.modules)
         schedule += actions.schedule
 
         for mc in config.meson_config:
             meson_input = meson_v2.build_input_params(mc)
-            modules |= meson_input.modules
+            _merge_modules(modules, meson_input.modules)
             schedule += meson_input.schedule
 
     # 4. HIGHMODE section, once per keyed entry. Per-entry sp masses stay
@@ -253,7 +276,7 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     ]
     if any(entry_sp_masses):
         sp_gauge = gauge.build_sp_gauge(config.gauge_config)
-        modules |= sp_gauge.modules
+        _merge_modules(modules, sp_gauge.modules)
         schedule += sp_gauge.schedule
 
     for hm, sp_masses in zip(config.high_modes_config.values(), entry_sp_masses):
@@ -263,11 +286,11 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         actions = gauge.build_action_modules(
             config.gauge_config, dp_masses=hm.masses, sp_masses=sp_masses
         )
-        modules |= actions.modules
+        _merge_modules(modules, actions.modules)
         schedule += actions.schedule
 
         hm_input = highmode_v2.build_input_params(hm)
-        modules |= hm_input.modules
+        _merge_modules(modules, hm_input.modules)
         schedule += hm_input.schedule
 
     # Deduplicate schedule: keep first occurrence of each module name

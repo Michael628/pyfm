@@ -22,9 +22,11 @@ def build_input_params(config: MesonConfig, prefix: str = "") -> HadronsInput:
 
     ``prefix`` label-prefixes the emitted ``mf_*``/``spintaste_mf_*``
     module names — used by ``hadrons_lma_new``'s per-entry cache writer
-    (ADR Decision 7): ``prefix=entry.module_name("")`` keeps the default
-    ``""``-label names byte-identical while keyed entries emit disjoint
-    writers.
+    (ADR Decision 7): ``prefix=entry.module_name("")`` keeps each entry's
+    writer disjoint from the ``meson:`` stanza and from other entries.
+    ``cbpairs_{l,r}_mass_*`` stay unprefixed: their options depend only
+    on the mass's eigenpack and action, so every caller shares one pair
+    per mass instead of allocating a duplicate CB-pair eigenpack.
     """
     modules = {}
     schedule = []
@@ -78,8 +80,8 @@ def build_input_params(config: MesonConfig, prefix: str = "") -> HadronsInput:
         if config.cb_pairs:
             if mass_label not in cb_pairs_names:
                 pair = (
-                    f"{prefix}cbpairs_l_mass_{mass_label}",
-                    f"{prefix}cbpairs_r_mass_{mass_label}",
+                    f"cbpairs_l_mass_{mass_label}",
+                    f"cbpairs_r_mass_{mass_label}",
                 )
                 action = config.action_name.format(mass=mass_label)
                 for cb_name in pair:
