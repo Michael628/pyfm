@@ -34,7 +34,7 @@ function grid_configure() {
    --with-hdf5=${PYFMTOPDIR}/deps/install${PYFM_SYSTEM_EXT} \
    CXX=icpx MPICXX=mpicxx \
    LDFLAGS="-fiopenmp -fsycl -fsycl-device-code-split=per_kernel -fsycl-targets=spir64 -Xs -device -Xs pvc \
-   -fsycl-device-lib=all -lze_loader -L${MKLROOT}/lib -qmkl=parallel -fsycl -lsycl -lnuma \
+   -lze_loader -L${MKLROOT}/lib -qmkl=parallel -fsycl -lsycl -lnuma \
    -L/opt/aurora/24.180.3/spack/unified/0.8.0/install/linux-sles15-x86_64/oneapi-2024.07.30.002/numactl-2.0.14-7v6edad/lib \
    -fPIC -fsycl-max-parallel-link-jobs=16 -fno-sycl-rdc" \
    CXXFLAGS="-fiopenmp -fsycl-unnamed-lambda -fsycl -Wno-tautological-compare -qmkl=parallel -fsycl -fno-exceptions \
