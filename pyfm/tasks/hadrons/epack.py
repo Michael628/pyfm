@@ -116,7 +116,7 @@ def create_outfile_catalog(config: EpackConfig) -> pd.DataFrame:
                 yield ({"eig_index": list(range(int(config.eigs)))}, config.eigdir)
             else:
                 yield {}, config.eig
-        if config.save_eigs:
+        if config.save_evals:
             yield {}, config.eval
 
     outfile_generator = generate_outfile_formatting()
@@ -131,7 +131,6 @@ def validate_config(config: EpackConfig) -> None:
 
     Validates:
     - If not loading, requires Lanczos parameters and action_name
-    - If mass_shifts are provided, requires low_modes_name
     """
     if not config.load:
         if config.lanczos is None:

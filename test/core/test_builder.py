@@ -656,3 +656,48 @@ class TestDictContainerComposite:
         )
         build_config(DictPartsConfig, params)
         assert received["c"] == {}
+
+
+# ---------------------------------------------------------------------------
+# Optional SIMPLE subconfig
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True)
+class OptionalBoxConfig(CompositeConfig):
+    """Composite config with an optional SIMPLE PartConfig child."""
+    part_config: PartConfig | None = None
+    label: str = ""
+
+
+class TestOptionalSimpleSubconfig:
+    def test_absent_optional_subconfig_is_none(self):
+        config = build_config(OptionalBoxConfig, make_params(_preprocessor={}))
+        assert config.part_config is None
+
+    def test_absent_preprocessor_optional_subconfig_is_none(self):
+        assert build_config(OptionalBoxConfig, make_params()).part_config is None
+
+    def test_present_optional_subconfig_is_built(self):
+        build_hooks.register(
+            PartConfig, route=lambda p: p | p.pop("_preprocessor", {})
+        )
+        params = make_params(_preprocessor={"part_config": {"color": "red"}})
+        config = build_config(OptionalBoxConfig, params)
+        assert isinstance(config.part_config, PartConfig)
+        assert config.part_config.color == "red"
+
+    def test_empty_slice_still_builds(self):
+        params = make_params(_preprocessor={"part_config": {}})
+        assert isinstance(
+            build_config(OptionalBoxConfig, params).part_config, PartConfig
+        )
+
+    def test_absent_optional_child_hooks_not_called(self):
+        called = []
+        build_hooks.register(PartConfig, route=lambda p: called.append(p) or p)
+        build_config(OptionalBoxConfig, make_params(_preprocessor={}))
+        assert called == []
+
+    def test_non_optional_subconfig_still_built_when_absent(self):
+        config = build_config(BoxConfig, make_params(_preprocessor={}))
+        assert isinstance(config.part_config, PartConfig)

@@ -1,4 +1,5 @@
 import copy
+import dataclasses
 import logging
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -136,7 +137,7 @@ def test_generate_grid_input_skips_complete_high_mode_sources(
     params["shared_params"]["overwrite"] = False
 
     task = create_task("lma", params, "a", "20")
-    catalog = highmode.create_outfile_catalog(task.config.high_modes_config)
+    catalog = highmode.create_outfile_catalog(task.config.high_modes_config[0])
     for filepath in catalog[catalog["tsource"] == "0"]["filepath"]:
         _write_file(filepath, 1)
 
@@ -348,27 +349,64 @@ def test_split_grid_preserves_schedule_ordering(
     assert split_schedule == plain_schedule
 
 
-# --- appended: composite bias integration (slice 4) ---
-class TestBiasComposite:
+# --- composite high_modes list integration ---
+class TestSkipHighModesCatalogGating:
+    """lmi.create_outfile_catalog/build_aggregator_params must exclude
+    high-modes correlator rows when skip_high_modes is set — otherwise a
+    skip_high_modes=True job's completion check (validator.has_good_output)
+    is permanently poisoned by rows for files nothing schedules. Shared fix
+    in lmi.py, exercised here via hadrons_lmi (the "lma" job fixture)."""
+
+    def test_create_outfile_catalog_excludes_high_modes_rows_when_skipped(
+        self, hadrons_params
+    ):
+        task = create_task("lma", hadrons_params, "a", "20")
+        full_catalog = task.handler.create_outfile_catalog(task.config)
+
+        skipped_config = dataclasses.replace(task.config, skip_high_modes=True)
+        skipped_catalog = task.handler.create_outfile_catalog(skipped_config)
+
+        hm_catalog = highmode.create_outfile_catalog(task.config.high_modes_config[0])
+        assert len(skipped_catalog) == len(full_catalog) - len(hm_catalog)
+
+    def test_build_aggregator_params_empty_when_skipped(self, hadrons_params):
+        task = create_task("lma", hadrons_params, "a", "20")
+        full_params = task.handler.build_aggregator_params(task.config, average=False)
+        assert full_params  # sanity: non-empty for the real fixture
+
+        skipped_config = dataclasses.replace(task.config, skip_high_modes=True)
+        skipped_params = task.handler.build_aggregator_params(
+            skipped_config, average=False
+        )
+        assert skipped_params == {}
+
+
+class TestHighModesListComposite:
     @staticmethod
-    def _set_bias(params, *, nbias=4, bias_seed="bias-seed", label="bias_modes",
-                  gamma=("pion_local",), mass=("l",), residual=None):
-        bias = params["job_setup"]["lma"]["tasks"].setdefault("bias", {})
-        bias["nbias"] = nbias
-        bias["bias_seed"] = bias_seed
-        bias["gamma"] = list(gamma)
-        bias["mass"] = list(mass)
+    def _append_bias_entry(
+        params, *, nbias=4, bias_seed="bias-seed", label="bias_modes",
+        gamma=("pion_local",), mass=("l",), residual=None
+    ):
+        tasks = params["job_setup"]["lma"]["tasks"]
+        main = tasks["high_modes"]
+        bias = {
+            "nbias": nbias,
+            "bias_seed": bias_seed,
+            "gamma": list(gamma),
+            "mass": list(mass),
+        }
         if label is not None:
             bias["high_modes"] = label
         if residual is not None:
             bias["residual"] = residual
+        tasks["high_modes"] = [main, bias]
         return params
 
-    def test_lma_with_bias_emits_block_modules_with_sampled_t0(
+    def test_lma_with_bias_entry_emits_block_modules_with_sampled_t0(
         self, tmp_path, monkeypatch, hadrons_params
     ):
         monkeypatch.chdir(tmp_path)
-        self._set_bias(hadrons_params)
+        self._append_bias_entry(hadrons_params)
 
         task = create_task("lma", hadrons_params, "a", "20")
         write_input_file("lma", hadrons_params, "a", "20")
@@ -381,14 +419,14 @@ class TestBiasComposite:
                 t0_by_name[name] = module.find("options/t0").text
 
         assert sorted(t0_by_name) == [f"noise_n{i}" for i in range(4)]
-        for i, t0 in enumerate(task.config.bias_config.tsource_range):
+        for i, t0 in enumerate(task.config.high_modes_config[1].tsource_range):
             assert t0_by_name[f"noise_n{i}"] == str(t0)
 
     def test_bias_outputs_use_bias_modes_filestem(
         self, tmp_path, monkeypatch, hadrons_params
     ):
         monkeypatch.chdir(tmp_path)
-        self._set_bias(hadrons_params)
+        self._append_bias_entry(hadrons_params)
 
         write_input_file("lma", hadrons_params, "a", "20")
 
@@ -400,14 +438,17 @@ class TestBiasComposite:
         self, tmp_path, monkeypatch, caplog, hadrons_params
     ):
         monkeypatch.chdir(tmp_path)
-        self._set_bias(hadrons_params, label=None)
+        self._append_bias_entry(hadrons_params, label=None)
 
         with caplog.at_level(logging.WARNING):
             write_input_file("lma", hadrons_params, "a", "20")
 
-        assert "bias_modes" in caplog.text
+        # The generalized pairwise warning fires for the second entry (it
+        # shares the default files label with the first); the remedy text
+        # names the bias_modes rebind.
+        assert "high_modes_config entry 1" in caplog.text
 
-    def test_empty_bias_block_changes_nothing(
+    def test_empty_second_entry_changes_nothing(
         self, tmp_path, monkeypatch, hadrons_params
     ):
         monkeypatch.chdir(tmp_path)
@@ -415,29 +456,55 @@ class TestBiasComposite:
         plain_task = create_task("lma", hadrons_params, "a", "20")
         plain_sched = plain_task.handler.build_input_params(plain_task.config).schedule
 
-        biased_params = copy.deepcopy(hadrons_params)
-        biased_params["job_setup"]["lma"]["tasks"]["bias"] = {}
-        biased_task = create_task("lma", biased_params, "a", "20")
-        biased_sched = biased_task.handler.build_input_params(biased_task.config).schedule
+        doubled_params = copy.deepcopy(hadrons_params)
+        tasks = doubled_params["job_setup"]["lma"]["tasks"]
+        tasks["high_modes"] = [tasks["high_modes"], {}]
+        doubled_task = create_task("lma", doubled_params, "a", "20")
+        doubled_sched = doubled_task.handler.build_input_params(
+            doubled_task.config
+        ).schedule
 
-        assert biased_task.config.skip_bias is False  # key present
-        assert plain_sched == biased_sched
+        assert len(doubled_task.config.high_modes_config) == 2
+        assert plain_sched == doubled_sched
 
-    def test_bias_absent_sets_skip_flag(self, hadrons_params):
+    def test_single_dict_coerced_to_list(self, hadrons_params):
+        task = create_task("lma", hadrons_params, "a", "20")
+        assert isinstance(task.config.high_modes_config, list)
+        assert len(task.config.high_modes_config) == 1
+        # Byte-identity of the single-entry XML is pinned by the golden tests.
+
+    def test_absent_or_empty_high_modes_sets_skip_flag(self, hadrons_params):
         task = create_task("lma", hadrons_params)
-        assert task.config.skip_bias is True
+        assert task.config.skip_high_modes is False  # fixture has high_modes
+
+        absent = copy.deepcopy(hadrons_params)
+        del absent["job_setup"]["lma"]["tasks"]["high_modes"]
+        task = create_task("lma", absent)
+        assert task.config.skip_high_modes is True
+        assert task.config.high_modes_config == []
+
+        empty = copy.deepcopy(hadrons_params)
+        empty["job_setup"]["lma"]["tasks"]["high_modes"] = []
+        task = create_task("lma", empty)
+        assert task.config.skip_high_modes is True
+        assert task.config.high_modes_config == []
+
+    def test_tasks_bias_key_fails_loudly(self, hadrons_params):
+        hadrons_params["job_setup"]["lma"]["tasks"]["bias"] = {"nbias": 4}
+        with pytest.raises(KeyError, match="bias_config"):
+            create_task("lma", hadrons_params)
 
     def test_aggregator_merges_bias_family(self, hadrons_params):
-        self._set_bias(hadrons_params)
+        self._append_bias_entry(hadrons_params)
         task = create_task("lma", hadrons_params)
         params = task.handler.build_aggregator_params(task.config, average=False)
 
         run = params["run"]
-        assert any(k.startswith("bias_") for k in run)
-        assert any(not k.startswith("bias_") for k in run)
+        assert any(k.startswith("hm1_") for k in run)
+        assert any(not k.startswith("hm") for k in run)  # entry 0 unprefixed
         for key in run:
             assert key in params
-        bias_key = next(k for k in run if k.startswith("bias_"))
+        bias_key = next(k for k in run if k.startswith("hm1_"))
         assert "correlators_bias" in params[bias_key]["load_files"]["filestem"]
 
     def test_aggregation_path_catalog_enumerates_all_blocks(self, hadrons_params):
@@ -445,16 +512,15 @@ class TestBiasComposite:
         # the seed composes empty suffixes there; the catalog axis (a pure
         # function of nbias) must still enumerate every block — the design's
         # coherence invariant.
-        self._set_bias(hadrons_params)
+        self._append_bias_entry(hadrons_params)
         task = create_task("lma", hadrons_params)
 
-        assert task.config.bias_config.bias_seed.endswith("__")
-        assert task.config.bias_config.source_axis == [f"n{i}" for i in range(4)]
-        # (create_outfile_catalog call dropped: pre-existing {series}/{cfg}
-        # retention makes it raise on series/cfg-less builds)
+        bias = task.config.high_modes_config[1]
+        assert bias.bias_seed.endswith("__")
+        assert bias.source_axis == [f"n{i}" for i in range(4)]
 
     def test_epack_mass_shifts_include_bias_masses(self, hadrons_params):
-        self._set_bias(hadrons_params, mass=("d",))
+        self._append_bias_entry(hadrons_params, mass=("d",))
         task = create_task("lma", hadrons_params, "a", "20")
         result = task.handler.build_input_params(task.config)
 
@@ -462,33 +528,90 @@ class TestBiasComposite:
         # on the epack config (shared route default); every bias mass label
         # must join the shifted set.
         epack_cfg = task.config.epack_config
-        for mass_label in task.config.bias_config.masses:
+        for mass_label in task.config.high_modes_config[1].masses:
             assert epack_cfg.low_modes_name.format(mass=mass_label) in result.modules
 
 
-# --- appended: grid routing-safety (slice 5) ---
-def test_grid_lma_builds_with_bias_task_present(tmp_path, monkeypatch, grid_params):
-    """grid_lma shares lmi routing; a tasks.bias block routes but is silently unused.
-
-    GridLMAConfig has no bias_config field: the routed slice is dropped, the
-    derived skip_bias flag becomes a harmless formatting entry, and the shared
-    handlers (catalog/validate/aggregator) are getattr-guarded. The build must
-    succeed and the Grid XML must contain no bias content.
-    """
+# --- grid list-shape routing safety ---
+def test_grid_lma_accepts_single_dict_high_modes(tmp_path, monkeypatch, grid_params):
+    """Single-dict tasks.high_modes still builds on Grid (coerced to [dict])."""
     monkeypatch.chdir(tmp_path)
-    params = copy.deepcopy(grid_params)
-    params["job_setup"]["lma"]["tasks"]["bias"] = {
-        "nbias": 4,
-        "bias_seed": "grid-bias",
-        "gamma": ["pion_local"],
-        "mass": ["l"],
-    }
 
-    task = create_task("lma", params, "a", "20")  # must not raise
-    assert not hasattr(task.config, "skip_bias")  # GridLMAConfig has no bias field
+    task = create_task("lma", grid_params, "a", "20")
+    assert isinstance(task.config.high_modes_config, list)
+    assert len(task.config.high_modes_config) == 1
 
-    write_input_file("lma", params, "a", "20")
+    write_input_file("lma", grid_params, "a", "20")
+    assert (tmp_path / "in" / "grid-full-lma-a.20.xml").exists()
 
-    root = ET.parse(tmp_path / "in" / "grid-full-lma-a.20.xml").getroot()
-    seeds = [e.text for e in root.findall(".//sources/elem/seed")]
-    assert seeds and not any("noise_n" in s for s in seeds)
+
+def test_grid_lma_rejects_multiple_high_mode_entries(grid_params):
+    tasks = grid_params["job_setup"]["lma"]["tasks"]
+    tasks["high_modes"] = [tasks["high_modes"], dict(tasks["high_modes"])]
+    with pytest.raises(ValueError, match="at most one"):
+        create_task("lma", grid_params, "a", "20")
+
+
+def test_grid_lma_tasks_bias_key_fails_loudly(grid_params):
+    grid_params["job_setup"]["lma"]["tasks"]["bias"] = {"nbias": 4}
+    with pytest.raises(KeyError, match="bias_config"):
+        create_task("lma", grid_params, "a", "20")
+
+
+# --- appended: TIERED end-to-end (phase 5) ---
+def test_generate_high_modes_tiered_input(tmp_path, monkeypatch, hadrons_params):
+    """TIERED: ranLL_ama cross contractions and dsets; no HH (ama) contraction
+    modules; ama propagators persist (the LH contraction consumes them)."""
+    monkeypatch.chdir(tmp_path)
+    hadrons_params["job_setup"]["high_modes"]["tasks"]["high_modes"][
+        "solve_cross_terms"
+    ] = "tiered"
+
+    write_input_file("high_modes", hadrons_params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+    contractions = {n for n in modules if n.startswith("corr_")}
+    cross = {n for n in contractions if "ama" in n and "ranLL" in n}
+
+    assert cross, "expected ranLL_ama cross contractions under TIERED"
+    assert all(n.startswith("corr_ranLL_ama_") for n in cross)
+    assert not any(n.startswith("corr_ama_") for n in contractions), "HH dropped"
+    assert not any("ama_ranLL" in n for n in contractions), "reverse orientation dropped"
+    assert any(n.startswith("quark_ama_") for n in modules), "ama propagators persist"
+
+    xml = (tmp_path / "in" / "high-modes-a.20.xml").read_text()
+    # module names and output filestems both name the ranLL_ama dset
+    assert "ranLL_ama" in xml
+
+
+def test_generate_high_modes_tiered_skips_dead_cg_solves(
+    tmp_path, monkeypatch, hadrons_params
+):
+    """TIERED with a non-pion op (the fixture's high_modes step lists
+    pion_local + vec_local): the op-gamma ama propagators have zero
+    contraction consumers and are not emitted; the contract-gamma ama
+    propagators persist (consumed by ranLL_ama), precon-chained to ranLL."""
+    monkeypatch.chdir(tmp_path)
+    params = copy.deepcopy(hadrons_params)  # sibling-test convention
+    params["job_setup"]["high_modes"]["tasks"]["high_modes"][
+        "solve_cross_terms"
+    ] = "tiered"
+
+    write_input_file("high_modes", params, "a", "20")
+
+    modules = _modules_by_name(tmp_path / "in" / "high-modes-a.20.xml")
+
+    # Dead solves gone: the vec_local op-gamma CG propagator has no consumer
+    # under TIERED (the LH cross consumes only the PION_LOCAL antiquark side).
+    assert not any(n.startswith("quark_ama_vec_local") for n in modules)
+    # Live propagators persist.
+    assert any(n.startswith("quark_ama_pion_local") for n in modules)
+    assert any(n.startswith("corr_ranLL_ama_") for n in modules)
+
+    # Precon chain: the ranLL contract-gamma solve precedes its ama consumer.
+    # [1:] skips the module-count header line (golden-comparison convention).
+    sched = (tmp_path / "schedules" / "high-modes-a.20.sched").read_text().splitlines()[1:]
+    assert (
+        sched.index("quark_ranLL_pion_local_mass_l_t0")
+        < sched.index("quark_ama_pion_local_mass_l_t0")
+    )

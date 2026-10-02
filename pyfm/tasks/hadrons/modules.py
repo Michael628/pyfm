@@ -191,8 +191,244 @@ def epack_modify(name: str, eigen_pack: str, mass: str) -> t.Dict:
     }
 
 
-def spin_taste(name: str) -> t.Dict:
-    return {"id": {"name": name, "type": "MFermion::SpinTaste"}}
+def eigen_pack_cb_pairs(name: str, eigen_pack: str, action: str) -> t.Dict:
+    """Wrap ``MUtilities::EigenPackCBPairs`` — on-demand CB pair source over a
+    checkerboarded eigenpack (odd partner filled from Meooe on demand)."""
+    return {
+        "id": {"name": name, "type": "MUtilities::EigenPackCBPairs"},
+        "options": {"action": action, "eigenPack": eigen_pack},
+    }
+
+
+def spin_taste(
+    name: str, gammas: str, gauge: str, apply_g5: str, labels: str = ""
+) -> t.Dict:
+    """Wrap ``MFermion::SpinTaste``.
+
+    Publishes a ``std::vector<StagGamma>`` under ``name`` and a companion
+    label-keyed ``TGammaMap<StagGamma>`` under ``<name>_map``, consumed by
+    the canonical (non-Legacy) ``quark_prop_v2``/``prop_contract_v2``/
+    ``meson_field_v2``/``lma_meson_field_prop_v2``. ``labels`` is an
+    optional whitespace-separated list, positionally parallel to the
+    parsed ``gammas`` string; "" means every gamma publishes under its own
+    default (raw, pre-``apply_g5``-fold) label. ``apply_g5`` only changes
+    the physics folded into each operator, never its default label
+    (``StagGamma::getLabelName()`` returns the raw pre-fold pair) — so an
+    override is needed only when a downstream consumer must find this
+    module's entries under a *different* module's labels (the axial-gamma
+    reuse case; see the design's SpinTaste ``labels`` wiring decision).
+    """
+    return {
+        "id": {"name": name, "type": "MFermion::SpinTaste"},
+        "options": {
+            "spinTaste": {"gammas": gammas, "gauge": gauge, "applyG5": apply_g5},
+            "labels": labels,
+        },
+    }
+
+
+def gamma_map_element(name: str, map: str, label: str) -> t.Dict:
+    """Wrap ``MUtilities::GammaMapElement``.
+
+    Bridges one label-keyed ``TGammaMap`` element (``map``, e.g. a
+    ``quark_prop_v2`` output) onto a bare environment object under
+    ``name`` — for feeding a single-gamma propagator (``PION_LOCAL``/
+    ``IDENTITY`` antiquarks) to ``prop_contract_v2``'s ``sink`` as a bare
+    object. ``Meson::checkKeys`` only validates ``sinkGammas``' key set
+    against a param that is ITSELF a ``TGammaMap``; a bare object is used
+    unchanged for every ``sinkGammas`` gamma, skipping that check
+    entirely — the antiquark propagator is single-valued regardless of
+    which sink-gamma component is being contracted, so this is exactly
+    the semantics required.
+    """
+    return {
+        "id": {"name": name, "type": "MUtilities::GammaMapElement"},
+        "options": {"map": map, "label": label},
+    }
+
+
+def quark_prop_v2(
+    name: str,
+    source: str,
+    solver: str,
+    guess: str,
+    gammas: str,
+    source_label: str = "",
+    subgrid: int | None = None,
+) -> t.Dict:
+    """Wrap ``MFermion::StagGaugeProp`` (canonical, SpinTaste-module-driven).
+
+    ``gammas`` names an ``MFermion::SpinTaste`` module; this module
+    consumes that module's ``_map`` companion output, never the bare
+    vector — empty is a setup-time error on the HadronsMILC side (use
+    ``quark_prop`` targeting ``StagGaugePropLegacy`` for develop-schema
+    output). ``source_label``: when ``source`` is a label-keyed map, the
+    element key used for every gamma; "" means each gamma reads its own
+    label's element.
+    """
+    module = {
+        "id": {
+            "name": name,
+            "type": "MFermion::StagGaugeProp",
+        },
+        "options": {
+            "source": source,
+            "gammas": gammas,
+            "solver": solver,
+            "guess": guess,
+            "sourceLabel": source_label,
+        },
+    }
+    if subgrid is not None:
+        module["subgrid"] = subgrid
+    return module
+
+
+def prop_contract_v2(
+    name: str,
+    source: str,
+    sink: str,
+    sink_fn: str,
+    source_shift: str,
+    sink_gammas: str,
+    output: str,
+    subgrid: int | None = None,
+) -> t.Dict:
+    """Wrap ``MContraction::StagMeson`` (canonical, SpinTaste-module-driven).
+
+    ``sink_gammas`` names an ``MFermion::SpinTaste`` module; this module
+    consumes its ``_map`` output as the loop driver and single source of
+    truth for key matching against ``source``/``sink`` (each independently
+    may be a bare object, used unchanged for every gamma, or a label-keyed
+    map, validated present at setup). No ``source_gammas``/inline
+    ``sinkSpinTaste`` — those moved into the referenced SpinTaste module
+    (use ``prop_contract`` targeting ``StagMesonLegacy`` for develop-schema
+    output).
+    """
+    module = {
+        "id": {
+            "name": name,
+            "type": "MContraction::StagMeson",
+        },
+        "options": {
+            "source": source,
+            "sink": sink,
+            "sinkFunc": sink_fn,
+            "sourceShift": source_shift,
+            "sinkGammas": sink_gammas,
+            "output": output,
+        },
+    }
+    if subgrid is not None:
+        module["subgrid"] = subgrid
+    return module
+
+
+def meson_field_v2(
+    name: str,
+    block: str,
+    gammas: str,
+    low_modes: str,
+    left: str,
+    right: str,
+    output: str,
+    cb_pairs_left: str = "",
+    cb_pairs_right: str = "",
+) -> t.Dict:
+    """Wrap ``MContraction::StagA2AMesonField`` (canonical stencil worker).
+
+    ``gammas`` names an ``MFermion::SpinTaste`` module publishing
+    ``std::vector<StagGamma>`` (gauge bound by that module for every
+    displacing operator) — no ``action``/inline ``spinTaste`` fields here
+    (dropped from the canonical Par struct entirely; use ``meson_field``
+    targeting ``StagA2AMesonFieldLegacy`` for develop-schema output).
+    ``cb_pairs_left``/``cb_pairs_right`` naming two distinct
+    ``MUtilities::EigenPackCBPairs`` instances enables on-demand
+    checkerboard pairing — injected only when set; the C++ setup requires
+    both set together. Momentum is always zero (no current usage requests
+    finite momentum, and the canonical stencil worker rejects it outright).
+    """
+    if bool(cb_pairs_left) != bool(cb_pairs_right):
+        raise ValueError(
+            "cbPairsLeft and cbPairsRight must be set together (two distinct "
+            "MUtilities::EigenPackCBPairs instances); got "
+            f"{cb_pairs_left!r} / {cb_pairs_right!r}."
+        )
+    options = {
+        "block": block,
+        "mom": {
+            "elem": "0 0 0",
+        },
+        "gammas": gammas,
+        "lowModes": low_modes,
+        "left": left,
+        "right": right,
+        "output": output,
+    }
+    if cb_pairs_left:
+        options["cbPairsLeft"] = cb_pairs_left
+        options["cbPairsRight"] = cb_pairs_right
+    return {
+        "id": {
+            "name": name,
+            "type": "MContraction::StagA2AMesonField",
+        },
+        "options": options,
+    }
+
+
+def lma_meson_field_prop_v2(
+    name: str,
+    action: str,
+    low_modes: str,
+    meson_field: str,
+    gammas: str,
+    labels: str,
+    ta: str,
+    tb: str,
+    tstep: str,
+    noise_index: str = "0",
+    noise: str = "",
+    n_noise: str = "1",
+) -> t.Dict:
+    """Wrap ``MFermion::StagLMAMesonFieldProp`` (canonical, no Legacy sibling).
+
+    ``gammas`` names an ``MFermion::SpinTaste`` module; this module
+    consumes its ``_map`` output for per-label ``StagGamma`` lookup, never
+    the bare vector. ``labels`` is REQUIRED — a whitespace-separated list
+    positionally parallel ONLY to ``meson_field`` (``labels[i]`` <->
+    ``meson_field[i]``); each label is looked up by key in the ``gammas``
+    module's ``_map`` at setup (fatal if missing). ``meson_field`` is a
+    whitespace-separated list of ``MIO::LoadMesonField`` module names, one
+    per label. Outputs are one ``TGammaMap`` per ``t`` in ``[tA, tB]``
+    stride ``tStep``, named ``<name>_t<t>`` — or just ``<name>`` when
+    exactly one timeslice is produced (``tA=tB``, the per-slice form
+    ``hadrons_lma_new`` emits). Gamma-free: the label is the map key. No develop-schema equivalent exists — this module is
+    feature-branch-only (absent from ``develop`` entirely).
+    """
+    return {
+        "id": {
+            "name": name,
+            "type": "MFermion::StagLMAMesonFieldProp",
+        },
+        "options": {
+            "action": action,
+            "lowModes": low_modes,
+            "mesonField": meson_field,
+            "gammas": gammas,
+            "labels": labels,
+            "noiseIndex": noise_index,
+            "nNoise": n_noise,
+            "tA": ta,
+            "tB": tb,
+            "tStep": tstep,
+            "eigStart": "0",
+            "nEigs": "-1",
+            "negFirst": "",
+            "pairScale": "",
+            "noise": noise,
+        },
+    }
 
 
 def sink(name: str, mom: str) -> t.Dict:
@@ -305,7 +541,7 @@ def quark_prop(
     module = {
         "id": {
             "name": name,
-            "type": "MFermion::StagGaugeProp",
+            "type": "MFermion::StagGaugePropLegacy",
         },
         "options": {
             "source": source,
@@ -335,7 +571,7 @@ def prop_contract(
     module = {
         "id": {
             "name": name,
-            "type": "MContraction::StagMeson",
+            "type": "MContraction::StagMesonLegacy",
         },
         "options": {
             "source": source,
@@ -367,23 +603,144 @@ def meson_field(
     right: str,
     output: str,
     apply_g5: str,
+    cb_pairs_left: str = "",
+    cb_pairs_right: str = "",
 ) -> t.Dict:
+    """Wrap ``MContraction::StagA2AMesonFieldLegacy``.
+
+    With ``cb_pairs_left``/``cb_pairs_right`` naming two distinct
+    ``MUtilities::EigenPackCBPairs`` instances, the eigenvector rows come from
+    on-demand checkerboard pairs (HadronsMILC 4d96243) — the options are
+    injected only when set, keeping the legacy emission byte-identical. The
+    C++ setup requires both set together (MesonField.hpp).
+    """
+    if bool(cb_pairs_left) != bool(cb_pairs_right):
+        raise ValueError(
+            "cbPairsLeft and cbPairsRight must be set together (two distinct "
+            "MUtilities::EigenPackCBPairs instances); got "
+            f"{cb_pairs_left!r} / {cb_pairs_right!r}."
+        )
+    options = {
+        "action": action,
+        "block": block,
+        "mom": {
+            "elem": "0 0 0",
+        },
+        "spinTaste": {"gammas": gammas, "gauge": gauge, "applyG5": apply_g5},
+        "lowModes": low_modes,
+        "left": left,
+        "right": right,
+        "output": output,
+    }
+    if cb_pairs_left:
+        options["cbPairsLeft"] = cb_pairs_left
+        options["cbPairsRight"] = cb_pairs_right
     return {
         "id": {
             "name": name,
-            "type": "MContraction::StagA2AMesonField",
+            "type": "MContraction::StagA2AMesonFieldLegacy",
+        },
+        "options": options,
+    }
+
+
+def eigen_pack_cb_pairs(name: str, eigen_pack: str, action: str) -> t.Dict:
+    """Wrap ``MUtilities::EigenPackCBPairs`` — on-demand CB pair source over a
+    checkerboarded eigenpack (odd partner filled from Meooe on demand)."""
+    return {
+        "id": {"name": name, "type": "MUtilities::EigenPackCBPairs"},
+        "options": {"action": action, "eigenPack": eigen_pack},
+    }
+
+
+def load_meson_field(
+    name: str, file: str, dataset: str, side: str = "", low_modes: str = ""
+) -> t.Dict:
+    """Wrap ``MIO::LoadMesonField`` — read back a StagA2AMesonField file.
+
+    ``file`` may embed the ``@traj@`` token (replaced with the trajectory
+    counter at execute time; passes through pyfm's ``{...}`` format strings
+    untouched). ``side``/``low_modes`` stay empty for the solver-input use.
+    """
+    return {
+        "id": {"name": name, "type": "MIO::LoadMesonField"},
+        "options": {
+            "file": file,
+            "dataset": dataset,
+            "side": side,
+            "lowModes": low_modes,
+        },
+    }
+
+
+# The dead file-driven LMA solver wrapper formerly defined at this
+# position was removed with the load-mode chain swap: HadronsMILC deleted
+# that module type in dacc3fa, and lma_meson_field_prop below is its
+# eager-producer replacement.
+
+
+def lma_meson_field_prop(
+    name: str,
+    action: str,
+    low_modes: str,
+    meson_field: str,
+    ta: str,
+    tb: str,
+    tstep: str,
+    gammas: str,
+    apply_g5: str,
+    noise_index: str = "0",
+    noise: str = "",
+    n_noise: str = "1",
+) -> t.Dict:
+    """Wrap ``MFermion::StagLMAMesonFieldProp`` — eager low-mode producer.
+
+    Reconstructs one ``PropagatorField`` per output name from precomputed
+    meson-field files (the GaugeProp-style replacement of the former
+    ``MSolver::StagLMAMesonField`` family, HadronsMILC dacc3fa): outputs
+    are ``<name>_t<t>`` for a single gamma (or empty ``gammas``) and
+    ``<name>_t<t>_<spin>_<taste>`` for multiple gammas, one per ``t`` in
+    ``[tA, tB]`` stride ``tStep`` — the raw gamma labels (independent of
+    ``applyG5``) name the per-gamma outputs, exactly GaugeProp's
+    per-gamma guess grammar. ``meson_field`` is a whitespace-separated
+    parallel list of ``MIO::LoadMesonField`` module names, one per gamma
+    in raw order (each loader must hold the file produced under the
+    applyG5-conjugated gamma; miswiring fails at the execute-time
+    metadata cross-check). ``gauge`` stays empty — the module applies no
+    spin-taste operator (fatal otherwise). ``noise`` names a
+    ``<fvnoise>_vec`` object to enable the pairing/normalization
+    self-check (run once per noise window). ``noise_index``/``n_noise``
+    select the noise windows (HadronsMILC 8ea54f1): the module
+    reconstructs ``noise_index..noise_index+n_noise-1``, window n
+    reading three adjacent table columns (``noise_index`` counts noises,
+    not columns); the execute-time coverage check needs
+    ``(noise_index + n_noise) * 3`` columns. ``n_noise == 1`` publishes
+    a scalar ``PropagatorField`` per output name (legacy grammar);
+    ``n_noise > 1`` publishes a noise-major
+    ``std::vector<PropagatorField>`` — the element-wise vector contract
+    ``MContraction::Meson`` averages over, and the per-noise guess
+    alignment GaugeProp's vector overload provides.
+    """
+    return {
+        "id": {
+            "name": name,
+            "type": "MFermion::StagLMAMesonFieldProp",
         },
         "options": {
             "action": action,
-            "block": block,
-            "mom": {
-                "elem": "0 0 0",
-            },
-            "spinTaste": {"gammas": gammas, "gauge": gauge, "applyG5": apply_g5},
             "lowModes": low_modes,
-            "left": left,
-            "right": right,
-            "output": output,
+            "mesonField": meson_field,
+            "spinTaste": {"gammas": gammas, "gauge": "", "applyG5": apply_g5},
+            "noiseIndex": noise_index,
+            "nNoise": n_noise,
+            "tA": ta,
+            "tB": tb,
+            "tStep": tstep,
+            "eigStart": "0",
+            "nEigs": "-1",
+            "negFirst": "",
+            "pairScale": "",
+            "noise": noise,
         },
     }
 
