@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from pyfm import version
 from pyfm.nanny.taskbuilder import create_task
 from pyfm.nanny import write_input_file
 from pyfm.tasks.hadrons import highmode, meson
@@ -92,6 +93,32 @@ def test_generate_grid_input(
         tmp_path / "in" / f"{io_prefix}-a.20.xml",
         tasks_data_dir / "in" / f"test-{io_prefix}-a.20.xml",
     )
+
+
+def test_hadrons_input_has_provenance(tmp_path, monkeypatch, hadrons_params):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(version, "git_sha", lambda: "abc123")
+
+    write_input_file("meson", hadrons_params, "a", "20")
+
+    root = ET.parse(tmp_path / "in" / "meson-a.20.xml").getroot()
+    prov = root.find("provenance")
+    assert prov is not None, "hadrons XML must carry <grid><provenance>"
+    leaves = {child.tag: child.text for child in prov}
+    assert set(leaves) == {"pyfmVersion", "pyfmSha", "hadronsMilcCompat", "generated"}
+    assert leaves["pyfmVersion"] == version.__version__
+    assert leaves["pyfmSha"] == "abc123"
+    assert leaves["hadronsMilcCompat"] == version.HADRONS_MILC_COMPAT
+    assert leaves["generated"].endswith("Z")
+
+
+def test_grid_input_has_no_provenance(tmp_path, monkeypatch, grid_params):
+    monkeypatch.chdir(tmp_path)
+
+    write_input_file("lma", grid_params, "a", "20")
+
+    root = ET.parse(tmp_path / "in" / "grid-full-lma-a.20.xml").getroot()
+    assert root.find("provenance") is None
 
 
 def _write_file(path, size):

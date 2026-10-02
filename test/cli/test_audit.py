@@ -196,3 +196,57 @@ def test_audit_benchmark_requires_existing_log(runner):
 
     assert result.exit_code != 0
     assert "does not exist" in result.output
+
+
+_MSG = "Hadrons : Message : 0.01 s : "
+
+
+def _write_log(tmp_path, *lines):
+    log = tmp_path / "hadrons.out"
+    log.write_text("\n".join(lines) + "\n")
+    return str(log)
+
+
+def _provenance_line(compat):
+    return (
+        _MSG + "Provenance pyfmVersion=0.2.0 pyfmSha=abc123 "
+        f"hadronsMilcCompat={compat} generated=2026-10-02T04:00:00Z"
+    )
+
+
+def test_audit_version_match(tmp_path, runner):
+    log = _write_log(
+        tmp_path,
+        _MSG + "HadronsMILC version=0.2.1 git=v0.2.1",
+        _provenance_line("0.2"),
+    )
+    result = runner.invoke(cli, ["audit", "version", log])
+    assert result.exit_code == 0, result.output
+    assert "hadronsMilcVersion: 0.2.1" in result.output
+    assert "provenance.pyfmSha: abc123" in result.output
+    assert "compat: match (expected 0.2, binary 0.2.1)" in result.output
+
+
+def test_audit_version_mismatch_exits_nonzero(tmp_path, runner):
+    log = _write_log(
+        tmp_path,
+        _MSG + "HadronsMILC version=0.2.1 git=v0.2.1",
+        _provenance_line("0.3"),
+    )
+    result = runner.invoke(cli, ["audit", "version", log])
+    assert result.exit_code == 1, result.output
+    assert "compat: mismatch (expected 0.3, binary 0.2.1)" in result.output
+
+
+def test_audit_version_without_banner_is_unknown(tmp_path, runner):
+    log = _write_log(tmp_path, "Grid : Message : Current Grid git commit hash=abc: clean")
+    result = runner.invoke(cli, ["audit", "version", log])
+    assert result.exit_code == 0, result.output
+    assert "hadronsMilcVersion: unknown" in result.output
+    assert "compat: unknown" in result.output
+
+
+def test_audit_version_requires_existing_file(runner):
+    result = runner.invoke(cli, ["audit", "version", "missing.out"])
+    assert result.exit_code != 0
+    assert "does not exist" in result.output

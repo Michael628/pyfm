@@ -24,6 +24,14 @@ pyfm completion --shell fish > ~/.config/fish/completions/pyfm.fish
 
 The script assumes `pyfm` is on your `PATH`. Use `--prog` if the executable has a different name (e.g. an alias).
 
+## Versioning
+
+pyfm shares MAJOR.MINOR with HadronsMILC: pyfm `0.2.*` targets HadronsMILC
+`0.2.*`. `pyfm --version` prints both. Generated Hadrons XML records the pyfm
+version and SHA in `<grid><provenance>`, and `pyfm audit version <run log>`
+checks a finished run's binary against it. See [CHANGELOG.md](CHANGELOG.md)
+for the release history and the release/tagging process.
+
 ## Workspace setup
 
 ```bash

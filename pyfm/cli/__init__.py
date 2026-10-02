@@ -2,6 +2,7 @@ import click
 
 from pyfm.cli._lazy import LazyGroup
 from pyfm.cli.completion import completion
+from pyfm.version import HADRONS_MILC_COMPAT, __version__
 
 
 @click.group(cls=LazyGroup, lazy_subcommands={
@@ -13,6 +14,11 @@ from pyfm.cli.completion import completion
     "build": "pyfm.cli.systems:build",
     "workspace": "pyfm.cli.systems:workspace",
 })
+@click.version_option(
+    version=__version__,
+    prog_name="pyfm",
+    message=f"%(prog)s, version %(version)s (HadronsMILC {HADRONS_MILC_COMPAT})",
+)
 def cli():
     """PyFM - lattice QCD workflow toolkit."""
     pass

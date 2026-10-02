@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pyfm"
-version = "0.1.0"
+version = "0.2.0"
 authors = [
     {name = "Michael Lynch", email = "michaellynch628@gmail.com"},
 ]

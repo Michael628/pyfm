@@ -5,6 +5,7 @@ import click
 from pyfm import utils
 from pyfm.performance import analyze_file, benchmark_lmi_performance
 from pyfm.nanny.validator import compare_task_outputs
+from pyfm.version import parse_run_log
 from pyfm.cli._options import job_option, param_file_option
 
 
@@ -107,4 +108,41 @@ def output(ctx, param_file, jobs, series, cfg, rtol, atol):
         click.echo(f"All {len(compared)} compared file(s) within tolerance.")
     else:
         click.echo(f"{n_out} of {len(compared)} compared file(s) OUTSIDE tolerance.")
+        ctx.exit(1)
+
+
+@audit.command(name="version")
+@click.argument(
+    "log_file", type=click.Path(exists=True, dir_okay=False, readable=True)
+)
+@click.pass_context
+def version_check(ctx, log_file):
+    """Check the HadronsMILC version reported in a Hadrons run LOG_FILE.
+
+    Compares the binary's MAJOR.MINOR with the hadronsMilcCompat recorded in the
+    log's Provenance line (falling back to this pyfm's HADRONS_MILC_COMPAT).
+    Exits non-zero on a mismatch; logs from binaries without a version banner
+    report "unknown" and exit zero.
+    """
+    with open(log_file, errors="replace") as f:
+        info = parse_run_log(f.read())
+
+    fields = [
+        ("hadronsMilcVersion", info.hadrons_milc_version),
+        ("hadronsMilcGit", info.hadrons_milc_git),
+        ("gridGit", info.grid_git),
+        ("hadronsGit", info.hadrons_git),
+        ("gridMilcVersion", info.grid_milc_version),
+        ("dependencyPins", info.dependency_pins),
+    ]
+    for key, value in fields:
+        click.echo(f"{key}: {value or 'unknown'}")
+    if info.provenance is not None:
+        for key, value in info.provenance.items():
+            click.echo(f"provenance.{key}: {value or 'unknown'}")
+
+    status = info.compat_status()
+    binary = info.hadrons_milc_version or "unknown"
+    click.echo(f"compat: {status} (expected {info.expected_compat()}, binary {binary})")
+    if status == "mismatch":
         ctx.exit(1)

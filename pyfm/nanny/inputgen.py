@@ -3,6 +3,7 @@ import yaml
 
 from pyfm.nanny.taskbuilder import create_task
 from pyfm import utils
+from pyfm import version
 from pyfm.domain import Outfile
 from pyfm.tasks.hadrons import hadmods
 from pyfm.tasks.grid import gridmods
@@ -49,6 +50,7 @@ def write_input_file(job_step: str, yaml_data: t.Dict, series: str, cfg: str) ->
         )
         modules = list(hadrons_input.modules.values())
         xml_dict["grid"]["modules"] = {"module": modules}
+        xml_dict["grid"]["provenance"] = version.build_provenance()
         infile = utils.io.write_xml(infile_stem, xml_dict)
     elif "contract" in task_key:
         yaml.add_representer(Outfile, lambda d, x: d.represent_dict(x.__dict__))
