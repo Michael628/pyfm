@@ -4,9 +4,21 @@ Sibling composite of ``hadrons_lma_new`` driving the HadronsMILC SIB HVP
 A2A-batch module surface (``../HadronsMILC/test/params/sib-hvp-mesonfields.xml``):
 full-volume noise → ``noise_t{t0}_vec`` batch source → ``tab`` (⟨ℓ|η⟩
 overlap table) → ``p`` (the ``StagLMAMesonFieldProp`` ``a2a_batch`` guess)
-→ per-mass ``h`` solves → six leg-pair ``StagA2AMesonField`` blocks per
+→ per-mass ``h`` solves → the leg-pair ``StagA2AMesonField`` blocks per
 Γ family. The task produces meson-field artifacts only — aggregation has
 no meaning here, so ``build_aggregator_params`` returns ``{}``.
+
+Block table: ``ll`` for every family and ``nl`` for the vector families
+(once at ``defl_mass``), plus ``lh``/``nh`` per operations mass. The
+derivable reference pairs are NOT emitted: ``lp``/``np`` (all families)
+and the scalar ``nl`` are exact offline arithmetic from the stored
+``ll``/``tab``/evals — ``lp = ll·w·tab``, ``np = tab†·w·tab``,
+``nl_s = eval-weighted conj(tab)ᵀ`` with the pair weight ``w`` built
+from the stored eigenvalues (research artifact
+``2026-10-04_17-36-40_sib-precon-pair-weight-identity.md``; validated by
+the HadronsMILC ``sib-pair-identity`` harness). The scalar family's
+``nl`` is derivable because its kernel is the identity; the vector
+families' ``nl`` blocks carry the Γ kernel between the legs and stay.
 
 Flat single-module layout (``lma_new.py`` style): config tree, hooks,
 emission, catalog, and registration in one file. Batch data contract
@@ -41,17 +53,37 @@ _ACTION_NAME = "stag_mass_{mass}"
 _LOW_MODES_NAME = "evecs_mass_{mass}"
 _SHIFT_GAUGE_NAME = "gauge_apbc"
 
-# The six leg-pair block kinds per Gamma family (pyfm-side letters, from
+# The leg-pair block kinds per Gamma family (pyfm-side letters, from
 # the research naming decisions): l = low modes (eig), n = full-volume
 # noise, p = LMA batch precon guess, h = unprojected high solve.
-# Reference blocks (ll/lp/nl/np) are emitted once at defl_mass; h-legged
-# blocks (lh/nh) are emitted per operations mass. Upstream writes the
-# noise leg as `e` (eta) and the guess leg as `g`.
-_REFERENCE_LEG_PAIRS = ("ll", "lp", "nl", "np")
+# Reference blocks are emitted once at defl_mass; h-legged blocks
+# (lh/nh) are emitted per operations mass. Upstream writes the noise
+# leg as `e` (eta) and the guess leg as `g`.
+#
+# The derivable pairs (lp/np for every family, and the scalar family's
+# nl) are NOT emitted: they are exact offline arithmetic from the
+# stored ll/tab/evals files (the pair-basis identity; see the module
+# docstring). The vector families' nl blocks carry the Gamma kernel
+# between the legs and are not derivable from the scalar tab — they
+# stay. _reference_pairs(gamma) expresses the family condition.
+_REFERENCE_LEG_PAIRS = ("ll", "nl")
 _H_LEG_PAIRS = ("lh", "nh")
 # Pairs with no eigenvector leg on either side: empty lowModes, no
 # CB pairs (upstream sib-hvp-mesonfields.xml eh/eg blocks).
-_PURE_HIGH_LEG_PAIRS = frozenset({"np", "nh"})
+_PURE_HIGH_LEG_PAIRS = frozenset({"nh"})
+
+
+def _reference_pairs(gamma: Gamma) -> t.Tuple[str, ...]:
+    """Reference leg pairs a Γ family emits.
+
+    The scalar family's nl block (⟨η|ℓ⟩ at Γ=G1_G1) equals the
+    eval-weighted conjugate transpose of the tab and is not emitted;
+    the vector families' nl blocks apply the Γ kernel between the legs
+    (not expressible through the scalar tab) and are emitted.
+    """
+    if gamma == Gamma.SCALAR_LOCAL:
+        return ("ll",)
+    return _REFERENCE_LEG_PAIRS
 
 # The three Γ families the block table covers (spin-taste structure lives
 # in the meson-field kernel, not the solves — all four field sets are
@@ -140,7 +172,8 @@ class SIBOutputConfig(SimpleConfig):
 
     ``file`` is the block files label — its filestem carries ``{leg_pair}``
     and ``{mass}``, where ``{mass}`` formats to ``''`` for the mass-free
-    reference blocks (ll/lp/nl/np) and ``'_m<label>'`` for the per-mass
+    reference blocks (ll, and nl for the vector families) and
+    ``'_m<label>'`` for the per-mass
     h-legged blocks (lh/nh). ``tab`` is the scalar-only ⟨ℓ|η⟩ overlap
     table label. Both route to the ``cfg_gamma_h5`` ext
     (``.{cfg}/{gamma}_0_0_0.h5``), so their labels must contain "meson"
@@ -155,7 +188,7 @@ class SIBOutputConfig(SimpleConfig):
     worlds (``noise_fv_n{i}`` → per-world tab/wall → ``precon_n{i}`` →
     per-mass ``h``) and splits every noise-carrying block into
     per-combination files whose stems carry ``_n{i}`` (n leg) / ``_n{j}``
-    (h/p leg) suffixes; the tab splits per world too. ``ll`` and the
+    (h leg) suffixes; the tab splits per world too. ``ll`` and the
     infra sections are identical in both modes.
     """
 
@@ -178,7 +211,7 @@ class SIBMFConfig(CompositeConfig):
     vec_local / vec_onelink) and the ``h``-solve masses; ``defl_mass``
     (default ``"l"``, the most commonly calculated mass) names the single
     ``ModifyEigenPackMILC`` shift every low-side artifact (tab, p, the
-    ll/lp/nl/np blocks, the CB pairs) builds from — all contributions at
+    ll/nl blocks, the CB pairs) builds from — all contributions at
     that mass then contract without reweighting, and every other mass
     reweights downstream from the stored evals.
     """
@@ -390,12 +423,14 @@ def _sib_outfile_catalog(config: SIBMFConfig) -> pd.DataFrame:
     granularity — the axes the resume gate narrows on and compare_outputs
     pairs on. One yield per leg pair: the reference pairs carry the
     mass-free stem token (""), the h pairs one ``_m<label>`` token per
-    operations mass; the tab row is scalar-only.
+    operations mass; the tab row is scalar-only. The reference set is
+    family-conditional (ll every family; nl only the vector families —
+    the scalar nl, lp, and np are derivable offline and not emitted).
 
     In split-noise mode the catalog gains ``n_index``/``hp_index`` columns
     (``'_n<k>'`` suffix fragments, ``''`` for absent axes): each leg pair
     fans out over the world indices its legs carry (ll none, nl the n
-    world, lp/lh the h-p world, np/nh both worlds' product) and the tab
+    world, lh the h-p world, nh both worlds' product) and the tab
     over the n world.
     """
     split = config.output_config.split_noise
@@ -418,7 +453,7 @@ def _sib_outfile_catalog(config: SIBMFConfig) -> pd.DataFrame:
     def generate_outfile_formatting():
         for op in config.op_list:
             gammas = op.gamma.gamma_list
-            for leg_pair in _REFERENCE_LEG_PAIRS:
+            for leg_pair in _reference_pairs(op.gamma):
                 yield (
                     {
                         "gamma": gammas,
@@ -476,7 +511,7 @@ def _needed_blocks(
         return [(ni, hi) for ni in n_vals for hi in hp_vals]
 
     for op in config.op_list:
-        for leg_pair in _REFERENCE_LEG_PAIRS:
+        for leg_pair in _reference_pairs(op.gamma):
             for ni, hi in index_combos(leg_pair):
                 if any(
                     _block_filepath(config, leg_pair, "", g, ni, hi) in bad_files
@@ -533,7 +568,7 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     schedule += epack_input.schedule
 
     # 3. Single mass shift at defl_mass: every low-side artifact (tab, p,
-    #    the ll/lp/nl/np blocks, the CB pairs) builds from this one
+    #    the ll/nl blocks, the CB pairs) builds from this one
     #    shifted pack (D9).
     mass_shifts_input = epack.build_epack_mass_shifts(
         config.epack_config, [config.defl_mass]
@@ -580,7 +615,7 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
         needed_ref = {
             op.gamma: {
                 (leg_pair, ni, hi)
-                for leg_pair in _REFERENCE_LEG_PAIRS
+                for leg_pair in _reference_pairs(op.gamma)
                 for ni, hi in _combos(leg_pair)
             }
             for op in config.op_list
@@ -606,30 +641,28 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     h_demand = {(e[4], e[2]) for e in needed_h}
     h_masses = [m for m in config.masses if any(mm == m for _, mm in h_demand)]
     # World demand (split-noise mode): a world runs when any needed block
-    # references it — via its n leg (noise/tab side) or its h/p leg
-    # (precon side). tab feeds p; p is also the h guess; the wall feeds
-    # only h; noise feeds tab, the n legs, and the wall.
-    lp_worlds = {c[2] for c in ref_combos if c[0] == "lp"}
-    np_p_worlds = {c[2] for c in ref_combos if c[0] == "np"}
+    # references it — via its n leg (noise/tab side) or its h leg. tab
+    # feeds p; p is the h guess (no reference block consumes p any
+    # more — lp/np are derivable); the wall feeds only h; noise feeds
+    # tab, the n legs, and the wall.
     nl_worlds = {c[1] for c in ref_combos if c[0] == "nl"}
-    np_n_worlds = {c[1] for c in ref_combos if c[0] == "np"}
     h_worlds = {w for w, _ in h_demand}
-    tab_worlds = lp_worlds | np_p_worlds | h_worlds
-    noise_worlds = tab_worlds | nl_worlds | np_n_worlds | h_worlds
-    need_precon = bool(lp_worlds or np_p_worlds or needed_h)
+    tab_worlds = h_worlds
+    noise_worlds = h_worlds | nl_worlds
+    need_precon = bool(needed_h)
     need_noise_t0 = bool(needed_h)
     need_noise_fv = (
         bool(tab_needed)
         or need_precon
         or need_noise_t0
-        or bool(nl_worlds or np_n_worlds)
-        or bool({"nl", "np"} & ref_pairs)
+        or bool(nl_worlds)
+        or "nl" in ref_pairs
     )
     need_cbpairs = (
         bool(tab_needed)
         or "ll" in ref_pairs
-        or bool({"lp", "nl"} & ref_pairs)
-        or bool(lp_worlds or nl_worlds or tab_worlds)
+        or "nl" in ref_pairs
+        or bool(nl_worlds or tab_worlds)
         or any(e[1] == "lh" for e in needed_h)
     )
 
@@ -876,15 +909,17 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
             )
             schedule.append(name)
 
-    # 13. Six leg-pair blocks per family (flattened stems, D8): reference
-    #     pairs once at defl_mass (mass-free stem token), h pairs per
-    #     operations mass (_m<label> token). Split-noise mode emits one
-    #     module per world combination; its noise legs bind the world
-    #     instance modules and the stem renders the _n{i}/_n{j} suffixes
-    #     via the derived split outfile. Pure-high pairs (np/nh) carry
-    #     empty lowModes and no CB pairs; low-side pairs bind both CB
-    #     pair modules. Blocks append after every module they reference
-    #     (append order IS the schedule, D10).
+    # 13. Leg-pair blocks per family (flattened stems, D8): reference
+    #     pairs once at defl_mass (mass-free stem token; ll every
+    #     family, nl only the vector families — see
+    #     _reference_pairs), h pairs per operations mass (_m<label>
+    #     token). Split-noise mode emits one module per world
+    #     combination; its noise legs bind the world instance modules
+    #     and the stem renders the _n{i}/_n{j} suffixes via the derived
+    #     split outfile. Pure-high pairs (nh) carry empty lowModes and
+    #     no CB pairs; low-side pairs bind both CB pair modules.
+    #     Blocks append after every module they reference (append order
+    #     IS the schedule, D10).
     block_outfile = (
         _split_block_outfile(config) if split_noise else config.output_config.file
     )
@@ -898,7 +933,7 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
             # SpinTaste module was not emitted either.
             continue
         gammas_ref = spintaste_names[gamma]
-        for leg_pair in _REFERENCE_LEG_PAIRS:
+        for leg_pair in _reference_pairs(gamma):
             combos = sorted(c for c in needed_ref.get(gamma, ()) if c[0] == leg_pair)
             for _, ni, hi in combos:
                 pure_high = leg_pair in _PURE_HIGH_LEG_PAIRS

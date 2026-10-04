@@ -186,15 +186,25 @@ class TestModuleTopology:
             create_task("sib_mf", hadrons_params, "a", "20").config
         )
         blocks = _blocks(result)
-        assert len(blocks) == 45
+        assert len(blocks) == 25
         assert blocks["mf_s_ll_t0"]["left"] == ""
         assert blocks["mf_s_ll_t0"]["right"] == ""
         assert blocks["mf_s_ll_t0"]["lowModes"] == "evecs_mass_l"
         assert blocks["mf_s_ll_t0"]["cbPairsLeft"] == "cbpairs_l_mass_l"
-        assert blocks["mf_vo_np_n0_n1_t0"]["left"] == "noise_fv_n0_vec"
-        assert blocks["mf_vo_np_n0_n1_t0"]["right"] == "precon_n1"
-        assert blocks["mf_vo_np_n0_n1_t0"]["lowModes"] == ""
-        assert "cbPairsLeft" not in blocks["mf_vo_np_n0_n1_t0"]
+        # nl is family-conditional: vector families emit it (noise bra,
+        # ket eig leg + CB pairs); the scalar family does not (derivable
+        # offline as eval-weighted conj(tab)T).
+        assert blocks["mf_vl_nl_n0_t0"]["left"] == "noise_fv_n0_vec"
+        assert blocks["mf_vl_nl_n0_t0"]["right"] == ""
+        assert blocks["mf_vl_nl_n0_t0"]["lowModes"] == "evecs_mass_l"
+        assert "mf_s_nl_t0" not in blocks
+        # The derivable pairs are gone everywhere.
+        assert not any(
+            f"mf_{nick}_{pair}" in name
+            for name in blocks
+            for nick in ("s", "vl", "vo")
+            for pair in ("lp", "np")
+        )
         assert blocks["mf_vl_lh_n0_mass_l_t0"]["right"] == "quark_h_n0_mass_l_t0"
         assert blocks["mf_vl_nh_n1_n0_mass_l_t0"]["left"] == "noise_fv_n1_vec"
         assert blocks["mf_vl_nh_n1_n0_mass_l_t0"]["right"] == "quark_h_n0_mass_l_t0"
@@ -304,21 +314,56 @@ class TestResumeGate:
         assert "precon_n0" in result.modules
         assert (
             sum(n.startswith(("mf_s_", "mf_vl_", "mf_vo_")) for n in result.schedule)
-            == 45
+            == 25
         )
+
+    def test_missing_vec_local_nl_narrows_without_precon(
+        self, tmp_path, monkeypatch, hadrons_params
+    ):
+        """An nl-only resume demands the noise leg but never the guess
+        chain: with lp/np gone, no reference block consumes precon — it
+        runs only for h solves."""
+        monkeypatch.chdir(tmp_path)
+        params = _gated_params(hadrons_params, tmp_path)
+        task = create_task("sib_mf", params, "a", "20")
+        catalog = _sib_outfile_catalog(task.config)
+        for _, row in catalog.iterrows():
+            if (
+                row["gamma"] in ("GX_GX", "GY_GY", "GZ_GZ")
+                and row["leg_pair"] == "nl"
+            ):
+                continue
+            _write_file(row["filepath"], row["good_size"])
+
+        result = build_input_params(task.config)
+        assert "mf_vl_nl_n0_t0" in result.modules
+        assert "mf_vl_nl_n1_t0" in result.modules
+        assert "noise_fv_n0" in result.modules
+        for absent in (
+            "mf_tab_n0",
+            "mfload_tab_n0",
+            "precon_n0",
+            "quark_h_n0_mass_l_t0",
+            "noise_t0_n0",
+        ):
+            assert absent not in result.modules, absent
 
 
 class TestCatalogAndCompare:
     def test_catalog_covers_outputs(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
         df = _sib_outfile_catalog(task.config)
-        nblocks = sum(len(op.gamma.gamma_list) * 15 for op in task.config.op_list)
+        nblocks = sum(
+            len(op.gamma.gamma_list)
+            * (7 if op.gamma == Gamma.SCALAR_LOCAL else 9)
+            for op in task.config.op_list
+        )
         ntab = 2 * len(Gamma.SCALAR_LOCAL.gamma_list)
         assert len(df) == nblocks + ntab
         assert {"leg_pair", "mass", "gamma", "n_index", "hp_index"} <= set(df.columns)
         assert df["filepath"].str.endswith("e100n2/sib/ll_a.20/GX_GX_0_0_0.h5").any()
         assert df["filepath"].str.endswith(
-            "e100n2/sib/np_a_n0_n1.20/GX_GX_0_0_0.h5"
+            "e100n2/sib/nl_a_n0.20/GX_GX_0_0_0.h5"
         ).any()
         assert df["filepath"].str.endswith(
             "e100n2/sib/tab_a_n1.20/G1_G1_0_0_0.h5"
@@ -332,7 +377,11 @@ class TestCatalogAndCompare:
     def test_compare_missing_file_report(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
         report = compare_outputs(task.config, task.config)
-        nblocks = sum(len(op.gamma.gamma_list) * 15 for op in task.config.op_list)
+        nblocks = sum(
+            len(op.gamma.gamma_list)
+            * (7 if op.gamma == Gamma.SCALAR_LOCAL else 9)
+            for op in task.config.op_list
+        )
         ntab = 2 * len(Gamma.SCALAR_LOCAL.gamma_list)
         assert len(report) == nblocks + ntab
         assert (report["status"] == "missing_file").all()
@@ -372,8 +421,8 @@ class TestCatalogAndCompare:
                 grp.create_dataset("a2aMatrix", data=np.zeros(4, dtype=dt))
 
         # Write valid HDF5 only for the unsuffixed ll rows (they compare);
-        # every noise-carrying leg pair stays missing, including the np
-        # world combinations.
+        # every noise-carrying leg pair stays missing, including the nh
+        # world combinations (nh carries both worlds' indices).
         for _, row in catalog.iterrows():
             if row["leg_pair"] == "ll":
                 _write_h5(row["filepath"], row["gamma"])
@@ -383,12 +432,12 @@ class TestCatalogAndCompare:
         missing = report[report["status"] == "missing_file"]
         assert (compared["leg_pair"] == "ll").all()
         assert len(compared) > 0
-        # np rows carry their world indices in the report.
-        np_missing = missing[missing["leg_pair"] == "np"]
+        # nh rows carry their world indices in the report.
+        nh_missing = missing[missing["leg_pair"] == "nh"]
         assert (
-            (np_missing["n_index"] == "_n0") & (np_missing["hp_index"] == "_n1")
+            (nh_missing["n_index"] == "_n0") & (nh_missing["hp_index"] == "_n1")
         ).any()
-        assert ((np_missing["n_index"] == "") | (np_missing["n_index"].str.startswith("_n"))).all()
+        assert ((nh_missing["n_index"] == "") | (nh_missing["n_index"].str.startswith("_n"))).all()
 
 
 class TestSharedModeRegression:
@@ -401,7 +450,7 @@ class TestSharedModeRegression:
 
         assert task.config.output_config.split_noise is False
         blocks = _blocks(result)
-        assert len(blocks) == 18
+        assert len(blocks) == 11
 
         p = result.modules["precon_t0"]["options"]
         assert p["nNoise"] == "2"
@@ -410,7 +459,7 @@ class TestSharedModeRegression:
 
         assert result.modules["noise_t0"]["options"]["nSrc"] == "2"
 
-        assert len(_sib_outfile_catalog(task.config)) == 43
+        assert len(_sib_outfile_catalog(task.config)) == 28
         assert _pair_keys(task.config) == ["leg_pair", "mass", "gamma"]
 
         # Schedule order identical to the Phase 2 AVs.
@@ -459,5 +508,5 @@ def test_generate_sib_mf_input_end_to_end(tmp_path, monkeypatch, hadrons_params)
     # v2-only: no Legacy modules anywhere in the SIB chain
     assert "Legacy</type>" not in xml
     sched = (tmp_path / "schedules" / "sib-mf-a.20.sched").read_text()
-    assert sched.splitlines()[0] == "74"
+    assert sched.splitlines()[0] == "54"
     assert sched.splitlines()[0] == str(len(sched.splitlines()) - 1)
