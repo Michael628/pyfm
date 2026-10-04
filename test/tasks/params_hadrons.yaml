@@ -231,6 +231,7 @@ job_setup:
         output:
           file: sib_meson_blocks
           tab: sib_meson_tab
+          split_noise: true
 files:
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg

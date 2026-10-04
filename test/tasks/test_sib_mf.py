@@ -1,6 +1,6 @@
 """Tests for sib_mf.py — SIBMFConfig composite, own hooks, the batch
-contract, the demand-driven resume gate, and the flattened-stem block
-table."""
+contract, the demand-driven resume gate, the flattened-stem block table,
+and the split-noise per-world emission (with a shared-mode regression)."""
 
 import copy
 
@@ -13,6 +13,7 @@ from pyfm.tasks.hadrons.sib_mf import (
     SIBMFConfig,
     _block_filepath,
     _needed_blocks,
+    _pair_keys,
     _sib_outfile_catalog,
     build_aggregator_params,
     build_input_params,
@@ -39,6 +40,21 @@ def _gated_params(params, tmp_path):
     params["shared_params"]["home"] = str(tmp_path)
     params["shared_params"]["overwrite"] = False
     return params
+
+
+def _shared_params(params):
+    """Fixture copy with the shared (split_noise: false) chain."""
+    params = copy.deepcopy(params)
+    _sib_tasks(params)["sib"]["output"]["split_noise"] = False
+    return params
+
+
+def _blocks(result):
+    return {
+        name: mod["options"]
+        for name, mod in result.modules.items()
+        if name.startswith(("mf_s_", "mf_vl_", "mf_vo_"))
+    }
 
 
 class TestRegistration:
@@ -116,23 +132,35 @@ class TestBatchContract:
     def test_precon_pins_batch_contract(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
         result = build_input_params(task.config)
-        p = result.modules["precon_t0"]["options"]
+        p = result.modules["precon_n0"]["options"]
         assert (
             p["a2a_batch"],
             p["labels"],
             p["tA"],
             p["tB"],
             p["tStep"],
+            p["noiseIndex"],
             p["nNoise"],
             p["noise"],
             p["mesonField"],
-        ) == ("true", "G1_G1", "0", "3", "1", "2", "noise_fv_vec", "mfload_tab")
+        ) == (
+            "true",
+            "G1_G1",
+            "0",
+            "3",
+            "1",
+            "0",
+            "1",
+            "noise_fv_n0_vec",
+            "mfload_tab_n0",
+        )
 
     def test_job_noise_flows_to_batch_and_stem(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
         assert task.config.batch_config.noise == 2  # absorbed from job params
+        assert task.config.output_config.split_noise is True
         result = build_input_params(task.config)
-        assert result.modules["noise_t0"]["options"]["nSrc"] == "2"
+        assert result.modules["noise_fv_n0"]["options"]["nsrc"] == "1"
         assert result.modules["mf_s_ll_t0"]["options"]["output"].endswith(
             "e100n2/sib/ll_a"
         )
@@ -144,37 +172,34 @@ class TestModuleTopology:
             create_task("sib_mf", hadrons_params, "a", "20").config
         ).schedule
         assert (
-            schedule.index("noise_fv")
-            < schedule.index("noise_t0")
-            < schedule.index("mf_tab")
-            < schedule.index("mfload_tab")
-            < schedule.index("precon_t0")
-            < schedule.index("quark_h_mass_l_t0")
-            < schedule.index("mf_s_lh_mass_l_t0")
+            schedule.index("noise_fv_n0")
+            < schedule.index("mf_tab_n0")
+            < schedule.index("mfload_tab_n0")
+            < schedule.index("precon_n0")
+            < schedule.index("noise_t0_n0")
+            < schedule.index("quark_h_n0_mass_l_t0")
+            < schedule.index("mf_s_lh_n0_mass_l_t0")
         )
 
     def test_block_table_legs(self, hadrons_params):
         result = build_input_params(
             create_task("sib_mf", hadrons_params, "a", "20").config
         )
-        blocks = {
-            name: mod["options"]
-            for name, mod in result.modules.items()
-            if name.startswith(("mf_s_", "mf_vl_", "mf_vo_"))
-        }
-        assert len(blocks) == 18
+        blocks = _blocks(result)
+        assert len(blocks) == 45
         assert blocks["mf_s_ll_t0"]["left"] == ""
         assert blocks["mf_s_ll_t0"]["right"] == ""
         assert blocks["mf_s_ll_t0"]["lowModes"] == "evecs_mass_l"
         assert blocks["mf_s_ll_t0"]["cbPairsLeft"] == "cbpairs_l_mass_l"
-        assert blocks["mf_vo_np_t0"]["left"] == "noise_fv_vec"
-        assert blocks["mf_vo_np_t0"]["right"] == "precon_t0"
-        assert blocks["mf_vo_np_t0"]["lowModes"] == ""
-        assert "cbPairsLeft" not in blocks["mf_vo_np_t0"]
-        assert blocks["mf_vl_lh_mass_l_t0"]["right"] == "quark_h_mass_l_t0"
-        assert blocks["mf_vl_nh_mass_l_t0"]["left"] == "noise_fv_vec"
-        assert blocks["mf_vl_nh_mass_l_t0"]["lowModes"] == ""
-        assert "cbPairsLeft" not in blocks["mf_vl_nh_mass_l_t0"]
+        assert blocks["mf_vo_np_n0_n1_t0"]["left"] == "noise_fv_n0_vec"
+        assert blocks["mf_vo_np_n0_n1_t0"]["right"] == "precon_n1"
+        assert blocks["mf_vo_np_n0_n1_t0"]["lowModes"] == ""
+        assert "cbPairsLeft" not in blocks["mf_vo_np_n0_n1_t0"]
+        assert blocks["mf_vl_lh_n0_mass_l_t0"]["right"] == "quark_h_n0_mass_l_t0"
+        assert blocks["mf_vl_nh_n1_n0_mass_l_t0"]["left"] == "noise_fv_n1_vec"
+        assert blocks["mf_vl_nh_n1_n0_mass_l_t0"]["right"] == "quark_h_n0_mass_l_t0"
+        assert blocks["mf_vl_nh_n1_n0_mass_l_t0"]["lowModes"] == ""
+        assert "cbPairsLeft" not in blocks["mf_vl_nh_n1_n0_mass_l_t0"]
 
     def test_stems_are_leg_pair_only(self, hadrons_params):
         result = build_input_params(
@@ -187,12 +212,12 @@ class TestModuleTopology:
             "e100n2/sib/ll_a"
         )
         assert (
-            result.modules["mf_s_lh_mass_l_t0"]["options"]["output"].endswith(
-                "e100n2/sib/lh_ml_a"
+            result.modules["mf_s_lh_n0_mass_l_t0"]["options"]["output"].endswith(
+                "e100n2/sib/lh_ml_a_n0"
             )
         )
-        assert result.modules["mf_tab"]["options"]["output"].endswith(
-            "e100n2/sib/tab_a"
+        assert result.modules["mf_tab_n0"]["options"]["output"].endswith(
+            "e100n2/sib/tab_a_n0"
         )
 
     def test_onelink_binds_shift_gauge(self, hadrons_params):
@@ -215,11 +240,11 @@ class TestResumeGate:
             task.config,
             {
                 _block_filepath(task.config, "ll", "", "GX_GX"),
-                _block_filepath(task.config, "nh", "_ml", "G1_G1"),
+                _block_filepath(task.config, "nh", "_ml", "G1_G1", n_index=1, hp_index=0),
             },
         )
-        assert ref == {Gamma.VEC_LOCAL: {"ll"}}
-        assert h == {(Gamma.SCALAR_LOCAL, "nh", "l")}
+        assert ref == {Gamma.VEC_LOCAL: {("ll", None, None)}}
+        assert h == {(Gamma.SCALAR_LOCAL, "nh", "l", 1, 0)}
 
     def test_all_outputs_complete_emits_infra_only(
         self, tmp_path, monkeypatch, hadrons_params
@@ -231,8 +256,8 @@ class TestResumeGate:
             _write_file(row["filepath"], row["good_size"])
 
         result = build_input_params(task.config)
-        assert "precon_t0" not in result.modules
-        assert "mf_tab" not in result.modules
+        assert "precon_n0" not in result.modules
+        assert "mf_tab_n0" not in result.modules
         assert not any(
             name.startswith(("mf_s_", "mf_vl_", "mf_vo_")) for name in result.modules
         )
@@ -253,15 +278,16 @@ class TestResumeGate:
         assert "mf_vl_ll_t0" in result.modules
         assert "mf_s_ll_t0" not in result.modules
         assert "mf_vo_ll_t0" not in result.modules
-        # ll is low-side only: no noise, no precon, no tab, no h, no scalar
-        # SpinTaste — just the CB pairs and the family SpinTaste.
+        # ll is low-side only: no world modules, no noise, no precon, no
+        # tab, no h, no scalar SpinTaste — just the CB pairs and the
+        # family SpinTaste.
         for absent in (
-            "noise_fv",
-            "noise_t0",
-            "mf_tab",
-            "mfload_tab",
-            "precon_t0",
-            "quark_h_mass_l_t0",
+            "noise_fv_n0",
+            "noise_t0_n0",
+            "mf_tab_n0",
+            "mfload_tab_n0",
+            "precon_n0",
+            "quark_h_n0_mass_l_t0",
             "sib_solver_mass_l",
             "spintaste_scalar_local",
         ):
@@ -275,21 +301,28 @@ class TestResumeGate:
         # (nonexistent) home files.
         task = create_task("sib_mf", hadrons_params, "a", "20")
         result = build_input_params(task.config)
-        assert "precon_t0" in result.modules
+        assert "precon_n0" in result.modules
         assert (
             sum(n.startswith(("mf_s_", "mf_vl_", "mf_vo_")) for n in result.schedule)
-            == 18
+            == 45
         )
 
 
 class TestCatalogAndCompare:
-    def test_catalog_covers_43_outputs(self, hadrons_params):
+    def test_catalog_covers_outputs(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
         df = _sib_outfile_catalog(task.config)
-        assert len(df) == 43
-        assert {"leg_pair", "mass", "gamma"} <= set(df.columns)
+        nblocks = sum(len(op.gamma.gamma_list) * 15 for op in task.config.op_list)
+        ntab = 2 * len(Gamma.SCALAR_LOCAL.gamma_list)
+        assert len(df) == nblocks + ntab
+        assert {"leg_pair", "mass", "gamma", "n_index", "hp_index"} <= set(df.columns)
         assert df["filepath"].str.endswith("e100n2/sib/ll_a.20/GX_GX_0_0_0.h5").any()
-        assert df["filepath"].str.endswith("e100n2/sib/tab_a.20/G1_G1_0_0_0.h5").any()
+        assert df["filepath"].str.endswith(
+            "e100n2/sib/np_a_n0_n1.20/GX_GX_0_0_0.h5"
+        ).any()
+        assert df["filepath"].str.endswith(
+            "e100n2/sib/tab_a_n1.20/G1_G1_0_0_0.h5"
+        ).any()
 
     def test_aggregator_empty(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
@@ -299,12 +332,16 @@ class TestCatalogAndCompare:
     def test_compare_missing_file_report(self, hadrons_params):
         task = create_task("sib_mf", hadrons_params, "a", "20")
         report = compare_outputs(task.config, task.config)
-        assert len(report) == 43
+        nblocks = sum(len(op.gamma.gamma_list) * 15 for op in task.config.op_list)
+        ntab = 2 * len(Gamma.SCALAR_LOCAL.gamma_list)
+        assert len(report) == nblocks + ntab
         assert (report["status"] == "missing_file").all()
         assert list(report.columns) == [
             "leg_pair",
             "mass",
             "gamma",
+            "n_index",
+            "hp_index",
             "filepath_a",
             "filepath_b",
             "max_abs_diff",
@@ -312,6 +349,93 @@ class TestCatalogAndCompare:
             "within_tolerance",
             "status",
         ]
+
+    def test_compare_pairs_present_files_per_world(
+        self, tmp_path, monkeypatch, hadrons_params
+    ):
+        monkeypatch.chdir(tmp_path)
+        params = _gated_params(hadrons_params, tmp_path)
+        task = create_task("sib_mf", params, "a", "20")
+        catalog = _sib_outfile_catalog(task.config)
+
+        import h5py
+        import numpy as np
+
+        def _write_h5(path, gamma):
+            from pathlib import Path
+
+            path = Path(path)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with h5py.File(path, "w") as f:
+                grp = f.create_group(f"{gamma}_0_0_0")
+                dt = np.dtype([("re", np.float64), ("im", np.float64)])
+                grp.create_dataset("a2aMatrix", data=np.zeros(4, dtype=dt))
+
+        # Write valid HDF5 only for the unsuffixed ll rows (they compare);
+        # every noise-carrying leg pair stays missing, including the np
+        # world combinations.
+        for _, row in catalog.iterrows():
+            if row["leg_pair"] == "ll":
+                _write_h5(row["filepath"], row["gamma"])
+
+        report = compare_outputs(task.config, task.config)
+        compared = report[report["status"] == "compared"]
+        missing = report[report["status"] == "missing_file"]
+        assert (compared["leg_pair"] == "ll").all()
+        assert len(compared) > 0
+        # np rows carry their world indices in the report.
+        np_missing = missing[missing["leg_pair"] == "np"]
+        assert (
+            (np_missing["n_index"] == "_n0") & (np_missing["hp_index"] == "_n1")
+        ).any()
+        assert ((np_missing["n_index"] == "") | (np_missing["n_index"].str.startswith("_n"))).all()
+
+
+class TestSharedModeRegression:
+    """``split_noise: false`` restores the Phase 2-4 shared-chain contract."""
+
+    def test_shared_chain_end_to_end(self, hadrons_params):
+        params = _shared_params(hadrons_params)
+        task = create_task("sib_mf", params, "a", "20")
+        result = build_input_params(task.config)
+
+        assert task.config.output_config.split_noise is False
+        blocks = _blocks(result)
+        assert len(blocks) == 18
+
+        p = result.modules["precon_t0"]["options"]
+        assert p["nNoise"] == "2"
+        assert p["noise"] == "noise_fv_vec"
+        assert p["mesonField"] == "mfload_tab"
+
+        assert result.modules["noise_t0"]["options"]["nSrc"] == "2"
+
+        assert len(_sib_outfile_catalog(task.config)) == 43
+        assert _pair_keys(task.config) == ["leg_pair", "mass", "gamma"]
+
+        # Schedule order identical to the Phase 2 AVs.
+        schedule = result.schedule
+        assert (
+            schedule.index("noise_fv")
+            < schedule.index("noise_t0")
+            < schedule.index("mf_tab")
+            < schedule.index("mfload_tab")
+            < schedule.index("precon_t0")
+            < schedule.index("quark_h_mass_l_t0")
+        )
+
+    def test_shared_mode_split_modules_absent(self, hadrons_params):
+        params = _shared_params(hadrons_params)
+        result = build_input_params(create_task("sib_mf", params, "a", "20").config)
+        for absent in (
+            "noise_fv_n0",
+            "noise_t0_n0",
+            "mf_tab_n0",
+            "mfload_tab_n0",
+            "precon_n0",
+            "quark_h_n0_mass_l_t0",
+        ):
+            assert absent not in result.modules, absent
 
 
 def test_generate_sib_mf_input_end_to_end(tmp_path, monkeypatch, hadrons_params):
@@ -330,7 +454,10 @@ def test_generate_sib_mf_input_end_to_end(tmp_path, monkeypatch, hadrons_params)
     assert "<a2a_batch>true</a2a_batch>" in xml
     assert "<labels>G1_G1</labels>" in xml
     assert "<type>MFermion::StagGaugeProp</type>" in xml
+    # Per-world external-noise wall wiring: noise_t0_n0 reads noise_fv_n0.
+    assert "<noise>noise_fv_n0</noise>" in xml
     # v2-only: no Legacy modules anywhere in the SIB chain
     assert "Legacy</type>" not in xml
     sched = (tmp_path / "schedules" / "sib-mf-a.20.sched").read_text()
+    assert sched.splitlines()[0] == "74"
     assert sched.splitlines()[0] == str(len(sched.splitlines()) - 1)
