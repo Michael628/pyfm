@@ -193,4 +193,5 @@ class TestLmaMesonFieldPropV2:
             "negFirst": "",
             "pairScale": "",
             "noise": "noise_fv_vec",
+            "a2a_batch": "",
         }

@@ -1,3 +1,13 @@
+"""Legacy sequential-solve SIB scheme (renamed from ``highmode/sib.py``).
+
+Dead/arity-broken code kept for parity — NOT the connected-SIB task
+surface (``pyfm/tasks/hadrons/sib_mf.py`` drives that via the SIB HVP
+A2A-batch modules). The ``SEQ_SIB`` name
+(``CorrelatorStrategy.SEQ_SIB``) reflects the scheme this implements:
+sequential high-mode solves with a ``seq_gamma`` second-solve stage
+(commented out below). Do not build on this module.
+"""
+
 import typing as t
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods

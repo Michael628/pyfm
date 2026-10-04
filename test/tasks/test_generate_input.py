@@ -18,6 +18,7 @@ HADRONS_CASES = [
     ("epack_load", "epack-load"),
     ("epack_solve", "epack-solve"),
     ("high_modes", "high-modes"),
+    ("sib_mf", "sib-mf"),
 ]
 
 

@@ -14,7 +14,7 @@ from pyfm.tasks.hadrons.types import (
 )
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import Gamma, OpList
-from pyfm.tasks.hadrons.highmode import sib, twopoint
+from pyfm.tasks.hadrons.highmode import sib_seq, twopoint
 
 from pyfm import utils
 
@@ -297,9 +297,12 @@ def build_quark_strategy(
     match config.correlator_strategy:
         case CorrelatorStrategy.TWOPOINT:
             return twopoint.build_quarks(config, run_refs)
-        case CorrelatorStrategy.SIB:
-            # Dead path (arity-broken callee); kept for parity, callee untouched.
-            return sib.build_quarks(config, run_refs)
+        case CorrelatorStrategy.SEQ_SIB:
+            # Dead path (arity-broken callee); kept for parity, callee
+            # untouched. Renamed SIB -> SEQ_SIB (the sequential-solve
+            # scheme this arm dispatches to) to free the "SIB" name for
+            # the hadrons_sib_mf task family.
+            return sib_seq.build_quarks(config, run_refs)
         case _:
             raise ValueError(
                 f"Unknown correlator_strategy: {config.correlator_strategy}"
@@ -310,8 +313,8 @@ def build_contract_strategy(
     config: HighModeConfig, run_refs: t.List[SourceRef]
 ) -> HadronsInput:
     match config.correlator_strategy:
-        case CorrelatorStrategy.SIB:
-            return sib.build_contractions(config, run_refs)
+        case CorrelatorStrategy.SEQ_SIB:
+            return sib_seq.build_contractions(config, run_refs)
         case CorrelatorStrategy.TWOPOINT:
             return twopoint.build_contractions(config, run_refs)
         case _:

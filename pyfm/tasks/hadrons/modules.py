@@ -390,6 +390,7 @@ def lma_meson_field_prop_v2(
     noise_index: str = "0",
     noise: str = "",
     n_noise: str = "1",
+    a2a_batch: str = "",
 ) -> t.Dict:
     """Wrap ``MFermion::StagLMAMesonFieldProp`` (canonical, no Legacy sibling).
 
@@ -403,8 +404,17 @@ def lma_meson_field_prop_v2(
     per label. Outputs are one ``TGammaMap`` per ``t`` in ``[tA, tB]``
     stride ``tStep``, named ``<name>_t<t>`` — or just ``<name>`` when
     exactly one timeslice is produced (``tA=tB``, the per-slice form
-    ``hadrons_lma_new`` emits). Gamma-free: the label is the map key. No develop-schema equivalent exists — this module is
-    feature-branch-only (absent from ``develop`` entirely).
+    ``hadrons_lma_new`` emits). Gamma-free: the label is the map key.
+
+    ``a2a_batch="true"`` (values ''/'false'/'true' upstream) switches to
+    the batch form: a single output ``<name>`` regardless of the tA/tB
+    window (one ``TGammaMap<std::vector<FermionField>>`` consumable only
+    by canonical ``StagGaugeProp``), requires exactly one label, and is
+    incompatible with ``projector="true"`` — both rejected at setup
+    upstream (LMAMesonFieldProp.hpp:469-484). ``a2a_batch`` is emitted
+    last, matching the upstream GRID_SERIALIZABLE member order. No
+    develop-schema equivalent exists — this module is feature-branch-only
+    (absent from ``develop`` entirely).
     """
     return {
         "id": {
@@ -427,6 +437,7 @@ def lma_meson_field_prop_v2(
             "negFirst": "",
             "pairScale": "",
             "noise": noise,
+            "a2a_batch": a2a_batch,
         },
     }
 

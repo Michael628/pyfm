@@ -75,7 +75,7 @@ class SolveCrossTerms(SerializableEnum):
 
 class CorrelatorStrategy(Enum):
     TWOPOINT = auto()
-    SIB = auto()
+    SEQ_SIB = auto()
 
 
 @dataclass(frozen=True)
