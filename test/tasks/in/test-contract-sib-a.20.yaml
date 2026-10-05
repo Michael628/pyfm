@@ -1,0 +1,69 @@
+diagrams:
+  hvp_vl:
+    blocks:
+      ext: .20/{gamma}_0_0_0.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/{leg_pair}{mass}_a{n_index}{hp_index}
+      good_size: 1286000
+    contraction_type: SIB
+    defl_mass: l
+    evalfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
+      good_size: 4400
+    mass:
+      d: 0.003328
+      l: 0.002426
+      u: 0.001524
+      zero: 0.0
+    n_slices: 4
+    noise: 2
+    operations:
+      vec_local:
+        mass:
+        - l
+        - u
+    outfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/correlators/sib3pt/m{mass}/{gamma}/c3_{gamma}_m{mass}_a
+      good_size: 400
+    t0: 0
+    t_step: 1
+    tab:
+      ext: .20/{gamma}_0_0_0.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/tab_a{n_index}
+      good_size: 4400
+  hvp_vo:
+    blocks:
+      ext: .20/{gamma}_0_0_0.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/{leg_pair}{mass}_a{n_index}{hp_index}
+      good_size: 1286000
+    contraction_type: SIB
+    defl_mass: l
+    evalfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
+      good_size: 4400
+    mass:
+      d: 0.003328
+      l: 0.002426
+      u: 0.001524
+      zero: 0.0
+    n_slices: 4
+    noise: 2
+    operations:
+      vec_onelink:
+        mass:
+        - l
+    outfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/correlators/sib3pt/m{mass}/{gamma}/c3_{gamma}_m{mass}_a
+      good_size: 400
+    t0: 0
+    t_step: 1
+    tab:
+      ext: .20/{gamma}_0_0_0.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/tab_a{n_index}
+      good_size: 4400
+logging_level: DEBUG
+runid: LMI-RW-series-a-100-eigs-2-noise
+time: 4

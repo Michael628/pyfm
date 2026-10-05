@@ -2,6 +2,7 @@ import typing as t
 from enum import auto
 
 from pyfm.domain import Outfile, MassDict, SerializableEnum, CompositeConfig, SimpleConfig
+from pyfm.domain.ops import Gamma, OpList
 from pydantic.dataclasses import dataclass
 
 
@@ -32,6 +33,10 @@ class ContractType(SerializableEnum):
         match self:
             case ContractType.TWOPOINT:
                 return 2
+            case ContractType.SIB:
+                return 3
+            case _:
+                raise ValueError(f"npoint not defined for {self.name}")
 
 @dataclass(frozen=True)
 class MesonLoaderConfig(SimpleConfig):
@@ -125,6 +130,109 @@ class DiagramConfig(CompositeConfig):
 @dataclass(frozen=True)
 class ContractConfig(CompositeConfig):
     diagrams: t.Dict[str, DiagramConfig]
+    time: int
+    overwrite: bool = True
+    hardware: str = "cpu"
+
+    @property
+    def comm_size(self) -> int:
+        comm = get_comm()
+        if comm:
+            return comm.Get_size()
+        return 1
+
+    @property
+    def rank(self) -> int:
+        comm = get_comm()
+        if comm:
+            return comm.Get_rank()
+        return 0
+
+
+SIB_TERM_LABELS = ("lll", "nll", "lnl", "lln", "nnl", "nln", "lnn", "nnn")
+"""The eight SIB three-point terms, id'd by their junction letters.
+
+Each term id concatenates the junction types (J12, J23, J31) between the
+three fields (outer1@t1, scalar-middle@t2, outer3@t3): ``l`` = eig<->eig
+junction (plain index contraction), ``n`` = noise junction (eta rows x h/p
+columns, slice pinned to the eta-side field's time row). Field blocks per
+term (h-legs carry the derived p-side subtraction; ``nl`` is emitted for
+vector families and derived for the scalar family):
+
+- ``lll``: (ll, ll, ll)                       — plain einsum
+- ``nll``: (pure_lh, nl, ll)  summed over worlds at J12
+- ``lnl``: (ll, pure_lh, nl)  summed over worlds at J23
+- ``lln``: (nl, ll, pure_lh)  summed over worlds at J31
+- ``nnl``: (pure_lh, pure_nh, nl)  summed over ordered world pairs i!=j
+- ``nln``: (pure_nh, nl, pure_lh)  summed over ordered world pairs i!=j
+- ``lnn``: (nl, pure_lh, pure_nh)  summed over ordered world pairs i!=j
+- ``nnn``: (pure_nh, pure_nh, pure_nh) summed over pairwise-distinct triples
+
+World-selection normalizers (applied at aggregation, not in the kernel):
+``lll`` 1, one-n 1/N, two-n 1/(N(N-1)), ``nnn`` 1/(N(N-1)(N-2)).
+"""
+
+
+@dataclass(frozen=True)
+class SIBDiagramConfig(SimpleConfig):
+    """One SIB three-point diagram: V(t1)·S(t2)·V(t3) per outer GammaName.
+
+    ``operations`` selects the outer Gamma families (scalar_local /
+    vec_local / vec_onelink) and correlator masses, mirroring the producer's
+    ``hadrons_sib_mf`` operations block. ``blocks``/``tab``/``evalfile`` are
+    the producer's own file labels — the split-noise layout is REQUIRED
+    (validation rejects stems lacking the ``{n_index}``/``{hp_index}`` world
+    tokens): the contraction derives the removed lp/np/scalar-nl blocks
+    offline via the pair-basis identity (``pyfm/a2a/sib_derive.py``).
+    ``batch`` geometry (noise/t0/t_step/n_slices) mirrors the producer's
+    SIBBatchConfig and maps h/p columns (slice-major ``3*s + c``) to lattice
+    times. ``outfile`` targets the per-term correlator files and must carry
+    ``{mass}`` and ``{gamma}`` tokens (terms ride inside as frame labels).
+    """
+
+    contraction_type: ContractType
+    operations: OpList
+    mass: MassDict
+    blocks: Outfile
+    tab: Outfile
+    evalfile: Outfile
+    outfile: Outfile
+    t0: int
+    n_slices: int
+    noise: int
+    defl_mass: str = "l"
+    t_step: int = 1
+    symmetric: bool = False
+
+    @property
+    def op_list(self) -> t.List[OpList.Op]:
+        return self.operations.op_list
+
+    @property
+    def npoint(self) -> int:
+        return self.contraction_type.npoint
+
+    @property
+    def correlator_masses(self) -> t.List[str]:
+        """Mass labels this diagram contracts, in first-occurrence order."""
+        seen: t.List[str] = []
+        for op in self.op_list:
+            for m in op.mass:
+                if m not in seen:
+                    seen.append(m)
+        return seen
+
+
+@dataclass(frozen=True)
+class SIBContractConfig(CompositeConfig):
+    """Config tree for the ``contract_sib`` task (sibling of ``contract``).
+
+    A genuinely new class, not a reuse of ContractConfig: the registry's
+    reverse map keys by class object, and the builder's DICT children are
+    homogeneous — SIB diagrams build through SIBDiagramConfig's own hooks.
+    """
+
+    diagrams: t.Dict[str, SIBDiagramConfig]
     time: int
     overwrite: bool = True
     hardware: str = "cpu"

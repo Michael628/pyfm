@@ -10,6 +10,8 @@ ACTION_ORDER = [
     "preprocess_custom",
     "build_high",
     "average",
+    "term_normalize",
+    "term_sum",
     "sum",
     "time_average",
     "real",
@@ -195,6 +197,60 @@ def normalize(df, _: str, divisor):
 def sum(df: pd.DataFrame, data_col, *sum_indices) -> pd.DataFrame:
     """Sums `data_col` column in `df` over columns or indices specified in `avg_indices`"""
     return group_apply(df, lambda x: x[data_col].mean(), data_col, list(sum_indices))
+
+
+def term_sum(df: pd.DataFrame, data_col: str, *sum_indices: str) -> pd.DataFrame:
+    """Sum ``data_col`` over the term axes (a true sum, unlike ``sum``'s
+    group-mean semantics) — folds the normalized SIB terms into C3.
+
+    Returns a DataFrame (``group_apply`` can yield a bare Series for a
+    single ungrouped column; downstream actions like ``index`` expect
+    frames).
+    """
+    out = group_apply(df, lambda x: x[data_col].sum(), data_col, list(sum_indices))
+    if isinstance(out, pd.Series):
+        out = out.to_frame(name=data_col)
+    return out
+
+
+def term_normalize(
+    df: pd.DataFrame, data_col: str, **factors: float
+) -> pd.DataFrame:
+    """Multiply ``data_col`` by each row's term factor.
+
+    ``factors`` maps term labels to multipliers (the processor's dict
+    action parameter) — for the SIB three-point task, the per-term
+    world-count normalizers (one-n 1/N, two-n 1/(N(N-1)), nnn
+    1/(N(N-1)(N-2)), zero when the world selection is empty). Raw kernel
+    outputs carry no factors by design (D7): the number of noise sources
+    may change between runs, so normalization happens here, at
+    aggregation, before the ``sum`` action folds the terms into the
+    physical correlator.
+
+    The ``term`` axis may live in the index or as a column. Terms missing
+    from ``factors`` raise loudly (a silent 1.0 would corrupt the sum).
+    """
+    df = df.copy()
+    if "term" in df.index.names:
+        term_values = df.index.get_level_values("term")
+    elif "term" in df.columns:
+        term_values = df["term"]
+    else:
+        raise ValueError(
+            "term_normalize: no 'term' level in the index or columns — the "
+            "SIB correlator frames carry a per-term axis."
+        )
+    missing = sorted(set(term_values) - set(factors))
+    if missing:
+        raise ValueError(
+            f"term_normalize: factors missing for term labels {missing}; "
+            f"provided {sorted(factors)}"
+        )
+    factor_series = pd.Series(
+        np.asarray(term_values.map(factors), dtype=float), index=df.index
+    )
+    df[data_col] = df[data_col] * factor_series
+    return df
 
 
 def average(df: pd.DataFrame, data_col, *avg_indices) -> pd.DataFrame:

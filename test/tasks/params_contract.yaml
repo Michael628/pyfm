@@ -108,6 +108,35 @@ contract_params:
         min: 0
         max: 200
       outfile: contract
+    hvp_vl:
+      contraction_type: sib
+      operations:
+        gamma:
+          - vec_local
+        mass:
+          - "l"
+          - "u"
+      defl_mass: l
+      t0: 0
+      n_slices: 4
+      blocks: sib_meson_blocks
+      tab: sib_meson_tab
+      evalfile: eval
+      outfile: contract_sib
+    hvp_vo:
+      contraction_type: sib
+      operations:
+        gamma:
+          - vec_onelink
+        mass:
+          - "l"
+      defl_mass: l
+      t0: 0
+      n_slices: 4
+      blocks: sib_meson_blocks
+      tab: sib_meson_tab
+      evalfile: eval
+      outfile: contract_sib
 
 submit:
   scheduler: SLURM
@@ -116,6 +145,9 @@ submit:
   resources:
     ppn: 4 # Number of processes per node
     contract:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+    contract_sib:
       nodes: 1
       geom: [1, 1, 1, 2]
 
@@ -138,6 +170,19 @@ job_setup:
       eigs: 100
       dt: 1
       noise: 1
+  contract_sib:
+    run: contract.sh
+    job_type: contract
+    task_type: sib
+    tasks:
+      diagrams:
+        - hvp_vl
+        - hvp_vo
+    io: "contract-sib"
+    wall_time: "8:00:00"
+    params:
+      eigs: 100
+      noise: 2
 
 
 files:
@@ -148,6 +193,15 @@ files:
   contract:
     filestem: e{eigs}n{noise}dt{dt}/correlators/m{mass}/{gamma_label}/a2aLL/corr_{gamma_label}_a2aLL_m{mass}_{series}
     good_size: 400
+  contract_sib:
+    filestem: e{eigs}n{noise}/correlators/sib3pt/m{mass}/{gamma}/c3_{gamma}_m{mass}_{series}
+    good_size: 400
   eval:
     filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 4400
+  sib_meson_blocks:
+    filestem: e{eigs}n{noise}/sib/{leg_pair}{mass}_{series}{n_index}{hp_index}
+    good_size: 1286000
+  sib_meson_tab:
+    filestem: e{eigs}n{noise}/sib/tab_{series}{n_index}
     good_size: 4400
