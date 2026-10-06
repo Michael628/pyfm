@@ -114,8 +114,6 @@ def _diagram_kwargs(**overrides):
             ext=".20.h5",
             good_size=1,
         ),
-        t0=0,
-        n_slices=4,
         noise=2,
     )
     if "operations" in overrides:
@@ -148,8 +146,6 @@ class TestDiagramValidation:
             ("operations", {"gamma": ["pion_local"], "mass": ["l"]}, "SIB family"),
             ("operations", {"gamma": ["vec_local"], "mass": []}, "no mass"),
             ("noise", 1, "noise >= 2"),
-            ("t0", -1, "batch window invalid"),
-            ("t_step", 0, "batch window invalid"),
         ],
     )
     def test_rejections(self, field, value, match):
@@ -237,19 +233,6 @@ class TestCompositeValidation:
                 )
             )
 
-    def test_window_outside_extent_rejected(self):
-        _reload_sib_modules()
-        from pyfm.a2a.types import SIBContractConfig
-        from pyfm.tasks.contract.sib import validate_config
-
-        diagram = _build_diagram(t0=3, n_slices=4)  # tB=6 > time=4
-        with pytest.raises(ValueError, match="exceeds the lattice"):
-            validate_config(
-                SIBContractConfig(
-                    formatting={}, logging_level="INFO", runid="t",
-                    diagrams={"hvp": diagram}, time=4,
-                )
-            )
 
 
 class TestGoldenInput:

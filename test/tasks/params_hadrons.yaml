@@ -222,9 +222,6 @@ job_setup:
           mass:
             - "l"
         defl_mass: l
-        batch:
-          t0: 0
-          n_slices: 4
         solver:
           solver: mpcg
           residual: 1e-8

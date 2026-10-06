@@ -2,7 +2,7 @@
 
 Sibling composite of ``hadrons_lma_new`` driving the HadronsMILC SIB HVP
 A2A-batch module surface (``../HadronsMILC/test/params/sib-hvp-mesonfields.xml``):
-full-volume noise → ``noise_t{t0}_vec`` batch source → ``tab`` (⟨ℓ|η⟩
+full-volume noise → ``noise_batch_vec`` batch source → ``tab`` (⟨ℓ|η⟩
 overlap table) → ``p`` (the ``StagLMAMesonFieldProp`` ``a2a_batch`` guess)
 → per-mass ``h`` solves → the leg-pair ``StagA2AMesonField`` blocks per
 Γ family. The task produces meson-field artifacts only — aggregation has
@@ -23,7 +23,7 @@ families' ``nl`` blocks carry the Γ kernel between the legs and stay.
 Flat single-module layout (``lma_new.py`` style): config tree, hooks,
 emission, catalog, and registration in one file. Batch data contract
 pinned by construction (upstream deliberately does not cross-check it):
-``tA=t0``, ``tB=t0+(n_slices-1)·t_step``, ``tStep=t_step``,
+``tA=0``, ``tB=time-1``, ``tStep=1``,
 ``nNoise=noise`` (the RandomWall ``nSrc``), single label ``G1_G1``.
 Emission is demand-driven: the resume gate catalogs the block/tab
 outputs at (family, leg_pair, mass, gamma) granularity and narrows the
@@ -90,58 +90,29 @@ def _reference_pairs(gamma: Gamma) -> t.Tuple[str, ...]:
 # scalar-spin-taste).
 _SIB_FAMILIES = frozenset({Gamma.SCALAR_LOCAL, Gamma.VEC_LOCAL, Gamma.VEC_ONELINK})
 
-# Module-name prefix per family — the upstream s/vl/vo nicknames. Module
-# names need the family axis for uniqueness (mf_s_ll vs mf_vl_ll; the
-# _merge_modules one-module-per-name rule); output stems do NOT (flattened
-# stems: every family's blocks for one leg pair share <stem>.<traj>/,
-# one file per GammaName).
-_FAMILY_NICKNAMES = {
-    Gamma.SCALAR_LOCAL: "s",
-    Gamma.VEC_LOCAL: "vl",
-    Gamma.VEC_ONELINK: "vo",
-}
-
-
 @dataclass(frozen=True)
 class SIBBatchConfig(SimpleConfig):
-    """``sib.batch`` block: the A2A batch source window.
+    """``sib.batch`` block: the A2A batch source knob surface.
 
-    One ``MSource::StagRandomWall`` publishes ``noise_t{t0}_vec`` with
-    ``3 * noise * n_slices`` columns (slice-major, column
-    ``3*(noise*n_slices + slice) + color``); the batched
-    ``StagLMAMesonFieldProp`` guess and the ``h`` solve consume the whole
-    window at once. ``noise`` and ``time`` absorb from shared/job params
-    when omitted from the block (the builder's shared-param layering), so
-    a job-level ``params: {noise: 2}`` keeps ``nSrc``, ``nNoise``, the
-    runid, and the ``{noise}`` filestem token consistent.
+    One ``MSource::StagRandomWall`` publishes ``noise_batch_vec`` with
+    ``3 * noise * nt`` columns (slice-major, column
+    ``3*(noise*nt + t) + color``); the batched ``StagLMAMesonFieldProp``
+    guess and the ``h`` solve consume the whole window at once. Full
+    coverage is structural (upstream: ``nSlices = nt/min(tStep, nt)``,
+    ``t0 < tStep`` ⇒ always ``t0=0``, ``tStep=1``, one wall per
+    timeslice), so only ``noise`` is configurable; ``time`` absorbs from
+    shared/job params when omitted (the builder's shared-param layering)
+    and pins the batched guess's ``tA=0``/``tB=time-1``/``tStep=1``.
     """
 
-    t0: int
-    n_slices: int
     noise: int
     time: int
-    t_step: int = 1
-
-    @property
-    def tb(self) -> int:
-        """Last source slice of the batch window (the producer's ``tB``)."""
-        return self.t0 + (self.n_slices - 1) * self.t_step
 
 
 def validate_batch(config: SIBBatchConfig) -> None:
-    """Validate SIBBatchConfig after construction: window inside the extent."""
-    if config.n_slices < 1:
-        raise ValueError(f"sib.batch.n_slices must be >= 1; got {config.n_slices}.")
+    """Validate SIBBatchConfig after construction."""
     if config.noise < 1:
         raise ValueError(f"sib.batch.noise must be >= 1; got {config.noise}.")
-    if config.t_step < 1:
-        raise ValueError(f"sib.batch.t_step must be >= 1; got {config.t_step}.")
-    if not (0 <= config.t0 <= config.tb < config.time):
-        raise ValueError(
-            f"sib.batch window [t0={config.t0}, tB={config.tb}] stride "
-            f"{config.t_step} exceeds the lattice time extent "
-            f"{config.time}."
-        )
 
 
 @dataclass(frozen=True)
@@ -650,11 +621,11 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     tab_worlds = h_worlds
     noise_worlds = h_worlds | nl_worlds
     need_precon = bool(needed_h)
-    need_noise_t0 = bool(needed_h)
+    need_noise_batch = bool(needed_h)
     need_noise_fv = (
         bool(tab_needed)
         or need_precon
-        or need_noise_t0
+        or need_noise_batch
         or bool(nl_worlds)
         or "nl" in ref_pairs
     )
@@ -670,9 +641,84 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     low_modes_defl = config.epack_config.low_modes_name.format(mass=config.defl_mass)
     cbpairs_l = f"cbpairs_l_mass_{config.defl_mass}"
     cbpairs_r = f"cbpairs_r_mass_{config.defl_mass}"
-    precon = f"precon_t{batch.t0}"
-    noise_batch = f"noise_t{batch.t0}"
+    precon = "precon_batch"
+    noise_batch = "noise_batch"
     noise_fv_vec = "noise_fv_vec"
+
+    # Merged block-emission groups (module topology): the s and vl
+    # families share gauge="" and applyG5="false", so their block modules
+    # merge — one StagA2AMesonField per (leg_pair, worlds, mass) group
+    # with the union gamma string of the demanded local families. vo
+    # keeps its own module per group (shift gauge). A group is emitted
+    # when ANY of its families demands the combination; the resume gate's
+    # file catalog stays at (family, leg_pair, mass, gamma) granularity.
+    def _add_group(groups, key, gamma):
+        group = groups.setdefault(key, {"local": set(), "vo": set()})
+        group["vo" if gamma == Gamma.VEC_ONELINK else "local"].add(gamma)
+
+    ref_groups: t.Dict[tuple, t.Dict[str, t.Set[Gamma]]] = {}
+    for gamma, combos in needed_ref.items():
+        for leg_pair, ni, hi in combos:
+            _add_group(ref_groups, (leg_pair, "", ni, hi), gamma)
+    h_groups: t.Dict[tuple, t.Dict[str, t.Set[Gamma]]] = {}
+    for gamma, leg_pair, mass_label, ni, hi in needed_h:
+        _add_group(h_groups, (leg_pair, mass_label, ni, hi), gamma)
+
+    def _merged_name(vo, leg_pair, mass, ni, hi):
+        name = f"mf_{'vo_' if vo else ''}{leg_pair}"
+        if ni is not None:
+            name += f"_n{ni}"
+        if hi is not None:
+            name += f"_n{hi}"
+        if mass:
+            name += f"_mass_{mass}"
+        return name
+
+    block_outfile = (
+        _split_block_outfile(config) if split_noise else config.output_config.file
+    )
+
+    def _emit_block_group(group, leg_pair, mass, ni, hi):
+        """Emit one (leg_pair, worlds, mass) group's modules; return names."""
+        emitted = []
+        for vo, families in ((False, group["local"]), (True, group["vo"])):
+            if not families:
+                continue
+            name = _merged_name(vo, leg_pair, mass, ni, hi)
+            pure_high = leg_pair in _PURE_HIGH_LEG_PAIRS
+            gammas_mod = (
+                "spintaste_vo"
+                if vo
+                else ("spintaste_vl" if leg_pair == "nl" else "spintaste_svl")
+            )
+            if split_noise:
+                left = (
+                    f"noise_fv_n{ni}_vec" if leg_pair.startswith("n") else ""
+                )
+                right = (
+                    f"quark_h_n{hi}_mass_{mass}" if leg_pair.endswith("h") else ""
+                )
+            else:
+                left = noise_fv_vec if leg_pair.startswith("n") else ""
+                right = f"quark_h_mass_{mass}" if leg_pair.endswith("h") else ""
+            modules[name] = hadmods.meson_field_v2(
+                name=name,
+                block=str(config.blocksize),
+                gammas=gammas_mod,
+                low_modes="" if pure_high else low_modes_defl,
+                left=left,
+                right=right,
+                output=block_outfile.filestem.format(
+                    leg_pair=leg_pair,
+                    mass=f"_m{mass}" if mass else "",
+                    n_index=_index_suffix(ni),
+                    hp_index=_index_suffix(hi),
+                ),
+                cb_pairs_left="" if pure_high else cbpairs_l,
+                cb_pairs_right="" if pure_high else cbpairs_r,
+            )
+            emitted.append(name)
+        return emitted
 
     # 6. CB pairs at defl_mass: two DISTINCT MUtilities::EigenPackCBPairs
     #    instances (the C++ setup requires cbPairsLeft != cbPairsRight),
@@ -714,33 +760,82 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
                 )
         schedule.append(name)
 
-    # 8. SpinTaste modules, one per Γ family that will emit blocks, plus
-    #    the scalar family whenever the tab writer, the precon, or an h
-    #    solve runs (tab/p/h are scalar-spin-taste regardless of which
-    #    families operations selects — the vector structure of
-    #    Vec-Scalar-Vec lives in the block kernels, not the solves). No
-    #    mass axis. Local families bind no gauge; vec_onelink binds
-    #    shift_gauge_name (gauge_apbc — D7). apply_g5="false" throughout
-    #    (the upstream XML's setting).
+    # 8. SpinTaste modules — the four-role scheme. ``spintaste_scalar``
+    #    (G1 G1) serves the tab writer, the precon, and the h solves
+    #    (scalar spin-taste regardless of which families operations
+    #    selects — the vector structure of Vec-Scalar-Vec lives in the
+    #    block kernels, not the solves). ``spintaste_svl`` carries the
+    #    union of the local families (scalar/vec_local) demanding blocks
+    #    — the merged ll/lh/nh local modules bind it. ``spintaste_vl``
+    #    is vectors-only (the scalar nl is derived offline and must NOT
+    #    be written) — the nl modules bind it. ``spintaste_vo`` binds
+    #    the shift gauge (gauge_apbc — D7) — the vo modules bind it.
+    #    The scalar/svl pair may coincide when only one local family
+    #    demands blocks (accepted redundancy). Local families bind no
+    #    gauge; apply_g5="false" throughout (the upstream XML's setting).
     needed_families = set(needed_ref) | {family for (family, _, _, _, _) in needed_h}
     if tab_needed or need_precon:
-        needed_families.add(Gamma.SCALAR_LOCAL)
-    spintaste_names: t.Dict[Gamma, str] = {}
-    for gamma in (Gamma.SCALAR_LOCAL, Gamma.VEC_LOCAL, Gamma.VEC_ONELINK):
-        if gamma not in needed_families:
-            continue
-        name = f"spintaste_{gamma.name.lower()}"
-        spintaste_names[gamma] = name
-        modules[name] = hadmods.spin_taste(
-            name=name,
-            gammas=gamma.gamma_string,
-            gauge="" if gamma.local else config.shift_gauge_name,
+        modules["spintaste_scalar"] = hadmods.spin_taste(
+            name="spintaste_scalar",
+            gammas=Gamma.SCALAR_LOCAL.gamma_string,
+            gauge="",
             apply_g5="false",
         )
-        schedule.append(name)
+        schedule.append("spintaste_scalar")
+
+    def _union_gamma_string(families):
+        pairs = list(
+            dict.fromkeys(
+                g for fam in families for g in fam.gamma_list
+            )
+        )
+        return " ".join(
+            f"({p})".replace("_", " ") for p in pairs
+        )
+
+    svl_families = [
+        g
+        for g in (Gamma.SCALAR_LOCAL, Gamma.VEC_LOCAL)
+        if g in needed_families
+    ]
+    if svl_families:
+        modules["spintaste_svl"] = hadmods.spin_taste(
+            name="spintaste_svl",
+            gammas=_union_gamma_string(svl_families),
+            gauge="",
+            apply_g5="false",
+        )
+        schedule.append("spintaste_svl")
+    if any(k[0] == "nl" and g["local"] for k, g in ref_groups.items()):
+        modules["spintaste_vl"] = hadmods.spin_taste(
+            name="spintaste_vl",
+            gammas=Gamma.VEC_LOCAL.gamma_string,
+            gauge="",
+            apply_g5="false",
+        )
+        schedule.append("spintaste_vl")
+    if any(gamma == Gamma.VEC_ONELINK for gamma in needed_families):
+        modules["spintaste_vo"] = hadmods.spin_taste(
+            name="spintaste_vo",
+            gammas=Gamma.VEC_ONELINK.gamma_string,
+            gauge=config.shift_gauge_name,
+            apply_g5="false",
+        )
+        schedule.append("spintaste_vo")
+
+    # 8b. ll blocks first (append order IS the schedule — D10): the ll
+    #     modules reference only lowModes=eig, the CB pair modules, and
+    #     their gammas module — no noise, wall, precon, or solver
+    #     dependency — so nothing but the eigenvector pack is resident
+    #     when they run, and the cheap outputs are banked before the
+    #     long solve chain (crash-resume granularity). nl/lh/nh stay at
+    #     step 13 after the h solves.
+    for key in sorted(k for k in ref_groups if k[0] == "ll"):
+        leg_pair, mass, ni, hi = key
+        schedule += _emit_block_group(ref_groups[key], leg_pair, mass, ni, hi)
 
     # 9. Full-volume noise + the batch RandomWall source (demand-driven).
-    #    The ``_vec`` companions (noise_fv_vec, noise_t{t0}_vec) are
+    #    The ``_vec`` companions (noise_fv_vec, noise_batch_vec) are
     #    implicit C++ outputs of the color-diagonal noise modules,
     #    published whenever colorDiag=true — nothing to emit for them.
     if split_noise:
@@ -758,12 +853,12 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
                 name="noise_fv", nsrc=str(batch.noise)
             )
             schedule.append("noise_fv")
-        if need_noise_t0:
+        if need_noise_batch:
             modules[noise_batch] = hadmods.noise_rw(
                 name=noise_batch,
                 nsrc=str(batch.noise),
-                t0=str(batch.t0),
-                tstep=str(batch.t_step),
+                t0="0",
+                tstep="1",
                 noise="noise_fv",
             )
             schedule.append(noise_batch)
@@ -781,7 +876,7 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
             modules[f"mf_tab_n{wi}"] = hadmods.meson_field_v2(
                 name=f"mf_tab_n{wi}",
                 block=str(config.blocksize),
-                gammas=spintaste_names[Gamma.SCALAR_LOCAL],
+                gammas="spintaste_scalar",
                 low_modes=low_modes_defl,
                 left="",
                 right=f"noise_fv_n{wi}_vec",
@@ -801,7 +896,7 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
             modules["mf_tab"] = hadmods.meson_field_v2(
                 name="mf_tab",
                 block=str(config.blocksize),
-                gammas=spintaste_names[Gamma.SCALAR_LOCAL],
+                gammas="spintaste_scalar",
                 low_modes=low_modes_defl,
                 left="",
                 right=noise_fv_vec,
@@ -822,8 +917,8 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     #     the whole source window with a2a_batch="true" (single-key
     #     output, batch-guess form consumable by canonical StagGaugeProp).
     #     The batch data contract is pinned by construction (D12) —
-    #     upstream deliberately does not cross-check it: tA=t0,
-    #     tB=t0+(n_slices-1)·t_step, tStep=t_step, nNoise=noise (the
+    #     upstream deliberately does not cross-check it: tA=0,
+    #     tB=time-1, tStep=1, nNoise=noise (the
     #     RandomWall nSrc), labels=G1_G1 == the scalar SpinTaste module's
     #     effective label, projector absent.
     if split_noise:
@@ -836,11 +931,11 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
                 action=action_defl,
                 low_modes=low_modes_defl,
                 meson_field=f"mfload_tab_n{wi}",
-                gammas=spintaste_names[Gamma.SCALAR_LOCAL],
+                gammas="spintaste_scalar",
                 labels="G1_G1",
-                ta=str(batch.t0),
-                tb=str(batch.tb),
-                tstep=str(batch.t_step),
+                ta="0",
+                tb=str(batch.time - 1),
+                tstep="1",
                 noise=f"noise_fv_n{wi}_vec",
                 noise_index="0",
                 n_noise="1",
@@ -853,11 +948,11 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
             action=action_defl,
             low_modes=low_modes_defl,
             meson_field="mfload_tab",
-            gammas=spintaste_names[Gamma.SCALAR_LOCAL],
+            gammas="spintaste_scalar",
             labels="G1_G1",
-            ta=str(batch.t0),
-            tb=str(batch.tb),
-            tstep=str(batch.t_step),
+            ta="0",
+            tb=str(batch.time - 1),
+            tstep="1",
             noise=noise_fv_vec,
             n_noise=str(batch.noise),
             a2a_batch="true",
@@ -865,18 +960,19 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
         schedule.append(precon)
 
     # 11b. World walls (split-noise mode): external-noise StagRandomWall
-    #      (nSrc=1) masking the world's realization to the batch window.
-    #      Only the h solves consume a wall, so one per h-demand world;
-    #      emitted after the precon it sits beside in the chain and
-    #      before the h solves that read it (append order, D10).
+    #      (nSrc=1) covering the world's realization at t0=0/tStep=1
+    #      (full volume is structural). Only the h solves consume a
+    #      wall, so one per h-demand world; emitted after the precon it
+    #      sits beside in the chain and before the h solves that read it
+    #      (append order, D10).
     if split_noise:
         for wi in sorted({w for w, _ in h_demand}):
-            wname = f"noise_t{batch.t0}_n{wi}"
+            wname = f"noise_batch_n{wi}"
             modules[wname] = hadmods.noise_rw(
                 name=wname,
                 nsrc="1",
-                t0=str(batch.t0),
-                tstep=str(batch.t_step),
+                t0="0",
+                tstep="1",
                 noise=f"noise_fv_n{wi}",
             )
             schedule.append(wname)
@@ -888,124 +984,40 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     if split_noise:
         # 12s. Per-world h solves.
         for wi, mass_label in sorted(h_demand):
-            name = f"quark_h_n{wi}_mass_{mass_label}_t{batch.t0}"
+            name = f"quark_h_n{wi}_mass_{mass_label}"
             modules[name] = hadmods.quark_prop_v2(
                 name=name,
-                source=f"noise_t{batch.t0}_n{wi}_vec",
+                source=f"noise_batch_n{wi}_vec",
                 solver=f"sib_solver_mass_{mass_label}",
                 guess=f"precon_n{wi}",
-                gammas=spintaste_names[Gamma.SCALAR_LOCAL],
+                gammas="spintaste_scalar",
             )
             schedule.append(name)
     else:
         for mass_label in h_masses:
-            name = f"quark_h_mass_{mass_label}_t{batch.t0}"
+            name = f"quark_h_mass_{mass_label}"
             modules[name] = hadmods.quark_prop_v2(
                 name=name,
                 source=f"{noise_batch}_vec",
                 solver=f"sib_solver_mass_{mass_label}",
                 guess=precon,
-                gammas=spintaste_names[Gamma.SCALAR_LOCAL],
+                gammas="spintaste_scalar",
             )
             schedule.append(name)
 
-    # 13. Leg-pair blocks per family (flattened stems, D8): reference
-    #     pairs once at defl_mass (mass-free stem token; ll every
-    #     family, nl only the vector families — see
-    #     _reference_pairs), h pairs per operations mass (_m<label>
-    #     token). Split-noise mode emits one module per world
-    #     combination; its noise legs bind the world instance modules
-    #     and the stem renders the _n{i}/_n{j} suffixes via the derived
-    #     split outfile. Pure-high pairs (nh) carry empty lowModes and
-    #     no CB pairs; low-side pairs bind both CB pair modules.
-    #     Blocks append after every module they reference (append order
-    #     IS the schedule, D10).
-    block_outfile = (
-        _split_block_outfile(config) if split_noise else config.output_config.file
-    )
-    for op in config.op_list:
-        gamma = op.gamma
-        nick = _FAMILY_NICKNAMES[gamma]
-        if not needed_ref.get(gamma) and not any(
-            e[0] == gamma for e in needed_h
-        ):
-            # No block of this family is demanded — the family's
-            # SpinTaste module was not emitted either.
-            continue
-        gammas_ref = spintaste_names[gamma]
-        for leg_pair in _reference_pairs(gamma):
-            combos = sorted(c for c in needed_ref.get(gamma, ()) if c[0] == leg_pair)
-            for _, ni, hi in combos:
-                pure_high = leg_pair in _PURE_HIGH_LEG_PAIRS
-                name = f"mf_{nick}_{leg_pair}"
-                if ni is not None:
-                    name += f"_n{ni}"
-                if hi is not None:
-                    name += f"_n{hi}"
-                name += f"_t{batch.t0}"
-                if split_noise:
-                    left = f"noise_fv_n{ni}_vec" if leg_pair.startswith("n") else ""
-                    right = f"precon_n{hi}" if leg_pair.endswith("p") else ""
-                else:
-                    left = noise_fv_vec if leg_pair.startswith("n") else ""
-                    right = precon if leg_pair.endswith("p") else ""
-                modules[name] = hadmods.meson_field_v2(
-                    name=name,
-                    block=str(config.blocksize),
-                    gammas=gammas_ref,
-                    low_modes="" if pure_high else low_modes_defl,
-                    left=left,
-                    right=right,
-                    output=block_outfile.filestem.format(
-                        leg_pair=leg_pair,
-                        mass="",
-                        n_index=_index_suffix(ni),
-                        hp_index=_index_suffix(hi),
-                    ),
-                    cb_pairs_left="" if pure_high else cbpairs_l,
-                    cb_pairs_right="" if pure_high else cbpairs_r,
-                )
-                schedule.append(name)
-        for mass_label in config.masses:
-            for leg_pair in _H_LEG_PAIRS:
-                combos = sorted(
-                    e for e in needed_h if e[0] == gamma and e[1] == leg_pair
-                )
-                for _, _, _, ni, hi in combos:
-                    pure_high = leg_pair in _PURE_HIGH_LEG_PAIRS
-                    name = f"mf_{nick}_{leg_pair}"
-                    if ni is not None:
-                        name += f"_n{ni}"
-                    if hi is not None:
-                        name += f"_n{hi}"
-                    name += f"_mass_{mass_label}_t{batch.t0}"
-                    if split_noise:
-                        left = (
-                            f"noise_fv_n{ni}_vec"
-                            if leg_pair.startswith("n")
-                            else ""
-                        )
-                        right = f"quark_h_n{hi}_mass_{mass_label}_t{batch.t0}"
-                    else:
-                        left = noise_fv_vec if leg_pair.startswith("n") else ""
-                        right = f"quark_h_mass_{mass_label}_t{batch.t0}"
-                    modules[name] = hadmods.meson_field_v2(
-                        name=name,
-                        block=str(config.blocksize),
-                        gammas=gammas_ref,
-                        low_modes="" if pure_high else low_modes_defl,
-                        left=left,
-                        right=right,
-                        output=block_outfile.filestem.format(
-                            leg_pair=leg_pair,
-                            mass=f"_m{mass_label}",
-                            n_index=_index_suffix(ni),
-                            hp_index=_index_suffix(hi),
-                        ),
-                        cb_pairs_left="" if pure_high else cbpairs_l,
-                        cb_pairs_right="" if pure_high else cbpairs_r,
-                    )
-                    schedule.append(name)
+    # 13. Remaining block modules (flattened stems, D8): the nl reference
+    #     groups (vectors-only — the scalar nl is derived offline) and
+    #     the h groups, per operations mass (_m<label> token), all via
+    #     the merged (leg_pair, worlds, mass) emission of step 8b.
+    #     Pure-high pairs (nh) carry empty lowModes and no CB pairs;
+    #     low-side pairs bind both CB pair modules. Blocks append after
+    #     every module they reference (append order IS the schedule, D10).
+    for key in sorted(k for k in ref_groups if k[0] != "ll"):
+        leg_pair, mass, ni, hi = key
+        schedule += _emit_block_group(ref_groups[key], leg_pair, mass, ni, hi)
+    for key in sorted(h_groups):
+        leg_pair, mass, ni, hi = key
+        schedule += _emit_block_group(h_groups[key], leg_pair, mass, ni, hi)
 
     # Deduplicate schedule: keep first occurrence of each module name
     deduplicated_schedule = list(dict.fromkeys(schedule))

@@ -93,9 +93,6 @@ def _diagram_input(diagram: SIBDiagramConfig) -> t.Dict[str, t.Any]:
         "mass": diagram.mass._asdict(),
         "defl_mass": diagram.defl_mass,
         "noise": diagram.noise,
-        "t0": diagram.t0,
-        "t_step": diagram.t_step,
-        "n_slices": diagram.n_slices,
         "blocks": diagram.blocks,
         "tab": diagram.tab,
         "evalfile": diagram.evalfile,
@@ -248,11 +245,6 @@ def validate_sib_diagram(config: SIBDiagramConfig) -> None:
             "the cross-noise world selection needs at least two "
             "independent realizations."
         )
-    if config.t0 < 0 or config.t_step < 1 or config.n_slices < 1:
-        raise ValueError(
-            f"SIB batch window invalid: t0={config.t0}, t_step="
-            f"{config.t_step}, n_slices={config.n_slices}."
-        )
     # The split-noise layout is required (D6): reject shared-mode stems
     # loudly — the derivation layer addresses per-world files.
     stem = config.blocks.filestem
@@ -283,17 +275,10 @@ def validate_sib_diagram(config: SIBDiagramConfig) -> None:
 
 
 def validate_config(config: SIBContractConfig) -> None:
-    """Validate the composite: non-empty diagrams, batch windows in extent."""
+    """Validate the composite: non-empty diagrams. Full-volume geometry
+    needs no window checks — the accessor's data shape guards cover it."""
     if len(config.diagrams) == 0:
         raise ValueError("SIBContractConfig.diagrams must not be empty")
-    for dlabel, diagram in config.diagrams.items():
-        tb = diagram.t0 + (diagram.n_slices - 1) * diagram.t_step
-        if not (0 <= diagram.t0 <= tb < config.time):
-            raise ValueError(
-                f"diagram {dlabel!r}: batch window [t0={diagram.t0}, "
-                f"tB={tb}] stride {diagram.t_step} exceeds the lattice "
-                f"time extent {config.time}."
-            )
 
 
 # Sub-config registration: SIBDiagramConfig gets the default route (absorbs

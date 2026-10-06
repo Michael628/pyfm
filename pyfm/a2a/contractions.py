@@ -183,9 +183,9 @@ def sib_conn_3pt(
     identity (``pyfm.a2a.sib_derive.SIBBlockAccessor``). World selection:
     single noise junctions sum diagonal world pairs; two-junction terms sum
     ordered off-diagonal pairs; ``nnn`` sums pairwise-distinct triples. At
-    each noise junction the h/p column slice is pinned to the eta-side
-    field's time row (the masked noise sees operators only at its source
-    slice; pinned times outside the batch window contribute nothing).
+    each noise junction the h/p column block is pinned to the eta-side
+    field's time row (full-volume noise: columns are slice-major
+    ``3*t + c`` over the whole lattice, so every time contributes).
 
     Outputs are RAW per-term (T,T,T) world sums — no normalization factors
     (D7: aggregation applies per-term world-count factors then sums the
@@ -213,9 +213,6 @@ def sib_conn_3pt(
         mass=diagram_config.mass,
         defl_mass=diagram_config.defl_mass,
         noise=diagram_config.noise,
-        t0=diagram_config.t0,
-        t_step=diagram_config.t_step,
-        n_slices=diagram_config.n_slices,
     )
 
     times = generate_time_sets(diagram_config, contract_config)
@@ -300,8 +297,8 @@ def _sib_terms(
     J23 (M2.cols x M3.rows), J31 (M3.cols x M1.rows); term ids follow
     (J12, J23, J31) letters, 'l' = eig, 'n' = noise. At each noise
     junction the h/p column slice is pinned to the eta-side field's time
-    row (D5/D6); ``cols`` returns None outside the window and the
-    contribution is skipped.
+    row (D5/D6); full-volume coverage means every pinned time is
+    in-range (``cols`` enforces width/bounds loudly).
     """
     from pyfm.a2a.sib_derive import SCALAR_GAMMA
 
@@ -325,8 +322,6 @@ def _sib_terms(
     for i in worlds:
         for t2 in range(s2.start, s2.stop):
             x = cols(pl_o[i][s1], t2)
-            if x is None:
-                continue
             y = oe.contract("uac,cb->uab", x, nl_s[i][t2])
             cij["nll"][s1, t2, s3] += oe.contract("uab,vba->uv", y, ll_o[s3])
 
@@ -334,8 +329,6 @@ def _sib_terms(
     for i in worlds:
         for t3 in range(s3.start, s3.stop):
             x = cols(pl_s[i][s2], t3)
-            if x is None:
-                continue
             cij["lnl"][s1, s2, t3] += oe.contract(
                 "uab,vbc,ca->uv", ll_o[s1], x, nl_o[i][t3]
             )
@@ -344,8 +337,6 @@ def _sib_terms(
     for i in worlds:
         for t1 in range(s1.start, s1.stop):
             x = cols(pl_o[i][s3], t1)
-            if x is None:
-                continue
             cij["lln"][t1, s2, s3] += oe.contract(
                 "ca,uab,vbc->uv", nl_o[i][t1], ll_s[s2], x
             )
@@ -364,12 +355,8 @@ def _sib_terms(
     for a, b in _sib_offdiag(accessor.noise):
         for t2 in range(s2.start, s2.stop):
             x = cols(pl_o[a][s1], t2)
-            if x is None:
-                continue
             for t3 in range(s3.start, s3.stop):
                 y = cols(pn_s[(a, b)][t2], t3)
-                if y is None:
-                    continue
                 cij["nnl"][s1, t2, t3] += oe.contract(
                     "ukc,cd,dk->u", x, y, nl_o[b][t3]
                 )
@@ -382,11 +369,7 @@ def _sib_terms(
             nl2 = nl_s[a][t2]
             for t1 in range(s1.start, s1.stop):
                 x = cols(pn_o[(c, a)][t1], t2)
-                if x is None:
-                    continue
                 z = cols(pl_o[c][s3], t1)
-                if z is None:
-                    continue
                 cij["nln"][t1, t2, s3] += oe.contract(
                     "ed,dk,vke->v", x, nl2, z
                 )
@@ -396,12 +379,8 @@ def _sib_terms(
     for a, b in _sib_offdiag(accessor.noise):
         for t3 in range(s3.start, s3.stop):
             u = cols(pl_s[b][s2], t3)
-            if u is None:
-                continue
             for t1 in range(s1.start, s1.stop):
                 v = cols(pn_o[(b, a)][t3], t1)
-                if v is None:
-                    continue
                 cij["lnn"][t1, s2, t3] += oe.contract(
                     "ck,vkw,wc->v", nl_o[a][t1], u, v
                 )
@@ -410,16 +389,10 @@ def _sib_terms(
     for a, b, c in _sib_distinct(accessor.noise):
         for t2 in range(s2.start, s2.stop):
             x1_all = cols(pn_o[(c, a)][s1], t2)
-            if x1_all is None:
-                continue
             for t3 in range(s3.start, s3.stop):
                 x2 = cols(pn_s[(a, b)][t2], t3)
-                if x2 is None:
-                    continue
                 for t1 in range(s1.start, s1.stop):
                     x3 = cols(pn_o[(b, c)][t3], t1)
-                    if x3 is None:
-                        continue
                     cij["nnn"][t1, t2, t3] += oe.contract(
                         "ed,df,fe->", x1_all[t1 - s1.start], x2, x3
                     )

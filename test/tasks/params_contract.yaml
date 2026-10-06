@@ -117,8 +117,6 @@ contract_params:
           - "l"
           - "u"
       defl_mass: l
-      t0: 0
-      n_slices: 4
       blocks: sib_meson_blocks
       tab: sib_meson_tab
       evalfile: eval
@@ -131,8 +129,6 @@ contract_params:
         mass:
           - "l"
       defl_mass: l
-      t0: 0
-      n_slices: 4
       blocks: sib_meson_blocks
       tab: sib_meson_tab
       evalfile: eval

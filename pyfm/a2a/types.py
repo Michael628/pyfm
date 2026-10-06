@@ -184,9 +184,11 @@ class SIBDiagramConfig(SimpleConfig):
     (validation rejects stems lacking the ``{n_index}``/``{hp_index}`` world
     tokens): the contraction derives the removed lp/np/scalar-nl blocks
     offline via the pair-basis identity (``pyfm/a2a/sib_derive.py``).
-    ``batch`` geometry (noise/t0/t_step/n_slices) mirrors the producer's
-    SIBBatchConfig and maps h/p columns (slice-major ``3*s + c``) to lattice
-    times. ``outfile`` targets the per-term correlator files and must carry
+    ``noise`` is the world count; h/p columns are slice-major ``3*t + c``
+    over the full lattice (full-volume noise — upstream ``StagRandomWall``
+    cannot express sub-extent windows), so the column block for time ``t``
+    is ``3*t..3*t+3`` and shape checks enforce the width. ``outfile``
+    targets the per-term correlator files and must carry
     ``{mass}`` and ``{gamma}`` tokens (terms ride inside as frame labels).
     """
 
@@ -197,11 +199,8 @@ class SIBDiagramConfig(SimpleConfig):
     tab: Outfile
     evalfile: Outfile
     outfile: Outfile
-    t0: int
-    n_slices: int
     noise: int
     defl_mass: str = "l"
-    t_step: int = 1
     symmetric: bool = False
 
     @property

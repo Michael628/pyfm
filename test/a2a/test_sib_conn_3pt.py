@@ -25,9 +25,6 @@ from pyfm.domain import MassDict, OpList, Outfile
 
 N_EIG = 2
 NT = 4
-N_SLICES = 2
-T0 = 1
-T_STEP = 2
 NOISE = 2
 MASSES = {"l": 0.01, "u": 0.02}
 DEFL = "l"
@@ -70,24 +67,34 @@ class _World:
 
 def _ref_lp(raw_ll, tab, mass):
     w = w_rows(LAM, mass)
-    out = np.zeros((NT, raw_ll.shape[1], N_SLICES * 3), dtype=np.complex128)
+    out = np.zeros((NT, raw_ll.shape[1], NT * 3), dtype=np.complex128)
     for t in range(NT):
-        for s in range(N_SLICES):
-            out[t, :, 3 * s : 3 * s + 3] = raw_ll[t] @ (
-                tab[T0 + s * T_STEP] * w[:, None]
+        for tt in range(NT):
+            out[t, :, 3 * tt : 3 * tt + 3] = raw_ll[t] @ (
+                tab[tt] * w[:, None]
             )
     return out
 
 
 def _ref_np(nl_raw, tab_hp, mass):
     w = w_rows(LAM, mass)
-    out = np.zeros((NT, 3, N_SLICES * 3), dtype=np.complex128)
+    out = np.zeros((NT, 3, NT * 3), dtype=np.complex128)
     for t in range(NT):
-        for s in range(N_SLICES):
-            out[t, :, 3 * s : 3 * s + 3] = nl_raw[t] @ (
-                tab_hp[T0 + s * T_STEP] * w[:, None]
+        for tt in range(NT):
+            out[t, :, 3 * tt : 3 * tt + 3] = nl_raw[t] @ (
+                tab_hp[tt] * w[:, None]
             )
     return out
+
+
+@pytest.fixture()
+def surface(tmp_path):
+    return _make_surface(tmp_path, NOISE)
+
+
+@pytest.fixture()
+def surface3(tmp_path):
+    return _make_surface(tmp_path, 3)
 
 
 def _make_surface(tmp_path, noise):
@@ -100,15 +107,15 @@ def _make_surface(tmp_path, noise):
         for g in GAMMAS
     }
     delta_lh = {
-        (g, w, m): rng.normal(size=(NT, 2 * N_EIG, N_SLICES * 3))
-        + 1j * rng.normal(size=(NT, 2 * N_EIG, N_SLICES * 3))
+        (g, w, m): rng.normal(size=(NT, 2 * N_EIG, NT * 3))
+        + 1j * rng.normal(size=(NT, 2 * N_EIG, NT * 3))
         for g in GAMMAS
         for w in range(noise)
         for m in MASSES
     }
     delta_nh = {
-        (g, i, j, m): rng.normal(size=(NT, 3, N_SLICES * 3))
-        + 1j * rng.normal(size=(NT, 3, N_SLICES * 3))
+        (g, i, j, m): rng.normal(size=(NT, 3, NT * 3))
+        + 1j * rng.normal(size=(NT, 3, NT * 3))
         for g in GAMMAS
         for i in range(noise)
         for j in range(noise)
@@ -195,10 +202,7 @@ def _make_surface(tmp_path, noise):
         tab=tab_out,
         evalfile=evalfile,
         outfile=outfile,
-        t0=T0,
-        n_slices=N_SLICES,
         noise=noise,
-        t_step=T_STEP,
     )
     contract = SIBContractConfig(
         formatting={},
@@ -216,29 +220,14 @@ def _make_surface(tmp_path, noise):
         mass=MassDict.from_dict(MASSES),
         defl_mass=DEFL,
         noise=noise,
-        t0=T0,
-        t_step=T_STEP,
-        n_slices=N_SLICES,
     )
     return accessor, contract, worlds, raw_ll
 
 
-
-@pytest.fixture()
-def surface(tmp_path):
-    return _make_surface(tmp_path, NOISE)
-
-@pytest.fixture()
-def surface3(tmp_path):
-    return _make_surface(tmp_path, 3)
-
-
-def _colsel(row, t_pin, accessor):
-    """Reference slice-pinned column selection (explicit index arithmetic)."""
-    j = accessor.slice_of(t_pin)
-    if j is None:
-        return None
-    return row[..., 3 * j : 3 * j + 3]
+def _colsel(row, t_pin):
+    """Reference time-pinned column selection (explicit index arithmetic):
+    slice-major ``3*t + c`` — the block for time ``t`` is ``3*t..3*t+3``."""
+    return row[..., 3 * t_pin : 3 * t_pin + 3]
 
 
 def _ref_term(accessor, gamma, mass_label, term):
@@ -279,25 +268,19 @@ def _ref_term(accessor, gamma, mass_label, term):
             val = np.einsum("ab,bc,ca->", ll_o[t1], ll_s[t2], ll_o[t3])
         elif term == "nll":
             for i in worlds:
-                x = _colsel(pl_o[i][t1], t2, accessor)
-                if x is None:
-                    continue
+                x = _colsel(pl_o[i][t1], t2)
                 val += np.einsum(
                     "ac,cb,ba->", x, nl_s[i][t2], ll_o[t3]
                 )
         elif term == "lnl":
             for i in worlds:
-                x = _colsel(pl_s[i][t2], t3, accessor)
-                if x is None:
-                    continue
+                x = _colsel(pl_s[i][t2], t3)
                 val += np.einsum(
                     "ab,bc,ca->", ll_o[t1], x, nl_o[i][t3]
                 )
         elif term == "lln":
             for i in worlds:
-                x = _colsel(pl_o[i][t3], t1, accessor)
-                if x is None:
-                    continue
+                x = _colsel(pl_o[i][t3], t1)
                 val += np.einsum(
                     "ca,ab,bc->", nl_o[i][t1], ll_s[t2], x
                 )
@@ -306,10 +289,8 @@ def _ref_term(accessor, gamma, mass_label, term):
                 for b in worlds:
                     if a == b:
                         continue
-                    x = _colsel(pl_o[a][t1], t2, accessor)
-                    y = _colsel(pn_s[(a, b)][t2], t3, accessor)
-                    if x is None or y is None:
-                        continue
+                    x = _colsel(pl_o[a][t1], t2)
+                    y = _colsel(pn_s[(a, b)][t2], t3)
                     val += np.einsum(
                         "ac,cd,da->", x, y, nl_o[b][t3]
                     )
@@ -318,10 +299,8 @@ def _ref_term(accessor, gamma, mass_label, term):
                 for c in worlds:
                     if a == c:
                         continue
-                    x = _colsel(pn_o[(c, a)][t1], t2, accessor)
-                    z = _colsel(pl_o[c][t3], t1, accessor)
-                    if x is None or z is None:
-                        continue
+                    x = _colsel(pn_o[(c, a)][t1], t2)
+                    z = _colsel(pl_o[c][t3], t1)
                     val += np.einsum(
                         "ed,dk,ke->", x, nl_s[a][t2], z
                     )
@@ -330,10 +309,8 @@ def _ref_term(accessor, gamma, mass_label, term):
                 for b in worlds:
                     if a == b:
                         continue
-                    u = _colsel(pl_s[b][t2], t3, accessor)
-                    v = _colsel(pn_o[(b, a)][t3], t1, accessor)
-                    if u is None or v is None:
-                        continue
+                    u = _colsel(pl_s[b][t2], t3)
+                    v = _colsel(pn_o[(b, a)][t3], t1)
                     val += np.einsum(
                         "ck,kw,wc->", nl_o[a][t1], u, v
                     )
@@ -343,11 +320,9 @@ def _ref_term(accessor, gamma, mass_label, term):
                     for c in worlds:
                         if a == b or b == c or c == a:
                             continue
-                        x1 = _colsel(pn_o[(c, a)][t1], t2, accessor)
-                        x2 = _colsel(pn_s[(a, b)][t2], t3, accessor)
-                        x3 = _colsel(pn_o[(b, c)][t3], t1, accessor)
-                        if x1 is None or x2 is None or x3 is None:
-                            continue
+                        x1 = _colsel(pn_o[(c, a)][t1], t2)
+                        x2 = _colsel(pn_s[(a, b)][t2], t3)
+                        x3 = _colsel(pn_o[(b, c)][t3], t1)
                         val += np.einsum("ed,df,fe->", x1, x2, x3)
         C[t1, t2, t3] = val
     return C
@@ -400,20 +375,16 @@ class TestKernel:
         ref = _ref_term(accessor, "G1_G1", "l", "lnl")
         assert np.allclose(got, ref, atol=1e-10)
 
-    def test_out_of_window_pinned_times_contribute_zero(self, surface):
-        """Window [1, 3] on nt=4: the nll term needs t2 in the window."""
+    def test_full_volume_no_zero_time_slabs(self, surface):
+        """Full-volume coverage: every t2 slab of nll receives a
+        stochastic contribution (no window — nothing is skipped)."""
         accessor, contract, *_ = surface
         diagram = contract.diagrams["hvp"]
         corr = sib_conn_3pt(("sib",), diagram, contract)
         token = diagram.mass.to_string("l", True)
         nll = corr[(VECTOR_GAMMAS[0], token)]["nll"]
-        # t2 = 0 and t2 = 2 are outside the window -> zero slabs.
-        assert np.allclose(nll[:, 0, :], 0.0)
-        assert np.allclose(nll[:, 2, :], 0.0)
-        # and the reference agrees everywhere anyway (parametrized test);
-        # here assert the in-window slabs are NOT all zero (random data).
-        assert not np.allclose(nll[:, 1, :], 0.0)
-        assert not np.allclose(nll[:, 3, :], 0.0)
+        for t2 in range(NT):
+            assert not np.allclose(nll[:, t2, :], 0.0)
 
     def test_nnn_empty_selection_at_noise_two(self, surface):
         """noise=2 admits no pairwise-distinct triple: nnn is identically
@@ -423,6 +394,21 @@ class TestKernel:
         corr = sib_conn_3pt(("sib",), diagram, contract)
         token = diagram.mass.to_string("l", True)
         assert np.allclose(corr[(VECTOR_GAMMAS[0], token)]["nnn"], 0.0)
+
+    @pytest.mark.parametrize("term", ["nnl", "nln", "lnn", "nnn"])
+    def test_world_selection_noise_three(self, surface3, term):
+        """noise=3: three-world off-diagonal pairs and the non-empty nnn
+        triple selection match the naive reference."""
+        accessor, contract, *_ = surface3
+        diagram = contract.diagrams["hvp"]
+        corr = sib_conn_3pt(("sib",), diagram, contract)
+        token = diagram.mass.to_string("l", True)
+        gamma = VECTOR_GAMMAS[0]
+        got = corr[(gamma, token)][term]
+        ref = _ref_term(accessor, gamma, "l", term)
+        assert np.allclose(got, ref, atol=1e-10)
+        if term == "nnn":
+            assert not np.allclose(got, 0.0)
 
     def test_returns_all_terms_and_keys(self, surface):
         accessor, contract, *_ = surface
@@ -445,17 +431,3 @@ class TestKernel:
         )
         with pytest.raises(ValueError, match="Symmetric"):
             sib_conn_3pt(("sib",), diagram, contract)
-    @pytest.mark.parametrize("term", ["nnl", "nln", "lnn", "nnn"])
-    def test_world_selection_noise_three(self, surface3, term):
-        """noise=3: three-world off-diagonal pairs and the non-empty nnn
-        triple selection match the naive reference."""
-        accessor, contract, *_ = surface3
-        diagram = contract.diagrams["hvp"]
-        corr = sib_conn_3pt(("sib",), diagram, contract)
-        token = diagram.mass.to_string("l", True)
-        gamma = VECTOR_GAMMAS[0]
-        got = corr[(gamma, token)][term]
-        ref = _ref_term(accessor, gamma, "l", term)
-        assert np.allclose(got, ref, atol=1e-10)
-        if term == "nnn":
-            assert not np.allclose(got, 0.0)

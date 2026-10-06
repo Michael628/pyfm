@@ -36,12 +36,13 @@ All mass dependence is either ``w_rows(m)`` (p-side derivations) or the
 per-column ket refold (stored eig-ket sides): raw blocks are mass-independent
 because the eigenvectors are mass-shift invariant.
 
-Batch-window addressing: each world file's h/p columns are
-``n_slices*3`` in slice-major order ``3*s + c`` (nsrc=1 per world); the
-lattice time of slice ``s`` is ``t0 + s*t_step``. A noise junction pins the
-column slice to the eta-side field's time row; ``slice_of(t)`` maps a lattice
-time to its slice index (``None`` outside the window — those output rows get
-no stochastic contribution).
+Full-volume column addressing: each world file's h/p columns are
+``3*nt`` in slice-major order ``3*t + c`` (nsrc=1 per world) — upstream
+``StagRandomWall`` derives ``nSlices = nt/min(tStep, nt)`` with
+``t0 < tStep``, so production always covers every timeslice and the
+slice index equals the lattice time. A noise junction pins the column
+block to the eta-side field's time row ``t``; ``cols`` verifies the
+width loudly against ``3*nt``.
 """
 
 import typing as t
@@ -151,9 +152,6 @@ class SIBBlockAccessor:
         mass: MassDict,
         defl_mass: str,
         noise: int,
-        t0: int,
-        t_step: int,
-        n_slices: int,
     ) -> None:
         self.blocks = blocks
         self.tab_outfile = tab
@@ -161,43 +159,43 @@ class SIBBlockAccessor:
         self.mass = mass
         self.defl_mass = defl_mass
         self.noise = noise
-        self.t0 = t0
-        self.t_step = t_step
-        self.n_slices = n_slices
         self._cache: t.Dict[t.Tuple, xp.ndarray] = {}
         self._lam: xp.ndarray | None = None
+        self._nt: int | None = None
 
     # ------------------------------------------------------------------
     # geometry
     # ------------------------------------------------------------------
-    def slice_of(self, t: int) -> int | None:
-        """Batch-slice index for lattice time ``t``; ``None`` outside."""
-        j, r = divmod(t - self.t0, self.t_step)
-        if r != 0 or j < 0 or j >= self.n_slices:
-            return None
-        return j
+    def nt(self) -> int:
+        """Lattice time extent (== the wall-slice count; full coverage).
 
-    def window_times(self) -> t.List[int]:
-        """Lattice times the batch window covers."""
-        return [self.t0 + j * self.t_step for j in range(self.n_slices)]
-
-    def cols(self, block: xp.ndarray, t_pin: int) -> xp.ndarray | None:
-        """Slice-pinned column selection of an h/p block.
-
-        The last axis (``n_slices*3``, slice-major ``3*s + c``) is viewed as
-        ``(n_slices, 3)`` and slice ``slice_of(t_pin)`` extracted, giving
-        ``[..., 3]``. ``None`` when ``t_pin`` is outside the window — the
-        caller contributes nothing for that output time.
+        Derived from the data: the per-world tab is stored at every
+        lattice time ``[nt, 2*n_eig, 3]``, and full-volume noise means
+        every timeslice is a wall slice (upstream ``StagRandomWall``:
+        ``nSlices = nt/min(tStep, nt)``, ``t0 < tStep``).
         """
-        j = self.slice_of(t_pin)
-        if j is None:
-            return None
-        if block.shape[-1] != self.n_slices * 3:
+        if self._nt is None:
+            self._nt = int(self.tab(0).shape[0])
+        return self._nt
+
+    def cols(self, block: xp.ndarray, t_pin: int) -> xp.ndarray:
+        """Time-pinned column selection of an h/p block.
+
+        The last axis (``3*nt``, slice-major ``3*t + c``) is viewed as
+        ``(nt, 3)`` and the block for time ``t_pin`` extracted, giving
+        ``[..., 3]``. Width and bounds are verified loudly — a block
+        whose columns don't cover every lattice time breaks the
+        full-volume data contract.
+        """
+        nt = self.nt()
+        if not 0 <= t_pin < nt:
+            raise ValueError(f"pinned time {t_pin} outside [0, {nt})")
+        if block.shape[-1] != nt * 3:
             raise ValueError(
                 f"block last axis {block.shape[-1]} does not match the "
-                f"batch window {self.n_slices}*3"
+                f"full-volume width {nt}*3"
             )
-        return block.reshape(block.shape[:-1] + (self.n_slices, 3))[..., j, :]
+        return block.reshape(block.shape[:-1] + (nt, 3))[..., t_pin, :]
 
     # ------------------------------------------------------------------
     # weights
@@ -294,14 +292,13 @@ class SIBBlockAccessor:
         return self._cache[key]
 
     def wt(self, world: int, mass_label: str) -> xp.ndarray:
-        """``w_rows(mass) * tab_w[slice]`` per window slice ``[n_slices, 2*n_eig, 3]``."""
+        """``w_rows(mass) * tab_w[t]`` per lattice time ``[nt, 2*n_eig, 3]``."""
         key = ("wt", world, mass_label)
         if key not in self._cache:
             w = self.w_rows(mass_label)[:, None]
-            times = self.window_times()
             stored = self.tab(world)
             self._cache[key] = xp.stack(
-                [stored[tt] * w for tt in times], axis=0
+                [stored[tt] * w for tt in range(stored.shape[0])], axis=0
             )
         return self._cache[key]
 
@@ -389,7 +386,7 @@ class SIBBlockAccessor:
         return self._cache[key]
 
     def lh(self, gamma: str, world: int, mass_label: str) -> xp.ndarray:
-        """Stored ``lh`` ``[nt, 2*n_eig, n_slices*3]`` (no folding on h)."""
+        """Stored ``lh`` ``[nt, 2*n_eig, 3*nt]`` (no folding on h)."""
         key = ("lh", gamma, world, mass_label)
         if key not in self._cache:
             arr = load_block(
@@ -408,7 +405,7 @@ class SIBBlockAccessor:
     def nh(
         self, gamma: str, world_n: int, world_hp: int, mass_label: str
     ) -> xp.ndarray:
-        """Stored ``nh`` ``[nt, 3, n_slices*3]`` (no folding on h)."""
+        """Stored ``nh`` ``[nt, 3, 3*nt]`` (no folding on h)."""
         key = ("nh", gamma, world_n, world_hp, mass_label)
         if key not in self._cache:
             arr = load_block(
@@ -435,18 +432,18 @@ class SIBBlockAccessor:
     ) -> None:
         n_eig = 2 * self.n_eig()
         expected_rows = 3 if leg_pair == "nh" else n_eig
-        if arr.shape[1] != expected_rows or arr.shape[2] != self.n_slices * 3:
+        if arr.shape[1] != expected_rows or arr.shape[2] != self.nt() * 3:
             raise ValueError(
                 f"{leg_pair} gamma {gamma!r} worlds "
                 f"(n={world_n}, hp={world_hp}) has shape {arr.shape}; "
-                f"expected [nt, {expected_rows}, {self.n_slices * 3}]"
+                f"expected [nt, {expected_rows}, {self.nt() * 3}]"
             )
 
     # ------------------------------------------------------------------
     # derived blocks / pure-high differences
     # ------------------------------------------------------------------
     def _derived_lp(self, gamma: str, world: int, mass_label: str) -> xp.ndarray:
-        """Derived ``lp`` ``[nt, 2*n_eig, n_slices*3]`` (slice-major cols)."""
+        """Derived ``lp`` ``[nt, 2*n_eig, 3*nt]`` (slice-major cols)."""
         key = ("lp", gamma, world, mass_label)
         if key not in self._cache:
             wt = self.wt(world, mass_label)
@@ -457,7 +454,7 @@ class SIBBlockAccessor:
     def _derived_np(
         self, gamma: str, world_n: int, world_hp: int, mass_label: str
     ) -> xp.ndarray:
-        """Derived ``np`` ``[nt, 3, n_slices*3]``: ``nl_raw @ w*tab_{hp}``."""
+        """Derived ``np`` ``[nt, 3, 3*nt]``: ``nl_raw @ w*tab_{hp}``."""
         key = ("np", gamma, world_n, world_hp, mass_label)
         if key not in self._cache:
             wt = self.wt(world_hp, mass_label)
@@ -467,11 +464,11 @@ class SIBBlockAccessor:
 
     @staticmethod
     def _lp_np_product(raw: xp.ndarray, wt: xp.ndarray) -> xp.ndarray:
-        """Concatenate ``raw[t] @ wt[s]`` over window slices (col order 3s+c).
+        """Concatenate ``raw[t] @ wt[t']`` over lattice times (col order 3t+c).
 
-        ``raw`` is ``[nt, R, 2*n_eig]``; ``wt`` is ``[n_slices, 2*n_eig, 3]``;
-        the result is ``[nt, R, n_slices*3]`` — for each ``t`` and slice
-        ``s``, column ``(s, c)`` = ``raw[t] @ (w * tab[s])[:, c]``.
+        ``raw`` is ``[nt, R, 2*n_eig]``; ``wt`` is ``[nt, 2*n_eig, 3]``;
+        the result is ``[nt, R, 3*nt]`` — for each ``t`` and time ``t'``,
+        column ``(t', c)`` = ``raw[t] @ (w * tab[t'])[:, c]``.
         """
         return xp.stack(
             [
@@ -485,7 +482,7 @@ class SIBBlockAccessor:
         )
 
     def pure_lh(self, gamma: str, world: int, mass_label: str) -> xp.ndarray:
-        """``lh - lp`` (the pure-high ℓ-leg block) ``[nt, 2*n_eig, n_slices*3]``."""
+        """``lh - lp`` (the pure-high ℓ-leg block) ``[nt, 2*n_eig, 3*nt]``."""
         key = ("pure_lh", gamma, world, mass_label)
         if key not in self._cache:
             self._cache[key] = (
@@ -497,7 +494,7 @@ class SIBBlockAccessor:
     def pure_nh(
         self, gamma: str, world_n: int, world_hp: int, mass_label: str
     ) -> xp.ndarray:
-        """``nh - np`` (the pure-high n-leg block) ``[nt, 3, n_slices*3]``."""
+        """``nh - np`` (the pure-high n-leg block) ``[nt, 3, 3*nt]``."""
         key = ("pure_nh", gamma, world_n, world_hp, mass_label)
         if key not in self._cache:
             self._cache[key] = (

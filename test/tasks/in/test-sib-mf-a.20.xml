@@ -148,7 +148,7 @@
     </module>
     <module>
       <id>
-        <name>spintaste_scalar_local</name>
+        <name>spintaste_scalar</name>
         <type>MFermion::SpinTaste</type>
       </id>
       <options>
@@ -162,7 +162,21 @@
     </module>
     <module>
       <id>
-        <name>spintaste_vec_local</name>
+        <name>spintaste_svl</name>
+        <type>MFermion::SpinTaste</type>
+      </id>
+      <options>
+        <labels></labels>
+        <spinTaste>
+          <applyG5>false</applyG5>
+          <gammas>(G1 G1) (GX GX) (GY GY) (GZ GZ)</gammas>
+          <gauge></gauge>
+        </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>spintaste_vl</name>
         <type>MFermion::SpinTaste</type>
       </id>
       <options>
@@ -176,7 +190,7 @@
     </module>
     <module>
       <id>
-        <name>spintaste_vec_onelink</name>
+        <name>spintaste_vo</name>
         <type>MFermion::SpinTaste</type>
       </id>
       <options>
@@ -186,6 +200,44 @@
           <gammas>(GX G1) (GY G1) (GZ G1)</gammas>
           <gauge>gauge_apbc</gauge>
         </spinTaste>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_ll</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
+        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
+        <gammas>spintaste_svl</gammas>
+        <left></left>
+        <lowModes>evecs_mass_l</lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/ll_a</output>
+        <right></right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_vo_ll</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
+        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
+        <gammas>spintaste_vo</gammas>
+        <left></left>
+        <lowModes>evecs_mass_l</lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/ll_a</output>
+        <right></right>
       </options>
     </module>
     <module>
@@ -215,7 +267,7 @@
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_scalar_local</gammas>
+        <gammas>spintaste_scalar</gammas>
         <left></left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
@@ -246,7 +298,7 @@
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_scalar_local</gammas>
+        <gammas>spintaste_scalar</gammas>
         <left></left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
@@ -277,7 +329,7 @@
         <a2a_batch>true</a2a_batch>
         <action>stag_mass_l</action>
         <eigStart>0</eigStart>
-        <gammas>spintaste_scalar_local</gammas>
+        <gammas>spintaste_scalar</gammas>
         <labels>G1_G1</labels>
         <lowModes>evecs_mass_l</lowModes>
         <mesonField>mfload_tab_n0</mesonField>
@@ -301,7 +353,7 @@
         <a2a_batch>true</a2a_batch>
         <action>stag_mass_l</action>
         <eigStart>0</eigStart>
-        <gammas>spintaste_scalar_local</gammas>
+        <gammas>spintaste_scalar</gammas>
         <labels>G1_G1</labels>
         <lowModes>evecs_mass_l</lowModes>
         <mesonField>mfload_tab_n1</mesonField>
@@ -318,7 +370,7 @@
     </module>
     <module>
       <id>
-        <name>noise_t0_n0</name>
+        <name>noise_batch_n0</name>
         <type>MSource::StagRandomWall</type>
       </id>
       <options>
@@ -331,7 +383,7 @@
     </module>
     <module>
       <id>
-        <name>noise_t0_n1</name>
+        <name>noise_batch_n1</name>
         <type>MSource::StagRandomWall</type>
       </id>
       <options>
@@ -344,184 +396,40 @@
     </module>
     <module>
       <id>
-        <name>quark_h_n0_mass_l_t0</name>
+        <name>quark_h_n0_mass_l</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
-        <gammas>spintaste_scalar_local</gammas>
+        <gammas>spintaste_scalar</gammas>
         <guess>precon_n0</guess>
         <solver>sib_solver_mass_l</solver>
-        <source>noise_t0_n0_vec</source>
+        <source>noise_batch_n0_vec</source>
         <sourceLabel></sourceLabel>
       </options>
     </module>
     <module>
       <id>
-        <name>quark_h_n1_mass_l_t0</name>
+        <name>quark_h_n1_mass_l</name>
         <type>MFermion::StagGaugeProp</type>
       </id>
       <options>
-        <gammas>spintaste_scalar_local</gammas>
+        <gammas>spintaste_scalar</gammas>
         <guess>precon_n1</guess>
         <solver>sib_solver_mass_l</solver>
-        <source>noise_t0_n1_vec</source>
+        <source>noise_batch_n1_vec</source>
         <sourceLabel></sourceLabel>
       </options>
     </module>
     <module>
       <id>
-        <name>mf_s_ll_t0</name>
+        <name>mf_nl_n0</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_scalar_local</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/ll_a</output>
-        <right></right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_s_lh_n0_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_scalar_local</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_s_lh_n1_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_scalar_local</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_s_nh_n0_n0_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_scalar_local</gammas>
-        <left>noise_fv_n0_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_s_nh_n0_n1_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_scalar_local</gammas>
-        <left>noise_fv_n0_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_s_nh_n1_n0_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_scalar_local</gammas>
-        <left>noise_fv_n1_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_s_nh_n1_n1_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_scalar_local</gammas>
-        <left>noise_fv_n1_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_ll_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_local</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/ll_a</output>
-        <right></right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_nl_n0_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_local</gammas>
+        <gammas>spintaste_vl</gammas>
         <left>noise_fv_n0_vec</left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
@@ -533,158 +441,14 @@
     </module>
     <module>
       <id>
-        <name>mf_vl_nl_n1_t0</name>
+        <name>mf_vo_nl_n0</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_local</gammas>
-        <left>noise_fv_n1_vec</left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nl_a_n1</output>
-        <right></right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_lh_n0_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_local</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_lh_n1_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_local</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_nh_n0_n0_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_vec_local</gammas>
-        <left>noise_fv_n0_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_nh_n0_n1_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_vec_local</gammas>
-        <left>noise_fv_n0_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_nh_n1_n0_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_vec_local</gammas>
-        <left>noise_fv_n1_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vl_nh_n1_n1_mass_l_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <gammas>spintaste_vec_local</gammas>
-        <left>noise_fv_n1_vec</left>
-        <lowModes></lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vo_ll_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_onelink</gammas>
-        <left></left>
-        <lowModes>evecs_mass_l</lowModes>
-        <mom>
-          <elem>0 0 0</elem>
-        </mom>
-        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/ll_a</output>
-        <right></right>
-      </options>
-    </module>
-    <module>
-      <id>
-        <name>mf_vo_nl_n0_t0</name>
-        <type>MContraction::StagA2AMesonField</type>
-      </id>
-      <options>
-        <block>200</block>
-        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
-        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vo</gammas>
         <left>noise_fv_n0_vec</left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
@@ -696,14 +460,14 @@
     </module>
     <module>
       <id>
-        <name>mf_vo_nl_n1_t0</name>
+        <name>mf_nl_n1</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vl</gammas>
         <left>noise_fv_n1_vec</left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
@@ -715,108 +479,233 @@
     </module>
     <module>
       <id>
-        <name>mf_vo_lh_n0_mass_l_t0</name>
+        <name>mf_vo_nl_n1</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vo</gammas>
+        <left>noise_fv_n1_vec</left>
+        <lowModes>evecs_mass_l</lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nl_a_n1</output>
+        <right></right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_lh_n0_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
+        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
+        <gammas>spintaste_svl</gammas>
         <left></left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
           <elem>0 0 0</elem>
         </mom>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
+        <right>quark_h_n0_mass_l</right>
       </options>
     </module>
     <module>
       <id>
-        <name>mf_vo_lh_n1_mass_l_t0</name>
+        <name>mf_vo_lh_n0_mass_l</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
         <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
         <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vo</gammas>
+        <left></left>
+        <lowModes>evecs_mass_l</lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n0</output>
+        <right>quark_h_n0_mass_l</right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_lh_n1_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
+        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
+        <gammas>spintaste_svl</gammas>
         <left></left>
         <lowModes>evecs_mass_l</lowModes>
         <mom>
           <elem>0 0 0</elem>
         </mom>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
+        <right>quark_h_n1_mass_l</right>
       </options>
     </module>
     <module>
       <id>
-        <name>mf_vo_nh_n0_n0_mass_l_t0</name>
+        <name>mf_vo_lh_n1_mass_l</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
-        <gammas>spintaste_vec_onelink</gammas>
+        <cbPairsLeft>cbpairs_l_mass_l</cbPairsLeft>
+        <cbPairsRight>cbpairs_r_mass_l</cbPairsRight>
+        <gammas>spintaste_vo</gammas>
+        <left></left>
+        <lowModes>evecs_mass_l</lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/lh_ml_a_n1</output>
+        <right>quark_h_n1_mass_l</right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_nh_n0_n0_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <gammas>spintaste_svl</gammas>
         <left>noise_fv_n0_vec</left>
         <lowModes></lowModes>
         <mom>
           <elem>0 0 0</elem>
         </mom>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
+        <right>quark_h_n0_mass_l</right>
       </options>
     </module>
     <module>
       <id>
-        <name>mf_vo_nh_n0_n1_mass_l_t0</name>
+        <name>mf_vo_nh_n0_n0_mass_l</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vo</gammas>
+        <left>noise_fv_n0_vec</left>
+        <lowModes></lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n0</output>
+        <right>quark_h_n0_mass_l</right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_nh_n0_n1_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <gammas>spintaste_svl</gammas>
         <left>noise_fv_n0_vec</left>
         <lowModes></lowModes>
         <mom>
           <elem>0 0 0</elem>
         </mom>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
+        <right>quark_h_n1_mass_l</right>
       </options>
     </module>
     <module>
       <id>
-        <name>mf_vo_nh_n1_n0_mass_l_t0</name>
+        <name>mf_vo_nh_n0_n1_mass_l</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vo</gammas>
+        <left>noise_fv_n0_vec</left>
+        <lowModes></lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n0_n1</output>
+        <right>quark_h_n1_mass_l</right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_nh_n1_n0_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <gammas>spintaste_svl</gammas>
         <left>noise_fv_n1_vec</left>
         <lowModes></lowModes>
         <mom>
           <elem>0 0 0</elem>
         </mom>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n0</output>
-        <right>quark_h_n0_mass_l_t0</right>
+        <right>quark_h_n0_mass_l</right>
       </options>
     </module>
     <module>
       <id>
-        <name>mf_vo_nh_n1_n1_mass_l_t0</name>
+        <name>mf_vo_nh_n1_n0_mass_l</name>
         <type>MContraction::StagA2AMesonField</type>
       </id>
       <options>
         <block>200</block>
-        <gammas>spintaste_vec_onelink</gammas>
+        <gammas>spintaste_vo</gammas>
+        <left>noise_fv_n1_vec</left>
+        <lowModes></lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n0</output>
+        <right>quark_h_n0_mass_l</right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_nh_n1_n1_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <gammas>spintaste_svl</gammas>
         <left>noise_fv_n1_vec</left>
         <lowModes></lowModes>
         <mom>
           <elem>0 0 0</elem>
         </mom>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n1</output>
-        <right>quark_h_n1_mass_l_t0</right>
+        <right>quark_h_n1_mass_l</right>
+      </options>
+    </module>
+    <module>
+      <id>
+        <name>mf_vo_nh_n1_n1_mass_l</name>
+        <type>MContraction::StagA2AMesonField</type>
+      </id>
+      <options>
+        <block>200</block>
+        <gammas>spintaste_vo</gammas>
+        <left>noise_fv_n1_vec</left>
+        <lowModes></lowModes>
+        <mom>
+          <elem>0 0 0</elem>
+        </mom>
+        <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/nh_ml_a_n1_n1</output>
+        <right>quark_h_n1_mass_l</right>
       </options>
     </module>
   </modules>
@@ -839,9 +728,9 @@
     </trajCounter>
   </parameters>
   <provenance>
-    <generated>2026-10-04T22:34:16Z</generated>
+    <generated>2026-10-05T23:40:25Z</generated>
     <hadronsMilcCompat>0.2</hadronsMilcCompat>
-    <pyfmSha>v0.2.0-21-ga7f9afe-dirty</pyfmSha>
+    <pyfmSha>v0.2.0-23-g9d6baed-dirty</pyfmSha>
     <pyfmVersion>0.2.0</pyfmVersion>
   </provenance>
 </grid>

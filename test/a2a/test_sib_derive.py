@@ -23,9 +23,6 @@ from pyfm.domain import MassDict, Outfile
 
 N_EIG = 2
 NT = 4
-N_SLICES = 2
-T0 = 1
-T_STEP = 2
 NOISE = 2
 MASSES = {"l": 0.01, "u": 0.02}
 DEFL = "l"
@@ -51,25 +48,25 @@ def _write_block(path, gamma, arr):
 
 
 def _ref_lp(raw_ll, tab, mass):
-    """Reference derived lp: column (s, c) = raw_ll[t] @ (w(m)*tab[t_s])[:, c]."""
+    """Reference derived lp: column (t', c) = raw_ll[t] @ (w(m)*tab[t'])[:, c]."""
     w = w_rows(LAM, mass)
-    out = np.zeros((NT, raw_ll.shape[1], N_SLICES * 3), dtype=np.complex128)
+    out = np.zeros((NT, raw_ll.shape[1], NT * 3), dtype=np.complex128)
     for t in range(NT):
-        for s in range(N_SLICES):
-            out[t, :, 3 * s : 3 * s + 3] = raw_ll[t] @ (
-                tab[T0 + s * T_STEP] * w[:, None]
+        for tt in range(NT):
+            out[t, :, 3 * tt : 3 * tt + 3] = raw_ll[t] @ (
+                tab[tt] * w[:, None]
             )
     return out
 
 
 def _ref_np(nl_raw, tab_hp, mass):
-    """Reference derived np: column (s, c) = nl_raw[t] @ (w(m)*tab_hp[t_s])[:, c]."""
+    """Reference derived np: column (t', c) = nl_raw[t] @ (w(m)*tab_hp[t'])[:, c]."""
     w = w_rows(LAM, mass)
-    out = np.zeros((NT, 3, N_SLICES * 3), dtype=np.complex128)
+    out = np.zeros((NT, 3, NT * 3), dtype=np.complex128)
     for t in range(NT):
-        for s in range(N_SLICES):
-            out[t, :, 3 * s : 3 * s + 3] = nl_raw[t] @ (
-                tab_hp[T0 + s * T_STEP] * w[:, None]
+        for tt in range(NT):
+            out[t, :, 3 * tt : 3 * tt + 3] = nl_raw[t] @ (
+                tab_hp[tt] * w[:, None]
             )
     return out
 
@@ -107,15 +104,15 @@ def surface(tmp_path):
         for g in GAMMAS
     }
     delta_lh = {
-        (g, w, m): rng.normal(size=(NT, 2 * N_EIG, N_SLICES * 3))
-        + 1j * rng.normal(size=(NT, 2 * N_EIG, N_SLICES * 3))
+        (g, w, m): rng.normal(size=(NT, 2 * N_EIG, NT * 3))
+        + 1j * rng.normal(size=(NT, 2 * N_EIG, NT * 3))
         for g in GAMMAS
         for w in range(NOISE)
         for m in MASSES
     }
     delta_nh = {
-        (g, i, j, m): rng.normal(size=(NT, 3, N_SLICES * 3))
-        + 1j * rng.normal(size=(NT, 3, N_SLICES * 3))
+        (g, i, j, m): rng.normal(size=(NT, 3, NT * 3))
+        + 1j * rng.normal(size=(NT, 3, NT * 3))
         for g in GAMMAS
         for i in range(NOISE)
         for j in range(NOISE)
@@ -205,9 +202,6 @@ def surface(tmp_path):
         mass=MassDict.from_dict(MASSES),
         defl_mass=DEFL,
         noise=NOISE,
-        t0=T0,
-        t_step=T_STEP,
-        n_slices=N_SLICES,
     )
     return accessor, worlds, raw_ll, delta_lh, delta_nh
 
@@ -246,32 +240,31 @@ class TestWeights:
 
 
 class TestGeometry:
-    def test_slice_of_window(self, surface):
+    def test_nt_derived_from_tab(self, surface):
         accessor, *_ = surface
-        # window: t = 1 (s=0), t = 3 (s=1); everything else outside.
-        assert accessor.slice_of(1) == 0
-        assert accessor.slice_of(3) == 1
-        assert accessor.slice_of(0) is None
-        assert accessor.slice_of(2) is None
-        assert accessor.slice_of(4) is None
-        assert accessor.window_times() == [1, 3]
+        assert accessor.nt() == NT
 
-    def test_cols_selection_and_none(self, surface):
+    def test_cols_selection(self, surface):
         accessor, *_ = surface
-        block = np.arange(2 * N_SLICES * 3, dtype=np.complex128).reshape(
-            1, 2, N_SLICES * 3
+        block = np.arange(2 * NT * 3, dtype=np.complex128).reshape(
+            1, 2, NT * 3
         )
-        sel = accessor.cols(block, T0)
-        assert np.allclose(sel, block[..., 0:3])
-        sel1 = accessor.cols(block, T0 + T_STEP)
-        assert np.allclose(sel1, block[..., 3:6])
-        assert accessor.cols(block, 0) is None
+        assert np.allclose(accessor.cols(block, 0), block[..., 0:3])
+        assert np.allclose(
+            accessor.cols(block, NT - 1), block[..., 3 * (NT - 1) : 3 * NT]
+        )
 
     def test_cols_loud_shape_guard(self, surface):
         accessor, *_ = surface
         bad = np.zeros((1, 2, 7), dtype=np.complex128)
-        with pytest.raises(ValueError, match="batch window"):
-            accessor.cols(bad, T0)
+        with pytest.raises(ValueError, match="full-volume width"):
+            accessor.cols(bad, 0)
+
+    def test_cols_bounds_guard(self, surface):
+        accessor, *_ = surface
+        block = np.zeros((1, 2, NT * 3), dtype=np.complex128)
+        with pytest.raises(ValueError, match="outside"):
+            accessor.cols(block, NT)
 
 
 class TestRefold:
@@ -390,9 +383,6 @@ class TestPathGuards:
             mass=MassDict.from_dict(MASSES),
             defl_mass=DEFL,
             noise=NOISE,
-            t0=T0,
-            t_step=T_STEP,
-            n_slices=N_SLICES,
         )
         with pytest.raises(ValueError, match="unresolved"):
             accessor.block_path(

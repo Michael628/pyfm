@@ -15,7 +15,6 @@ diagrams:
       l: 0.002426
       u: 0.001524
       zero: 0.0
-    n_slices: 4
     noise: 2
     operations:
       vec_local:
@@ -26,8 +25,6 @@ diagrams:
       ext: .20.h5
       filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/correlators/sib3pt/m{mass}/{gamma}/c3_{gamma}_m{mass}_a
       good_size: 400
-    t0: 0
-    t_step: 1
     tab:
       ext: .20/{gamma}_0_0_0.h5
       filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/tab_a{n_index}
@@ -48,7 +45,6 @@ diagrams:
       l: 0.002426
       u: 0.001524
       zero: 0.0
-    n_slices: 4
     noise: 2
     operations:
       vec_onelink:
@@ -58,8 +54,6 @@ diagrams:
       ext: .20.h5
       filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/correlators/sib3pt/m{mass}/{gamma}/c3_{gamma}_m{mass}_a
       good_size: 400
-    t0: 0
-    t_step: 1
     tab:
       ext: .20/{gamma}_0_0_0.h5
       filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/sib/tab_a{n_index}
