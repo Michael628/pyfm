@@ -429,7 +429,7 @@ def build_contractions(
                 name=name,
                 source=quark,
                 sink=antiquark_element,
-                sink_fn="sink",
+                sink_fn=sink_name(config),
                 source_shift=f"{noise_rw_name(config, ref)}_shift",
                 sink_gammas=spintaste_names[op.gamma],
                 output=output,
