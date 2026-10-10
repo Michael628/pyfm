@@ -24,6 +24,39 @@ written into every Hadrons input file as `<grid><provenance>`. After a run,
 `v0.1.0` (`1c561dd`) is the only exception to the first-parent rule. It was
 tagged retroactively on a commit reached through `develop`.
 
+## [Unreleased]
+
+## [0.3.0] - 2026-10-10
+
+Pairs with HadronsMILC `v0.3.0`, which pins Grid and Hadrons (both tagged
+`hadronsmilc/v0.3.0`; exact commits in that release's `DEPENDENCIES`).
+
+### Interface
+- Requires HadronsMILC 0.3. New module types emitted: `MFermion::SpinTaste`,
+  `MUtilities::EigenPackCBPairs`, `MUtilities::GammaMapElement`,
+  `MIO::LoadMesonField`, `MFermion::StagLMAMesonFieldProp`,
+  `MFermion::StagGaugePropLegacy` and `MContraction::StagMesonLegacy`.
+- New task `hadrons_sib_mf`: SIB meson fields with three-point contraction
+  support (connected HVP `V.S.V`), `split_noise` mode and full-volume noise
+  batch addressing.
+- New task `hadrons_lma_new`: SpinTaste-map-driven `meson_v2`/`highmode_v2`
+  LMA flow with file-driven low modes (`low_mode_method=load`) and
+  `build_lh_cache` cache synthesis (including a `cache_only` pathway with
+  `skip_high_modes`).
+- `bias_config` is replaced by a multi-entry `high_modes` list; `high_modes`
+  operations must be nested under `operations:`.
+- `cross_terms` is split into `mass_cross_terms` and `solve_cross_terms`,
+  with a `chain_cg_solves` toggle for independent high-mode CG solves.
+
+### Fixed
+- Sink suffix for multi-highmode entries no longer collapses distinct
+  high-mode entries.
+- Default high-modes label and CB-pair prefixing no longer collide on module
+  names; loader mass substitution uses the prefix-removed value in
+  `highmode_v2`.
+- Cross-mass labels are emitted in canonical raw-key order; solve-cross
+  semantics hardened after the cross-terms split.
+
 ## [0.2.0]
 
 Pairs with HadronsMILC `v0.2.0` (`d6503a6`), which pins Grid `7f82b1ee` and
