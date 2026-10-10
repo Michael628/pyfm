@@ -10,7 +10,6 @@ __pycache__/*
 CMakeLists.txt
 build
 archive
-uv.lock
 
 # ── GSD baseline (auto-generated) ──
 .gsd
