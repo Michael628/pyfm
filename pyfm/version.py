@@ -19,6 +19,19 @@ _MAJOR_MINOR_PATTERN = re.compile(r"^v?(\d+)\.(\d+)")
 
 
 def _dist_version() -> str:
+    """pyfm's version: committed pyproject.toml first, dist metadata second.
+
+    The editable-install dist metadata lags version bumps until a
+    reinstall, so a develop checkout would otherwise report the previous
+    release's version in <grid><provenance> (pyfmVersion).
+    """
+    try:
+        text = (_SOURCE_ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        match = re.search(r'^version\s*=\s*"([^"]+)"', text, re.M)
+        if match:
+            return match.group(1)
+    except OSError:
+        pass
     try:
         return metadata.version("pyfm")
     except metadata.PackageNotFoundError:

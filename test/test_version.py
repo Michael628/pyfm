@@ -32,12 +32,26 @@ def test_installed_version_matches_pyproject():
     assert pyfm.__version__ == _pyproject_version()
 
 
-def test_dist_version_falls_back_without_metadata(monkeypatch):
+def test_dist_version_falls_back_without_metadata(monkeypatch, tmp_path):
     def missing(name):
         raise metadata.PackageNotFoundError(name)
 
+    monkeypatch.setattr(version, "_SOURCE_ROOT", tmp_path)
     monkeypatch.setattr(version.metadata, "version", missing)
     assert version._dist_version() == "0+unknown"
+
+
+def test_dist_version_prefers_pyproject_over_stale_metadata(monkeypatch):
+    monkeypatch.setattr(
+        version.metadata, "version", lambda name: "9.9.9")
+    assert version._dist_version() == _pyproject_version()
+
+
+def test_dist_version_uses_metadata_without_pyproject(monkeypatch, tmp_path):
+    monkeypatch.setattr(version, "_SOURCE_ROOT", tmp_path)
+    monkeypatch.setattr(
+        version.metadata, "version", lambda name: "1.2.3")
+    assert version._dist_version() == "1.2.3"
 
 
 @pytest.mark.parametrize(
@@ -128,9 +142,10 @@ def test_parse_run_log_full_banner():
 
 
 def test_parse_run_log_empty_provenance_values_fall_back():
+    binary_version = f"{version.HADRONS_MILC_COMPAT}.0"
     log = "\n".join(
         [
-            PREFIX + "HadronsMILC version=0.2.0 git=v0.2.0-3-gabc",
+            PREFIX + f"HadronsMILC version={binary_version} git=vX-3-gabc",
             PREFIX
             + "Provenance pyfmVersion= pyfmSha= hadronsMilcCompat= generated= ",
         ]
