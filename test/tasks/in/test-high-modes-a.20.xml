@@ -254,7 +254,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_u_t0</guess>
@@ -270,7 +270,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_l_t0</guess>
@@ -286,7 +286,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_u_t0</guess>
@@ -302,7 +302,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_l_t0</guess>
@@ -318,7 +318,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -334,7 +334,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_l_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -350,7 +350,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -366,7 +366,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_u_t0</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -382,7 +382,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_u_t1</guess>
@@ -398,7 +398,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_l_t1</guess>
@@ -414,7 +414,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_u_t1</guess>
@@ -430,7 +430,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_l_t1</guess>
@@ -446,7 +446,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -462,7 +462,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_l_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -478,7 +478,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -494,7 +494,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_u_t1</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -510,7 +510,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_u_t2</guess>
@@ -526,7 +526,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_l_t2</guess>
@@ -542,7 +542,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_u_t2</guess>
@@ -558,7 +558,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_l_t2</guess>
@@ -574,7 +574,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -590,7 +590,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_l_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -606,7 +606,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -622,7 +622,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_u_t2</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -638,7 +638,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_u_t3</guess>
@@ -654,7 +654,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_l_t3</guess>
@@ -670,7 +670,7 @@
     <module>
       <id>
         <name>quark_ama_vec_local_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_vec_local_mass_u_t3</guess>
@@ -686,7 +686,7 @@
     <module>
       <id>
         <name>quark_ama_pion_local_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess>quark_ranLL_pion_local_mass_l_t3</guess>
@@ -702,7 +702,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -718,7 +718,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_l_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -734,7 +734,7 @@
     <module>
       <id>
         <name>quark_ranLL_pion_local_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -750,7 +750,7 @@
     <module>
       <id>
         <name>quark_ranLL_vec_local_mass_u_t3</name>
-        <type>MFermion::StagGaugeProp</type>
+        <type>MFermion::StagGaugePropLegacy</type>
       </id>
       <options>
         <guess></guess>
@@ -766,7 +766,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t0_a</output>
@@ -785,7 +785,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_u_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524_t0_a</output>
@@ -804,7 +804,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_u_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524_t0_a</output>
@@ -823,7 +823,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_u_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524_t0_a</output>
@@ -842,7 +842,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426_t0_a</output>
@@ -861,7 +861,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t0_a</output>
@@ -880,7 +880,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_l_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426_t0_a</output>
@@ -899,7 +899,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_u_t0</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524_t0_a</output>
@@ -918,7 +918,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t1_a</output>
@@ -937,7 +937,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_u_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524_t1_a</output>
@@ -956,7 +956,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_u_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524_t1_a</output>
@@ -975,7 +975,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_u_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524_t1_a</output>
@@ -994,7 +994,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426_t1_a</output>
@@ -1013,7 +1013,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t1_a</output>
@@ -1032,7 +1032,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_l_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426_t1_a</output>
@@ -1051,7 +1051,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_u_t1</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524_t1_a</output>
@@ -1070,7 +1070,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t2_a</output>
@@ -1089,7 +1089,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_u_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524_t2_a</output>
@@ -1108,7 +1108,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_u_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524_t2_a</output>
@@ -1127,7 +1127,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_u_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524_t2_a</output>
@@ -1146,7 +1146,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426_t2_a</output>
@@ -1165,7 +1165,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t2_a</output>
@@ -1184,7 +1184,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_l_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426_t2_a</output>
@@ -1203,7 +1203,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_u_t2</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524_t2_a</output>
@@ -1222,7 +1222,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ama/corr_pion_local_ama_m002426_t3_a</output>
@@ -1241,7 +1241,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_u_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ranLL/corr_vec_local_ranLL_m001524_t3_a</output>
@@ -1260,7 +1260,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_u_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ranLL/corr_pion_local_ranLL_m001524_t3_a</output>
@@ -1279,7 +1279,7 @@
     <module>
       <id>
         <name>corr_ama_pion_local_mass_u_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/pion_local/ama/corr_pion_local_ama_m001524_t3_a</output>
@@ -1298,7 +1298,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ama/corr_vec_local_ama_m002426_t3_a</output>
@@ -1317,7 +1317,7 @@
     <module>
       <id>
         <name>corr_ranLL_pion_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/pion_local/ranLL/corr_pion_local_ranLL_m002426_t3_a</output>
@@ -1336,7 +1336,7 @@
     <module>
       <id>
         <name>corr_ranLL_vec_local_mass_l_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m002426/vec_local/ranLL/corr_vec_local_ranLL_m002426_t3_a</output>
@@ -1355,7 +1355,7 @@
     <module>
       <id>
         <name>corr_ama_vec_local_mass_u_t3</name>
-        <type>MContraction::StagMeson</type>
+        <type>MContraction::StagMesonLegacy</type>
       </id>
       <options>
         <output>/home/mlynch/Work/pyfm/example/workspace/work-dir/e100n1dt1/correlators/m001524/vec_local/ama/corr_vec_local_ama_m001524_t3_a</output>

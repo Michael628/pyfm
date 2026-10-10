@@ -150,6 +150,49 @@ class Gamma(Enum):
         gammas = gammas.replace("_", " ")
         return gammas
 
+    @property
+    def conjugate_gamma_list(self) -> t.List[str]:
+        """G5-conjugated counterpart of :attr:`gamma_list` (pair-name strings).
+
+        StagGamma's ``applyG5`` conjugation is the involution part ⊕ 0b1111
+        on each spin/taste half (StagGamma.h TXYZ bitmask): G1↔G5,
+        GZ↔G5Z, … G5_G5→G1_G1, GX_GX→G5X_G5X. HadronsMILC meson-field
+        writers name files and metadata by the conjugated (applied) gamma,
+        so load-mode loaders and the meson-field catalog key on these
+        names while every other surface keeps the requested strings
+        (LMAMesonFieldProp.hpp parseGammas: raw labels name outputs,
+        conjugated values pair files).
+        """
+        return [self._conjugate_pair(pair) for pair in self.gamma_list]
+
+    @staticmethod
+    def _conjugate_pair(pair: str) -> str:
+        return "_".join(Gamma._g5_conjugation()[part] for part in pair.split("_"))
+
+    @staticmethod
+    def _g5_conjugation() -> t.Dict[str, str]:
+        # 16-name spin-taste algebra, part ⊕ 0b1111 (StagGamma.h:44-55,
+        # TXYZ convention); a perfect involution, listed both directions
+        # for readability.
+        return {
+            "G1": "G5",
+            "G5": "G1",
+            "GZ": "G5Z",
+            "G5Z": "GZ",
+            "GY": "G5Y",
+            "G5Y": "GY",
+            "GX": "G5X",
+            "G5X": "GX",
+            "GT": "G5T",
+            "G5T": "GT",
+            "GYZ": "GXT",
+            "GXT": "GYZ",
+            "GZX": "GYT",
+            "GYT": "GZX",
+            "GXY": "GZT",
+            "GZT": "GXY",
+        }
+
     @staticmethod
     def _local_gammas() -> t.List:
         return [

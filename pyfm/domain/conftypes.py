@@ -14,9 +14,10 @@ class SerializableEnum(Enum):
             raise ValueError(
                 f"Parameter passed to serializable type must be string, received: {name}"
             )
-        name = name.upper().replace("_", "")
-        if val := getattr(cls, name, None):
-            return val
+        normalized = name.upper().replace("_", "")
+        for member_name, member in cls.__members__.items():
+            if member_name.upper().replace("_", "") == normalized:
+                return member
         raise ValueError(f"Invalid serializable type ({name}). options are: {list(cls)}")
 
 

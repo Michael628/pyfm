@@ -1,5 +1,6 @@
 import typing as t
 
+import pandas as pd
 from pydantic.dataclasses import dataclass
 
 from pyfm import utils
@@ -15,6 +16,7 @@ from pyfm.tasks.hadrons import (
     lmi,
 )
 from pyfm.tasks.hadrons.highmode.twopoint import contraction_gen
+from pyfm.tasks.hadrons.types import SolveCrossTerms
 import pyfm.tasks.grid.modules as gridmods
 
 
@@ -23,13 +25,114 @@ class GridLMAConfig(CompositeConfig):
     gauge_config: gauge.GaugeConfig
     epack_config: epack.EpackConfig
     meson_config: meson.MesonConfig
-    high_modes_config: HighModeConfig
+    high_modes_config: t.List[HighModeConfig]
     series: str = ""
     skip_epack: bool = False
     skip_meson: bool = False
     skip_high_modes: bool = False
 
     solver_map: t.ClassVar[t.Dict[str, str]] = {"ranLL": "lma", "ama": "mpcg"}
+
+
+def normalize_params(params: t.Dict) -> t.Dict:
+    """Normalize GridLMAConfig input: derive ``skip_*`` flags and canonicalize
+    the ``high_modes`` task block to a list.
+
+    Diverges from the shared LMI normalizer only in not list-ifying
+    ``tasks.meson`` — Grid's ``meson_config`` stays a single mapping (Grid
+    was never extended to multi-entry meson; see this task's
+    ``build_a2a_params``/``GridLMAConfig.meson_config``).
+    """
+    incoming = params.get("_preprocessor", {})
+    skip_flags = {
+        f"skip_{k}": True for k in ["meson", "epack"] if k not in incoming
+    }
+
+    hm_raw = incoming.get("high_modes")
+    if hm_raw is None:
+        hm_entries = []
+    elif isinstance(hm_raw, dict):
+        hm_entries = [hm_raw]
+    elif isinstance(hm_raw, list):
+        hm_entries = hm_raw
+    else:
+        raise TypeError(
+            "tasks.high_modes must be a mapping or a list of mappings; got "
+            f"{type(hm_raw).__name__}."
+        )
+    if not all(isinstance(entry, dict) for entry in hm_entries):
+        raise TypeError(
+            "tasks.high_modes entries must all be mappings; got "
+            f"{[type(entry).__name__ for entry in hm_entries]}."
+        )
+    skip_flags["skip_high_modes"] = not hm_entries
+
+    if hm_raw is not None and not isinstance(hm_raw, list):
+        params = params | {"_preprocessor": incoming | {"high_modes": hm_entries}}
+    return params | skip_flags
+
+
+def route_params(params: t.Dict) -> t.Dict:
+    """Route per-subtask input to the child configs for GridLMAConfig.
+
+    ``meson_config`` stays a single mapping (not list-routed) — diverges
+    from the shared LMI router only in that respect; ``high_modes`` list
+    routing is unchanged.
+    """
+    ACTION_NAME = "stag_mass_{mass}"
+    SOLVER_NAME = "stag_{solver}_mass_{mass}"
+    LOW_MODES_NAME = "evecs_mass_{mass}"
+    SHIFT_GAUGE_NAME = "gauge_apbc"
+
+    preprocessor_params = params.pop("_preprocessor", {})
+
+    high_modes_defaults = dict(
+        action_name=ACTION_NAME,
+        low_modes_name=LOW_MODES_NAME,
+        solver_name=SOLVER_NAME,
+        shift_gauge_name=SHIFT_GAUGE_NAME,
+        skip_low_modes="epack" not in preprocessor_params,
+    )
+
+    entries = preprocessor_params.get("high_modes", [])
+    if isinstance(entries, dict):
+        entries = [entries]
+
+    child_preprocessor = dict(
+        gauge_config=dict(action_name=ACTION_NAME),
+        epack_config=dict(
+            action_name=ACTION_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        meson_config=dict(
+            action_name=ACTION_NAME,
+            shift_gauge_name=SHIFT_GAUGE_NAME,
+            low_modes_name=LOW_MODES_NAME,
+        ),
+        high_modes_config=[
+            high_modes_defaults | entry for entry in entries
+        ],
+    )
+
+    for k, v in preprocessor_params.items():
+        if k == "high_modes":
+            continue  # already expanded into the list above
+        child_preprocessor[f"{k}_config"] |= v
+
+    return params | dict(_preprocessor=child_preprocessor)
+
+
+def create_outfile_catalog(config: GridLMAConfig) -> pd.DataFrame:
+    catalogs = [
+        gauge.create_outfile_catalog(config.gauge_config),
+        epack.create_outfile_catalog(config.epack_config),
+        meson.create_outfile_catalog(config.meson_config),
+    ]
+    for hm in config.high_modes_config:
+        if not hm.op_list:
+            continue  # degenerate entry: excluded, as the old sibling guard did
+        catalogs.append(highmode.create_outfile_catalog(hm))
+    return pd.concat(catalogs, ignore_index=True)
 
 
 def hadrons_to_grid_filestem(filestem: str, series: str) -> str:
@@ -96,7 +199,17 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
 
     Orchestrates gauge module generation with submodule computation, ensuring that
     gauge action modules are generated only when needed by the submodules that use them.
+
+    Grid supports a single high-mode entry (``validate_config`` enforces
+    ``len(high_modes_config) <= 1``); the first entry is read guardedly so a
+    skipped (empty) high-modes section still builds the unconditional
+    ``mpcg`` block with the same defaults the old always-constructed sibling
+    carried (residual ``1e-8`` -> ``"1e-08"``, mixed precision on).
     """
+
+    hm = config.high_modes_config[0] if config.high_modes_config else None
+    mpcg_residual = hm.residual[0] if hm is not None else 1e-8
+    mpcg_mixed = (hm.solver == "mpcg") if hm is not None else True
 
     gauge = gridmods.gauge_files(
         link=config.gauge_config.ildg_links.filestem,
@@ -127,14 +240,14 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
     corr = []
     highModeActions = []
     sources = []
-    if not config.skip_high_modes:
-        run_tsources = get_high_mode_run_tsources(config.high_modes_config)
+    if not config.skip_high_modes and hm is not None:
+        run_tsources = get_high_mode_run_tsources(hm)
 
         sources = [
             gridmods.random_wall_source(
-                t_step=str(config.high_modes_config.time),
+                t_step=str(hm.time),
                 t0=tsource,
-                n_src=str(config.high_modes_config.noise),
+                n_src=str(hm.noise),
                 seed=f"noise_t{tsource}",
             )
             for tsource in run_tsources
@@ -142,13 +255,13 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
 
         if run_tsources:
             highModeActions = [
-                gridmods.action(m, str(config.high_modes_config.mass[m]))
-                for m in config.high_modes_config.masses
+                gridmods.action(m, str(hm.mass[m]))
+                for m in hm.masses
             ]
 
-            for op, con in contraction_gen(config.high_modes_config):
+            for op, con in contraction_gen(hm):
                 solver_label = con.solver_label
-                mass_label = con.mass_label(config.high_modes_config.mass)
+                mass_label = con.mass_label(hm.mass)
 
                 corr.append(
                     gridmods.contraction(
@@ -169,7 +282,7 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
                             apply_g5=str(con.sink.apply_g5).lower(),
                         ),
                         output=hadrons_to_grid_filestem(
-                            config.high_modes_config.high_modes.filestem, config.series
+                            hm.high_modes.filestem, config.series
                         ).format(
                             mass=mass_label,
                             dset=solver_label,
@@ -193,21 +306,60 @@ def build_input_params(config: GridLMAConfig) -> t.Dict:
         epack=epack_params,
         lma=gridmods.lma(),
         mpcg=gridmods.mpcg(
-            residual=str(config.high_modes_config.residual[0]),
-            mixed_precision=str(config.high_modes_config.solver == "mpcg").lower(),
+            residual=str(mpcg_residual),
+            mixed_precision=str(mpcg_mixed).lower(),
         ),
         **{k: v for k, v in optional.items() if v is not None},
     )
+
+
+def validate_config(config: GridLMAConfig) -> None:
+    """Validate GridLMAConfig after construction.
+
+    Delegates to the shared LMI validator for cross-sibling concerns, then
+    guards Grid capability: at most one high-mode entry (the Grid LMA path
+    resolves a single source family through ``solver_map``, and the mpcg
+    block pins one residual), and the **effective** solve-cross mode must be
+    DIAGONAL — TIERED/ALL that collapse to DIAGONAL under skip flags emit
+    only same-solver pairs and are valid Grid workloads.
+    """
+    lmi.validate_config(config)
+    if len(config.high_modes_config) > 1:
+        raise ValueError(
+            f"grid_lma supports at most one high_modes_config entry; got "
+            f"{len(config.high_modes_config)}. The Grid LMA path resolves a "
+            "single source family (one mpcg residual; solver_map covers only "
+            "ranLL and ama). Use the Hadrons LMI task for multi-entry "
+            "workloads."
+        )
+    if not config.high_modes_config:
+        return
+    hm = config.high_modes_config[0]
+    if hm.effective_solve_cross_terms != SolveCrossTerms.DIAGONAL:
+        raise ValueError(
+            "grid_lma only supports solve_cross_terms=DIAGONAL; got "
+            f"{hm.solve_cross_terms!r} (effective "
+            f"{hm.effective_solve_cross_terms!r}). Cross-solver contractions "
+            "are not implemented for the Grid LMA path — use the Hadrons LMI "
+            "task instead."
+        )
+    if len(hm.residual) > 1:
+        raise ValueError(
+            "grid_lma supports exactly one high-mode residual; got "
+            f"{hm.residual}. solver_map resolves only ranLL and ama — "
+            "per-residual ama_{r} labels have no Grid solver (and the mpcg "
+            "block pins residual[0])."
+        )
 
 
 # Register GridLMAConfig with all handlers
 register_task(
     "grid_lma",
     GridLMAConfig,
-    lmi.create_outfile_catalog,
+    create_outfile_catalog,
     build_input_params,
     lmi.build_aggregator_params,
-    lmi.normalize_params,
-    lmi.route_params,
-    validate=lmi.validate_config,
+    normalize_params,
+    route_params,
+    validate=validate_config,
 )

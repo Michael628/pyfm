@@ -8,6 +8,21 @@ from pyfm.domain import (
 )
 
 
+def _is_optional_field(config_type, field_name: str) -> bool:
+    """Whether ``config_type.field_name`` is annotated ``X | None``.
+
+    ``iterate_container`` strips ``None`` from the annotation, so the
+    subconfig ``ContainerType`` alone cannot tell an optional field apart.
+    Unresolvable annotations (e.g. string forward references) are treated
+    as non-optional.
+    """
+    try:
+        hint = t.get_type_hints(config_type).get(field_name)
+    except Exception:
+        return False
+    return type(None) in t.get_args(hint)
+
+
 def build_config(
     config_type,
     params: t.Dict[str, t.Any],
@@ -92,6 +107,13 @@ def build_config(
         for subconfig_label, field in config_type.get_subconfigs().items():
             match field.container:
                 case field.container.SIMPLE:
+                    if subconfig_label not in prep and _is_optional_field(
+                        config_type, subconfig_label
+                    ):
+                        # Optional block absent from the routing table: leave it
+                        # unset rather than building a child from shared params.
+                        subconfigs[subconfig_label] = None
+                        continue
                     slice_ = prep.get(subconfig_label, {})
                     if not isinstance(slice_, dict):
                         raise TypeError(

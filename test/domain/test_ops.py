@@ -62,3 +62,32 @@ def test_op_list_parses_fourvec_gamma_names():
         Gamma.AXIAL_FOURVEC_ONELINK,
         Gamma.AXIAL_FOURVEC_LOCAL,
     ]
+
+
+@pytest.mark.parametrize(
+    ("gamma", "conjugate_gamma_list"),
+    [
+        (Gamma.PION_LOCAL, ["G1_G1"]),
+        (Gamma.IDENTITY, ["G5_G5"]),
+        (Gamma.VEC_LOCAL, ["G5X_G5X", "G5Y_G5Y", "G5Z_G5Z"]),
+        (Gamma.VEC_ONELINK, ["G5X_G5", "G5Y_G5", "G5Z_G5"]),
+        (Gamma.AXIAL_VEC_ONELINK, ["GX_G1", "GY_G1", "GZ_G1"]),
+        (Gamma.GXY_G5T, ["GZT_GT"]),
+    ],
+)
+def test_conjugate_gamma_list(gamma, conjugate_gamma_list):
+    assert gamma.conjugate_gamma_list == conjugate_gamma_list
+
+
+def test_g5_conjugation_table_is_involutive_bijection():
+    parts = Gamma._g5_conjugation()
+    assert len(parts) == 16
+    assert sorted(parts) == sorted(
+        [
+            "G1", "GZ", "GY", "GYZ", "GX", "GZX", "GXY", "G5T",
+            "GT", "GZT", "GYT", "G5X", "GXT", "G5Y", "G5Z", "G5",
+        ]
+    )
+    assert set(parts.values()) == set(parts)
+    for part, conj in parts.items():
+        assert parts[conj] == part

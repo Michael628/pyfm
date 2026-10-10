@@ -4,7 +4,7 @@ import itertools
 from pyfm.tasks.hadrons.types import HadronsInput
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.domain import OpList, Gamma, MassDict
-from pyfm.tasks.hadrons.types import CrossTerms, HighModeConfig, SourceRef
+from pyfm.tasks.hadrons.types import HighModeConfig, SourceRef
 
 
 _AXIAL_GAMMAS = frozenset(
@@ -57,7 +57,31 @@ class TwoPointOp(t.NamedTuple):
 
 
 def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
-    """Generates required propagators for the requested two-point functions
+    """Generates exactly the propagators the requested contractions consume.
+
+    Demand-driven: the propagator set is derived from ``contraction_gen``'s
+    emitted quark/antiquark sides, so a solve is emitted iff some contraction
+    references it. Under TIERED the HH diagonal is dropped, leaving the LH
+    cross (``ranLL_ama``) as the only contraction consuming an ama (CG)
+    propagator — its antiquark side uses the contract gamma
+    (PION_LOCAL/IDENTITY) only, so the op-gamma CG solves (e.g.
+    ``quark_ama_vec_local_*``) have no consumer and are skipped. Under
+    DIAGONAL/ALL every base propagator remains required and the emitted set
+    is identical to the previous label-list-driven generator.
+
+    The precon (guess) chain is preserved among the remaining solvers: each
+    emitted solve's guess is the nearest earlier base solver whose
+    same-(gamma, mass) propagator is also emitted — the demand-driven
+    refinement of the previous ``[None] + solver_labels[:-1]`` zip. Per
+    (gamma, mass) the required set is a prefix of the base solver list (the
+    HH diagonal drops wholesale), so a guess never references a skipped
+    module. With ``chain_cg_solves=False`` (independent mode) every CG solve
+    guesses ``ranLL`` directly instead — or nothing, when low modes are
+    skipped (``ranLL`` itself never takes a guess in either mode).
+    Emission order is deterministic and mass-major: every solve and
+    gamma for one mass is emitted before moving on to the next mass (the
+    schedule builder consumes this order), base-solver order preserved
+    within a mass so precons precede their consumers.
 
     Note:
     - PION_LOCAL requires only the identity gamma operation (equivalent to G5_G5 with apply_g5=True)
@@ -67,43 +91,34 @@ def quark_gen(config: HighModeConfig) -> t.Iterator[TwoPointOp.Op]:
       G5_HERMITICITY note.
     """
     solver_labels = config.get_solver_labels(skip_cross=True)
-    guess_solver_labels = solver_labels[:-1].copy()
-    guess_solver_labels.insert(0, None)
-    solver_zip = list(zip(solver_labels, guess_solver_labels))
 
-    for op in config.operations:
-        for (slabel, slabel_guess), mlabel in itertools.product(solver_zip, op.mass):
-            common = dict(
-                apply_g5=True,
-                mass=mlabel,
-                solver=slabel,
-                precon=slabel_guess,
-            )
-            # Only axial gammas are *translated*: they contract against
-            # IDENTITY (instead of PION_LOCAL) and their vector solve uses the
-            # non-axial counterpart gamma. Every other gamma contracts with
-            # PION_LOCAL and solves its own gamma.
-            is_axial = op.gamma in _AXIAL_GAMMAS
+    required: t.Dict[t.Tuple[str, Gamma, str], None] = {}
+    for _, con in contraction_gen(config):
+        for side in (con.quark, con.antiquark):
+            required.setdefault((side.solver, side.gamma, side.mass))
 
-            # First (contract) solve: IDENTITY for axial gammas, PION_LOCAL
-            # otherwise.
-            yield TwoPointOp.Op(
-                gamma=Gamma.IDENTITY if is_axial else Gamma.PION_LOCAL, **common
-            )
-
-            # Second solve: axial gammas are translated to their non-axial
-            # counterpart; every other gamma solves its own gamma.
-            match op.gamma:
-                case Gamma.AXIAL_VEC_LOCAL:
-                    yield TwoPointOp.Op(gamma=Gamma.VEC_LOCAL, **common)
-                case Gamma.AXIAL_FOURVEC_LOCAL:
-                    yield TwoPointOp.Op(gamma=Gamma.FOURVEC_LOCAL, **common)
-                case Gamma.AXIAL_VEC_ONELINK:
-                    yield TwoPointOp.Op(gamma=Gamma.VEC_ONELINK, **common)
-                case Gamma.AXIAL_FOURVEC_ONELINK:
-                    yield TwoPointOp.Op(gamma=Gamma.FOURVEC_ONELINK, **common)
-                case _:
-                    yield TwoPointOp.Op(gamma=op.gamma, **common)
+    for solver, gamma, mass in sorted(
+        required, key=lambda k: (k[2], solver_labels.index(k[0]), k[1].name)
+    ):
+        precon = None
+        if config.chain_cg_solves or solver == "ranLL":
+            # Chained (default): nearest earlier base solver whose
+            # same-(gamma, mass) propagator is also emitted. Unchanged from
+            # the previous behavior (ranLL hits an empty prefix and stays
+            # guessless), so the default path is byte-identical.
+            for earlier in reversed(solver_labels[: solver_labels.index(solver)]):
+                if (earlier, gamma, mass) in required:
+                    precon = earlier
+                    break
+        elif ("ranLL", gamma, mass) in required:
+            # Independent: every CG solve guesses ranLL directly. The LL
+            # diagonal is always admitted, so an emitted CG solve's
+            # same-(gamma, mass) ranLL is emitted too; without low modes no
+            # guess is provided.
+            precon = "ranLL"
+        yield TwoPointOp.Op(
+            gamma=gamma, mass=mass, solver=solver, apply_g5=True, precon=precon
+        )
 
 
 def contraction_gen(
@@ -128,16 +143,14 @@ def contraction_gen(
             if mlabel1 < mlabel2:
                 continue
 
-            if (
-                config.cross_terms not in (CrossTerms.MASS, CrossTerms.ALL)
-                and mlabel1 != mlabel2
-            ):
+            if not config.mass_cross_terms and mlabel1 != mlabel2:
                 continue
 
-            if (
-                config.cross_terms not in (CrossTerms.SOLVE, CrossTerms.ALL)
-                and slabel1 != slabel2
-            ):
+            # slabel1 drives the antiquark, slabel2 the quark, and dset names
+            # are quark-first (TwoPointOp.solver_label) — so the pair check
+            # takes (quark=slabel2, antiquark=slabel1) and TIERED keeps the
+            # pairs whose dset is `ranLL_ama`.
+            if not config.admits_solve_pair(slabel2, slabel1):
                 continue
 
             common1 = dict(
