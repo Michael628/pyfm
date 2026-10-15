@@ -130,7 +130,7 @@ class TestMesonFieldV2:
         }
         assert module["options"] == {
             "block": "200",
-            "mom": {"elem": "0 0 0"},
+            "mom": {"elem": ["0 0 0"]},
             "gammas": "spintaste_vec_local",
             "lowModes": "evecs_mass_l",
             "left": "",
@@ -195,3 +195,152 @@ class TestLmaMesonFieldPropV2:
             "noise": "noise_fv_vec",
             "a2a_batch": "",
         }
+
+
+class TestMesonFieldV2Momentum:
+    def test_default_mom_single_elem_list(self):
+        module = hadmods.meson_field_v2(
+            name="mf", block="200", gammas="g", low_modes="lm",
+            left="", right="", output="o",
+        )
+        assert module["options"]["mom"] == {"elem": ["0 0 0"]}
+        from dict2xml import dict2xml as dxml
+
+        # dict2xml emits no root wrapper for the bare sub-dict and
+        # pretty-prints (2-space indent); wrap the key and compare the
+        # actual rendered form (verified against the live env):
+        assert dxml({"mom": module["options"]["mom"]}) == (
+            "<mom>\n  <elem>0 0 0</elem>\n</mom>"
+        )
+
+    def test_multi_momentum_list(self):
+        module = hadmods.meson_field_v2(
+            name="mf", block="200", gammas="g", low_modes="lm",
+            left="", right="", output="o", mom=["1 0 0", "-1 0 0"],
+        )
+        assert module["options"]["mom"] == {"elem": ["1 0 0", "-1 0 0"]}
+        from dict2xml import dict2xml as dxml
+
+        rendered = dxml(module["options"]["mom"])
+        assert "<elem>1 0 0</elem>" in rendered
+        assert "<elem>-1 0 0</elem>" in rendered
+
+
+class TestStochEmFunc:
+    def test_full_options_shape(self):
+        module = hadmods.stoch_em_func(
+            name="em", gauge="feynman", zm_scheme="qedL", improvement=""
+        )
+        assert module["id"] == {"name": "em", "type": "MGauge::StochEmFunc"}
+        assert module["options"] == {
+            "gauge": "feynman", "zmScheme": "qedL", "improvement": "",
+        }
+
+
+class TestAslashMesonFieldV2:
+    def test_full_options_member_order(self):
+        module = hadmods.aslash_meson_field_v2(
+            name="mf_ja_ll_em0", block="12", gammas="spintaste_ja",
+            low_modes="evecs_mass_l", left="", right="",
+            output="qed/ja_ll_em0", em_fn="em", n_em_fields="1",
+            em_seed_string="qed_a_20_n0",
+        )
+        assert module["id"] == {
+            "name": "mf_ja_ll_em0",
+            "type": "MContraction::StagA2AASlashMesonField",
+        }
+        assert module["options"] == {
+            "block": "12",
+            "lowModes": "evecs_mass_l",
+            "left": "",
+            "right": "",
+            "output": "qed/ja_ll_em0",
+            "gammas": "spintaste_ja",
+            "EmFunc": "em",
+            "nEmFields": "1",
+            "EmSeedString": "qed_a_20_n0",
+            "mom": {"elem": ["0 0 0"]},
+        }
+        # GRID_SERIALIZABLE member order (ASlashMesonField.hpp:56).
+        assert list(module["options"]) == [
+            "block", "lowModes", "left", "right", "output", "gammas",
+            "EmFunc", "nEmFields", "EmSeedString", "mom",
+        ]
+
+    def test_cb_pairs_injected_between_legs(self):
+        module = hadmods.aslash_meson_field_v2(
+            name="n", block="12", gammas="g", low_modes="lm", left="",
+            right="", output="o", em_fn="em", n_em_fields="1",
+            em_seed_string="s",
+            cb_pairs_left="cbpairs_l_mass_l", cb_pairs_right="cbpairs_r_mass_l",
+        )
+        assert list(module["options"]) == [
+            "block", "lowModes", "left", "cbPairsLeft", "cbPairsRight",
+            "right", "output", "gammas", "EmFunc", "nEmFields",
+            "EmSeedString", "mom",
+        ]
+
+    def test_rejects_one_sided_cb_pairs(self):
+        with pytest.raises(ValueError, match="together"):
+            hadmods.aslash_meson_field_v2(
+                name="n", block="12", gammas="g", low_modes="lm", left="",
+                right="", output="o", em_fn="em", n_em_fields="1",
+                em_seed_string="s", cb_pairs_left="cbpairs_l",
+            )
+
+
+class TestAslashOneLinkMesonField:
+    def test_full_options_member_order(self):
+        module = hadmods.aslash_onelink_meson_field(
+            name="mf_j1l_ll_em0", block="12", gauge="gauge",
+            low_modes="evecs_mass_l", left="", right="",
+            output="qed/j1l_ll_em0", em_fn="em", n_em_fields="1",
+            em_seed_string="qed_a_20_n0",
+        )
+        assert module["id"] == {
+            "name": "mf_j1l_ll_em0",
+            "type": "MContraction::StagA2AASlashOneLinkMesonField",
+        }
+        assert module["options"] == {
+            "block": "12",
+            "lowModes": "evecs_mass_l",
+            "left": "",
+            "right": "",
+            "output": "qed/j1l_ll_em0",
+            "gauge": "gauge",
+            "EmFunc": "em",
+            "nEmFields": "1",
+            "EmSeedString": "qed_a_20_n0",
+            "mom": {"elem": ["0 0 0"]},
+        }
+        assert "gammas" not in module["options"]
+
+    def test_cb_pairs_injected_between_legs(self):
+        module = hadmods.aslash_onelink_meson_field(
+            name="n", block="12", gauge="gauge", low_modes="lm", left="",
+            right="", output="o", em_fn="em", n_em_fields="1",
+            em_seed_string="s",
+            cb_pairs_left="cbpairs_l_mass_l", cb_pairs_right="cbpairs_r_mass_l",
+        )
+        assert list(module["options"]) == [
+            "block", "lowModes", "left", "cbPairsLeft", "cbPairsRight",
+            "right", "output", "gauge", "EmFunc", "nEmFields",
+            "EmSeedString", "mom",
+        ]
+
+    def test_rejects_one_sided_cb_pairs(self):
+        with pytest.raises(ValueError, match="together"):
+            hadmods.aslash_onelink_meson_field(
+                name="n", block="12", gauge="gauge", low_modes="lm",
+                left="", right="", output="o", em_fn="em",
+                n_em_fields="1", em_seed_string="s", cb_pairs_left="cb_l",
+            )
+
+
+class TestDeadEmitterDeletion:
+    def test_stale_qed_emitters_removed(self):
+        for name in (
+            "qed_meson_field", "em_fn", "em_field", "seq_aslash",
+            "a2a_vector", "load_vectors",
+        ):
+            assert not hasattr(hadmods, name)

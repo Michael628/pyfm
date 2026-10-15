@@ -324,6 +324,11 @@ def prop_contract_v2(
     return module
 
 
+def _mom_elems(mom: str | t.List[str]) -> t.Dict:
+    """``mom`` option body: one ``<elem>`` per momentum string."""
+    return {"elem": [mom] if isinstance(mom, str) else list(mom)}
+
+
 def meson_field_v2(
     name: str,
     block: str,
@@ -334,6 +339,7 @@ def meson_field_v2(
     output: str,
     cb_pairs_left: str = "",
     cb_pairs_right: str = "",
+    mom: str | t.List[str] = "0 0 0",
 ) -> t.Dict:
     """Wrap ``MContraction::StagA2AMesonField`` (canonical stencil worker).
 
@@ -345,8 +351,14 @@ def meson_field_v2(
     ``cb_pairs_left``/``cb_pairs_right`` naming two distinct
     ``MUtilities::EigenPackCBPairs`` instances enables on-demand
     checkerboard pairing — injected only when set; the C++ setup requires
-    both set together. Momentum is always zero (no current usage requests
-    finite momentum, and the canonical stencil worker rejects it outright).
+    both set together.
+
+    ``mom`` (general momentum is feature-branch-only —
+    ``feature/opt-a2a-general-spin-taste`` removed the canonical worker's
+    momentum gate; develop builds reject non-zero momentum) is one
+    space-separated 3-vector string or a list of them. The module writes
+    one HDF5 per gamma×momentum (g-major flat mu axis); the default keeps
+    the historical zero-momentum emission.
     """
     if bool(cb_pairs_left) != bool(cb_pairs_right):
         raise ValueError(
@@ -356,9 +368,7 @@ def meson_field_v2(
         )
     options = {
         "block": block,
-        "mom": {
-            "elem": "0 0 0",
-        },
+        "mom": _mom_elems(mom),
         "gammas": gammas,
         "lowModes": low_modes,
         "left": left,
@@ -655,12 +665,170 @@ def meson_field(
     }
 
 
-def eigen_pack_cb_pairs(name: str, eigen_pack: str, action: str) -> t.Dict:
-    """Wrap ``MUtilities::EigenPackCBPairs`` — on-demand CB pair source over a
-    checkerboarded eigenpack (odd partner filled from Meooe on demand)."""
+# The duplicate eigen_pack_cb_pairs definition formerly at this position
+# was removed (modules.py defined it twice, identically, since the
+# initial import); the canonical definition lives near the epack
+# emitters above.
+
+
+def stoch_em_func(name: str, gauge: str, zm_scheme: str, improvement: str) -> t.Dict:
+    """Wrap ``MGauge::StochEmFunc`` — the stochastic photon source.
+
+    Publishes the ``PhotonR`` object under ``name`` and the implicit
+    ``_<name>_weight`` companion (``EmComp``, filled once on first execute
+    by ``StochasticWeight`` — ``envCache`` + ``hasCreatedObject`` make a
+    second consumer free; only schedule order matters). ``gauge`` is the
+    ``PhotonR::Gauge`` scheme string (e.g. ``"feynman"``), NOT a module
+    name; ``zm_scheme`` the ``PhotonR::ZmScheme`` zero-mode scheme (e.g.
+    ``"qedL"``); ``improvement`` a space-separated list of reals or the
+    empty string (upstream parses it with ``strToVec<Real>``,
+    ``StochEmFunc.cpp:61``). The stochastic field draws live in the
+    consumers (seeded there by ``EmSeedString``), so one module serves any
+    number of consumers.
+
+    Feature-branch-only consumers (``feature/opt-a2a-general-spin-taste``):
+    ``StagA2AASlashMesonField`` / ``StagA2AASlashOneLinkMesonField``.
+    """
     return {
-        "id": {"name": name, "type": "MUtilities::EigenPackCBPairs"},
-        "options": {"action": action, "eigenPack": eigen_pack},
+        "id": {"name": name, "type": "MGauge::StochEmFunc"},
+        "options": {
+            "gauge": gauge,
+            "zmScheme": zm_scheme,
+            "improvement": improvement,
+        },
+    }
+
+
+def aslash_meson_field_v2(
+    name: str,
+    block: str,
+    gammas: str,
+    low_modes: str,
+    left: str,
+    right: str,
+    output: str,
+    em_fn: str,
+    n_em_fields: str,
+    em_seed_string: str,
+    mom: str | t.List[str] = "0 0 0",
+    cb_pairs_left: str = "",
+    cb_pairs_right: str = "",
+) -> t.Dict:
+    """Wrap ``MContraction::StagA2AASlashMesonField`` (canonical stencil worker).
+
+    The summed A_slash J·A local block: per stochastic sample the module
+    draws a photon field (``rng4d()`` seeded by ``EmSeedString``), folds
+    the per-direction spin-taste phase of ``gammas`` entry k onto photon
+    component k via ``applyCoeffsAndPhase``, sums over k, and contracts
+    through the same ``A2AMatrixBlockComputationMILC`` machinery as
+    ``StagA2AMesonField``. ``gammas`` names an ``MFermion::SpinTaste``
+    module publishing exactly Nd=4 entries (enforced at execute) — the
+    directional phase-fold spec, NOT output labels. ``left``/``right``
+    optionally name high-mode leg batches (``std::vector<FermionField>``);
+    ``low_modes`` + the two distinct ``cb_pairs_*`` enable the CB low
+    side. Output files: ``<output>.<traj>/<EmSeedString>_<a>_<p>.h5`` per
+    sample×momentum (the HDF5 dataset group equals the filename stem).
+
+    Cross-module reproducibility: a module seeded with the same
+    ``EmSeedString`` and drawing sample j consumes the same photon field
+    as any other module's sample j (the upstream one-link loop draws the
+    identical sequence) — distinct families may deliberately share seeds.
+
+    Feature-branch-only (absent from ``develop`` entirely;
+    ``feature/opt-a2a-general-spin-taste``; the pre-migration ``action``
+    surface lives on in ``StagA2AASlashMesonFieldLegacy``).
+    """
+    if bool(cb_pairs_left) != bool(cb_pairs_right):
+        raise ValueError(
+            "cbPairsLeft and cbPairsRight must be set together (two distinct "
+            "MUtilities::EigenPackCBPairs instances; got "
+            f"{cb_pairs_left!r} / {cb_pairs_right!r}."
+        )
+    options: t.Dict[str, t.Any] = {
+        "block": block,
+        "lowModes": low_modes,
+        "left": left,
+    }
+    if cb_pairs_left:
+        options["cbPairsLeft"] = cb_pairs_left
+        options["cbPairsRight"] = cb_pairs_right
+    options |= {
+        "right": right,
+        "output": output,
+        "gammas": gammas,
+        "EmFunc": em_fn,
+        "nEmFields": n_em_fields,
+        "EmSeedString": em_seed_string,
+        "mom": _mom_elems(mom),
+    }
+    return {
+        "id": {"name": name, "type": "MContraction::StagA2AASlashMesonField"},
+        "options": options,
+    }
+
+
+def aslash_onelink_meson_field(
+    name: str,
+    block: str,
+    gauge: str,
+    low_modes: str,
+    left: str,
+    right: str,
+    output: str,
+    em_fn: str,
+    n_em_fields: str,
+    em_seed_string: str,
+    mom: str | t.List[str] = "0 0 0",
+    cb_pairs_left: str = "",
+    cb_pairs_right: str = "",
+) -> t.Dict:
+    """Wrap ``MContraction::StagA2AASlashOneLinkMesonField`` (canonical).
+
+    The per-component J_kA_k one-link block: each stochastic sample
+    provides Nd RAW photon components (no ``applyCoeffsAndPhase`` fold, no
+    per-direction sum — the module dresses the links itself,
+    W~_k(x) = A_k(x)·U_k(x)) and emits one output channel per component
+    k. NO ``gammas`` parameter (the directional specs are synthesized
+    inside Grid via ``jaOneLinkSpecs``); ``gauge`` is REQUIRED and names
+    the ORIGINAL thin gauge module (not an APBC-shifted one). The rng is
+    seeded once before the sample loop: sample j draws the same sequence
+    a local-A_slash module with the same ``EmSeedString`` draws for its
+    sample j. Output files:
+    ``<output>.<traj>/<EmSeedString>_<j>_<k>_<p>.h5`` per
+    sample×component×momentum.
+
+    Feature-branch-only (absent from ``develop`` entirely;
+    ``feature/opt-a2a-general-spin-taste``).
+    """
+    if bool(cb_pairs_left) != bool(cb_pairs_right):
+        raise ValueError(
+            "cbPairsLeft and cbPairsRight must be set together (two distinct "
+            "MUtilities::EigenPackCBPairs instances; got "
+            f"{cb_pairs_left!r} / {cb_pairs_right!r}."
+        )
+    options: t.Dict[str, t.Any] = {
+        "block": block,
+        "lowModes": low_modes,
+        "left": left,
+    }
+    if cb_pairs_left:
+        options["cbPairsLeft"] = cb_pairs_left
+        options["cbPairsRight"] = cb_pairs_right
+    options |= {
+        "right": right,
+        "output": output,
+        "gauge": gauge,
+        "EmFunc": em_fn,
+        "nEmFields": n_em_fields,
+        "EmSeedString": em_seed_string,
+        "mom": _mom_elems(mom),
+    }
+    return {
+        "id": {
+            "name": name,
+            "type": "MContraction::StagA2AASlashOneLinkMesonField",
+        },
+        "options": options,
     }
 
 
@@ -756,67 +924,6 @@ def lma_meson_field_prop(
     }
 
 
-def qed_meson_field(
-    name: str,
-    action: str,
-    block: str,
-    em_fn: str,
-    n_em_fields: str,
-    em_seed_string: str,
-    low_modes: str,
-    left: str,
-    right: str,
-    output: str,
-) -> t.Dict:
-    return {
-        "id": {
-            "name": name,
-            "type": "MContraction::StagA2AASlashMesonField",
-        },
-        "options": {
-            "action": action,
-            "block": block,
-            "mom": {
-                "elem": "0 0 0",
-            },
-            "EmFunc": em_fn,
-            "nEmFields": n_em_fields,
-            "EmSeedString": em_seed_string,
-            "lowModes": low_modes,
-            "left": left,
-            "right": right,
-            "output": output,
-        },
-    }
-
-
-def em_fn(name: str, gauge: str, zm_scheme: str) -> t.Dict:
-    return {
-        "id": {"name": name, "type": "MGauge::StochEmFunc"},
-        "options": {"gauge": gauge, "zmScheme": zm_scheme},
-    }
-
-
-def em_field(name: str, gauge: str, zm_scheme: str, improvement: str) -> t.Dict:
-    return {
-        "id": {"name": name, "type": "MGauge::StochEm"},
-        "options": {"gauge": gauge, "zmScheme": zm_scheme, "improvement": improvement},
-    }
-
-
-def seq_aslash(name: str, q: str, ta: str, tb: str, em_field: str, mom: str) -> t.Dict:
-    return {
-        "id": {"name": name, "type": "MSource::StagSeqAslash"},
-        "options": {
-            "q": q,
-            "tA": ta,
-            "tB": tb,
-            "emField": em_field,
-            "mom": mom,
-        },
-    }
-
-
 def seq_gamma(
     name: str,
     q: str,
@@ -846,36 +953,4 @@ def save_vector(name: str, field: str, output: str, multifile: str = "false") ->
             "type": "MIO::SaveStagVector",
         },
         "options": {"field": field, "multiFile": multifile, "output": output},
-    }
-
-
-def a2a_vector(
-    name: str, noise: str, action: str, low_modes: str, solver: str, high_output: str
-) -> t.Dict:
-    return {
-        "id": {
-            "name": name,
-            "type": "MSolver::StagA2AVectors",
-        },
-        "options": {
-            "noise": noise,
-            "action": action,
-            "lowModes": low_modes,
-            "solver": solver,
-            "highOutput": high_output,
-            "norm2": "1.0",
-            "highMultiFile": "false",
-        },
-    }
-
-
-def load_vectors(
-    name: str, filestem: str, size: str, multifile: str = "false"
-) -> t.Dict:
-    return {
-        "id": {
-            "name": name,
-            "type": "MIO::StagLoadA2AVectors",
-        },
-        "options": {"filestem": filestem, "multiFile": multifile, "size": size},
     }

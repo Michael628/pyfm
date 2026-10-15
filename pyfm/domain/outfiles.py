@@ -20,6 +20,7 @@ class Outfile:
                 "cfg_bin_multi": ".{cfg}/v{eig_index}.bin",
                 "cfg_h5": ".{cfg}.h5",
                 "cfg_gamma_h5": ".{cfg}/{gamma}_0_0_0.h5",
+                "cfg_qed_h5": ".{cfg}/{file_key}.h5",
                 "cfg_pickle": ".{cfg}.p",
                 "raw": "",
             }
@@ -27,6 +28,11 @@ class Outfile:
             name_keys = {
                 "links": "cfg",
                 "meson": "cfg_gamma_h5",
+                # "qed" must be matched AFTER "meson": the qed tab label
+                # ("qed_meson_tab") contains both substrings and routes to
+                # cfg_gamma_h5 (zero-momentum G1_G1 grammar), while pure
+                # qed_* labels route to the token ext below.
+                "qed": "cfg_qed_h5",
                 "eig": "cfg_bin",
                 "a2a_vec": "cfg_bin",
                 "contract_legacy": "cfg_pickle",

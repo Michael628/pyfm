@@ -60,6 +60,9 @@ submit:
     sib_mf:
       nodes: 1
       geom: [1, 1, 1, 2]
+    qed_mf:
+      nodes: 1
+      geom: [1, 1, 1, 2]
 
 # Template and I/O file name keys
 job_setup:
@@ -229,6 +232,43 @@ job_setup:
           file: sib_meson_blocks
           tab: sib_meson_tab
           split_noise: true
+  qed_mf:
+    run: hadrons.sh
+    io: "qed-mf"
+    wall_time: "24:00:00"
+    job_type: hadrons
+    task_type: qed_mf
+    params:
+      noise: 2
+    tasks:
+      gauge:
+        action_type: load
+      epack:
+        load: true
+        save_evals: true
+        save_eigs: false
+      qed:
+        operations:
+          gamma:
+            - vec_local
+          mass:
+            - "l"
+        aslash: true
+        onelink: {}
+        momentum:
+          - [1, 0, 0]
+        em:
+          gauge: feynman
+          zm_scheme: qedL
+          improvement: ""
+          n_em: 2
+        defl_mass: l
+        solver:
+          solver: mpcg
+          residual: 1e-8
+        output:
+          file: qed_blocks
+          tab: qed_meson_tab
 files:
   fat_links:
     filestem: lat/scidac/fat{ens}{series}.ildg
@@ -265,5 +305,11 @@ files:
     good_size: 1286000
   sib_meson_tab:
     filestem: e{eigs}n{noise}/sib/tab_{series}
+    good_size: 4400
+  qed_blocks:
+    filestem: e{eigs}n{noise}/qed/{family}_{leg_pair}{mass}{em_index}_{series}
+    good_size: 1286000
+  qed_meson_tab:
+    filestem: e{eigs}n{noise}/qed/tab_{series}
     good_size: 4400
 

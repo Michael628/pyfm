@@ -26,8 +26,24 @@ tagged retroactively on a commit reached through `develop`.
 
 ## [Unreleased]
 
-Tracks HadronsMILC `cceb0cd`, Grid `4ccaeaf`, Hadrons `3a09801`
-(develop heads at the v0.3.0 back-merge; update as integration moves).
+Tracks HadronsMILC `feature/opt-a2a-general-spin-taste` @ `273c6d9` (ahead
+of develop `cceb0cd`; Grid pin `5325da90`) — the QED module surface is
+feature-branch-only until the branch merges; update as integration moves.
+
+### Interface
+- New task `hadrons_qed_mf`: perturbative-QED HVP diagram components —
+  momentum-projected vec meson fields (±p conjugate pairs on the external
+  legs), stochastic-photon `StagA2AASlashMesonField` (local J·A) and
+  `StagA2AASlashOneLinkMesonField` (per-component J_kA_k) blocks in
+  per-sample split_em worlds sharing one `MGauge::StochEmFunc` and the
+  sib_mf deflation chain.
+- New module types emitted: `MGauge::StochEmFunc`,
+  `MContraction::StagA2AASlashMesonField`,
+  `MContraction::StagA2AASlashOneLinkMesonField` (all feature-branch-only).
+- `meson_field_v2` gains a `mom` kwarg (general momentum;
+  feature-branch-only). Removed dead emitters: `qed_meson_field`, `em_fn`,
+  `em_field`, `seq_aslash`, `a2a_vector`, `load_vectors` (zero callers
+  since the initial import).
 
 ## [0.3.0] - 2026-10-10
 

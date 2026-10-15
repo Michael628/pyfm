@@ -1,9 +1,10 @@
 from pyfm.tasks.hadrons import gauge, modules, meson, epack, highmode, lmi
-from pyfm.tasks.hadrons import meson_v2, highmode_v2, lma_new, sib_mf
+from pyfm.tasks.hadrons import meson_v2, highmode_v2, lma_new, sib_mf, qed_mf
 
 from pyfm.tasks.hadrons.lmi import LMIConfig
 from pyfm.tasks.hadrons.lma_new import LMANewConfig
 from pyfm.tasks.hadrons.sib_mf import SIBMFConfig
+from pyfm.tasks.hadrons.qed_mf import QEDMFConfig
 from pyfm.tasks.hadrons.types import HighModeConfig
 
 from pyfm.tasks.register import register_task
@@ -24,6 +25,7 @@ __all__ = [
     "LMIConfig",
     "LMANewConfig",
     "SIBMFConfig",
+    "QEDMFConfig",
     "hadmods",
     "gauge",
     "meson",
@@ -34,6 +36,7 @@ __all__ = [
     "highmode_v2",
     "lma_new",
     "sib_mf",
+    "qed_mf",
 ]
 
 # Register HighModeConfig as the config for 'hadrons_high_modes' task type
