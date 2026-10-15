@@ -170,6 +170,30 @@ class TestBatchContract:
             "e100n2/sib/ll_a"
         )
 
+    def test_pretokenized_stems_are_not_suffixed_twice(self, hadrons_params):
+        """Stems already carrying the index tokens (the contract_sib form)
+        render the same paths as bare stems — one files: label serves both
+        the producer and the contraction."""
+        params = copy.deepcopy(hadrons_params)
+        params["files"]["sib_meson_blocks"]["filestem"] += "{n_index}{hp_index}"
+        params["files"]["sib_meson_tab"]["filestem"] += "{n_index}"
+        bare = build_input_params(
+            create_task("sib_mf", hadrons_params, "a", "20").config
+        )
+        task = create_task("sib_mf", params, "a", "20")
+        tokenized = build_input_params(task.config)
+
+        assert tokenized.modules["mf_nh_n0_n1_mass_l"]["options"][
+            "output"
+        ].endswith("e100n2/sib/nh_ml_a_n0_n1")
+        assert tokenized.modules["mf_tab_n0"]["options"]["output"].endswith(
+            "e100n2/sib/tab_a_n0"
+        )
+        assert tokenized.modules == bare.modules
+        assert _block_filepath(
+            task.config, "nh", "_ml", "G1_G1", n_index=0, hp_index=1
+        ).endswith("e100n2/sib/nh_ml_a_n0_n1.20/G1_G1_0_0_0.h5")
+
 
 class TestModuleTopology:
     def test_schedule_dependency_order(self, hadrons_params):

@@ -160,7 +160,9 @@ class SIBOutputConfig(SimpleConfig):
     per-mass ``h``) and splits every noise-carrying block into
     per-combination files whose stems carry ``_n{i}`` (n leg) / ``_n{j}``
     (h leg) suffixes; the tab splits per world too. ``ll`` and the
-    infra sections are identical in both modes.
+    infra sections are identical in both modes. The stems may already
+    carry ``{n_index}{hp_index}`` (block) / ``{n_index}`` (tab) — the form
+    ``contract_sib`` requires — and are then not suffixed again.
     """
 
     file: Outfile
@@ -331,20 +333,35 @@ def _index_suffix(index: int | None) -> str:
     return "" if index is None else f"_n{index}"
 
 
+def _with_tokens(outfile: Outfile, tokens: str) -> Outfile:
+    """``outfile`` with ``tokens`` appended to its stem unless already present.
+
+    Stems may carry the index tokens themselves (the ``contract_sib`` form,
+    which requires them), so one ``files:`` label serves both tasks.
+    """
+    if tokens in outfile.filestem:
+        return outfile
+    return dataclasses.replace(outfile, filestem=outfile.filestem + tokens)
+
+
 def _split_block_outfile(config: SIBMFConfig) -> Outfile:
     """Block outfile whose stem carries the per-index suffix tokens."""
-    return dataclasses.replace(
-        config.output_config.file,
-        filestem=config.output_config.file.filestem + "{n_index}{hp_index}",
-    )
+    return _with_tokens(config.output_config.file, "{n_index}{hp_index}")
 
 
 def _split_tab_outfile(config: SIBMFConfig) -> Outfile:
     """Tab outfile whose stem carries the world-index suffix token."""
-    return dataclasses.replace(
-        config.output_config.tab,
-        filestem=config.output_config.tab.filestem + "{n_index}",
+    return _with_tokens(config.output_config.tab, "{n_index}")
+
+
+def _tab_stem(config: SIBMFConfig, n_index: int | None = None) -> str:
+    """Formatted tab filestem (the writer output / loader file prefix)."""
+    outfile = (
+        _split_tab_outfile(config)
+        if config.output_config.split_noise
+        else config.output_config.tab
     )
+    return outfile.filestem.format(n_index=_index_suffix(n_index))
 
 
 def _block_filepath(
@@ -868,11 +885,10 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
     #     dependency with no environment edge — schedule order is the only
     #     execution contract (D10). The writer re-runs only when its own
     #     file is bad; the loader rides with the precon.
-    tab_stem = config.output_config.tab.filestem
     if split_noise:
         # 10s. Per-world tab writer + loader (⟨ℓ|η_i⟩, 3 columns).
         for wi in sorted(tab_worlds):
-            stem = f"{tab_stem}_n{wi}"
+            stem = _tab_stem(config, wi)
             modules[f"mf_tab_n{wi}"] = hadmods.meson_field_v2(
                 name=f"mf_tab_n{wi}",
                 block=str(config.blocksize),
@@ -892,6 +908,7 @@ def build_input_params(config: SIBMFConfig) -> HadronsInput:
             )
             schedule.append(f"mfload_tab_n{wi}")
     else:
+        tab_stem = _tab_stem(config)
         if tab_needed:
             modules["mf_tab"] = hadmods.meson_field_v2(
                 name="mf_tab",
