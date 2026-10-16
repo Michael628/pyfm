@@ -34,6 +34,24 @@ def _sniff_sib(params: dict) -> bool:
     )
 
 
+def _sniff_qed(params: dict) -> bool:
+    """Whether the parameter file selects QED diagrams.
+
+    The generated contract input YAML carries per-diagram
+    ``contraction_type`` names; any QED diagram routes the run through
+    ``QEDContractConfig`` (the builder's DICT children are homogeneous,
+    so QED diagrams cannot ride ``ContractConfig``).
+    """
+    diagrams = params.get("diagrams", {})
+    if not isinstance(diagrams, dict):
+        return False
+    return any(
+        isinstance(d, dict)
+        and str(d.get("contraction_type", "")).upper() == "QED"
+        for d in diagrams.values()
+    )
+
+
 @contract.command()
 @click.argument(
     "param-file", type=click.Path(dir_okay=False), required=False, default=None
@@ -56,7 +74,7 @@ def run(param_file, param_file_opt, do_time_average):
     """Execute A2A contractions for all diagrams defined in the parameter file."""
     from sympy.utilities.iterables import multiset_permutations
     import pyfm.tasks.contract  # noqa: F401 — registers build hooks for ContractConfig/DiagramConfig
-    from pyfm.a2a.types import ContractConfig, SIBContractConfig
+    from pyfm.a2a.types import ContractConfig, QEDContractConfig, SIBContractConfig
     from pyfm.domain import LoadDictConfig
     from pyfm.core.builder import build_config
     from pyfm.dataio import data_to_frame, write_files
@@ -72,6 +90,9 @@ def run(param_file, param_file_opt, do_time_average):
 
     if _sniff_sib(params):
         return _run_sib(params, SIBContractConfig, build_config, utils, do_time_average)
+
+    if _sniff_qed(params):
+        return _run_qed(params, QEDContractConfig, build_config, utils, do_time_average)
 
     config: ContractConfig = build_config(ContractConfig, params, normalized=True)
 
@@ -253,6 +274,74 @@ def _run_sib(params, config_type, build_config, utils, do_time_average):
                     logger.info(f"Skipping write. File exists: {fname}")
                     continue
                 logger.info(f"Writing SIB 3pt correlators: {fname}")
+                df = data_to_frame(terms, data_config)
+                write_files(df, fname, format="hdf5")
+    return 0
+
+
+def _run_qed(params, config_type, build_config, utils, do_time_average):
+    """Execute the QED four-point contraction flow.
+
+    One ``execute`` per diagram computes all sixteen junction terms per
+    (outer GammaName, correlator mass, momentum, em world) in a single
+    loading pass; each group is framed with a ``term`` label and written
+    to its own file via the outfile's ``{gamma}/{mass}/{momentum}/{em}``
+    tokens; ``--time-average`` is not supported for four-point data (the
+    pandas time_average action is two-point-only) and is rejected loudly.
+    """
+    import os
+
+    from pyfm.a2a import execute
+    from pyfm.dataio import data_to_frame, write_files
+    from pyfm.domain import LoadDictConfig
+
+    import click
+
+    if do_time_average:
+        raise click.UsageError(
+            "--time-average is not supported for QED four-point "
+            "contractions (the pandas time_average action is two-point-only)."
+        )
+
+    config = build_config(config_type, params, normalized=True)
+
+    logging_level = getattr(config, "logging_level", "INFO")
+    logger = utils.set_logging_level(logging_level)
+
+    logger.info(
+        f"Starting QED 4pt contractions with {config.comm_size} MPI rank(s) "
+        f"(current rank: {config.rank}, hardware: {config.hardware})"
+    )
+
+    for dlabel, diagram_config in config.diagrams.items():
+        logger.info(f"Contracting QED diagram: {dlabel}")
+
+        corr = execute(("qed",), diagram_config, config)
+        # corr: {(gamma, mass_token, mom_token, em_label):
+        #   {term: (T,T,T,T) ndarray}} — rank 0 only under MPI.
+
+        if config.rank < 1:
+            data_config = LoadDictConfig.create(
+                dict_labels=["term"],
+                array_order=["t1", "t2", "t3", "t4"],
+                array_labels={
+                    t: f"0..{config.time - 1}"
+                    for t in ("t1", "t2", "t3", "t4")
+                },
+            )
+            for (gamma, mass_token, momentum, em), terms in sorted(
+                corr.items()
+            ):
+                fname = diagram_config.outfile.filename.format(
+                    gamma=gamma,
+                    mass=mass_token,
+                    momentum=momentum,
+                    em=em,
+                )
+                if not config.overwrite and os.path.exists(fname):
+                    logger.info(f"Skipping write. File exists: {fname}")
+                    continue
+                logger.info(f"Writing QED 4pt correlators: {fname}")
                 df = data_to_frame(terms, data_config)
                 write_files(df, fname, format="hdf5")
     return 0

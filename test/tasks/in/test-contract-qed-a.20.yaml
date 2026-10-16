@@ -1,0 +1,94 @@
+diagrams:
+  qed_ja_ja:
+    blocks:
+      ext: .20/{file_key}.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/qed/{family}_{leg_pair}{mass}_a{em_index}
+      good_size: 1286000
+    contraction_type: QED
+    defl_mass: l
+    em:
+    - ja
+    - ja
+    em_seeds:
+    - qed_a_20_n0
+    - qed_a_20_n1
+    evalfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
+      good_size: 4400
+    mass:
+      d: 0.003328
+      l: 0.002426
+      u: 0.001524
+      zero: 0.0
+    momentum:
+    - - 1
+      - 0
+      - 0
+    n_em: 2
+    noise: 2
+    operations:
+      vec_local:
+        mass:
+        - l
+    ordering:
+    - vec
+    - em
+    - vec
+    - em
+    outfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/correlators/qed4pt/m{mass}/{gamma}/c4_{gamma}_m{mass}_P{momentum}_em{em}_a
+      good_size: 400
+    tab:
+      ext: .20/{gamma}_0_0_0.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/qed/tab_a
+      good_size: 4400
+  qed_selfen:
+    blocks:
+      ext: .20/{file_key}.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/qed/{family}_{leg_pair}{mass}_a{em_index}
+      good_size: 1286000
+    contraction_type: QED
+    defl_mass: l
+    em:
+    - ja
+    - j1l
+    em_seeds:
+    - qed_a_20_n0
+    - qed_a_20_n1
+    evalfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/eigen/eval/eval4444nv100a
+      good_size: 4400
+    mass:
+      d: 0.003328
+      l: 0.002426
+      u: 0.001524
+      zero: 0.0
+    momentum:
+    - - 1
+      - 0
+      - 0
+    n_em: 2
+    noise: 2
+    operations:
+      vec_local:
+        mass:
+        - l
+    ordering:
+    - vec
+    - em
+    - em
+    - vec
+    outfile:
+      ext: .20.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/correlators/qed4pt/m{mass}/{gamma}/c4_{gamma}_m{mass}_P{momentum}_em{em}_a
+      good_size: 400
+    tab:
+      ext: .20/{gamma}_0_0_0.h5
+      filestem: /home/mlynch/Work/pyfm/example/workspace/work-dir/e100n2/qed/tab_a
+      good_size: 4400
+logging_level: DEBUG
+runid: LMI-RW-series-a-100-eigs-2-noise
+time: 4

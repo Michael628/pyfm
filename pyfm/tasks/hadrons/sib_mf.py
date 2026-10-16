@@ -41,6 +41,7 @@ from pydantic.dataclasses import dataclass
 
 from pyfm import utils
 from pyfm.domain import CompositeConfig, Gamma, MassDict, OpList, Outfile, SimpleConfig
+from pyfm.domain.blockkeys import index_suffix as _index_suffix
 from pyfm.tasks.hadrons.types import HadronsInput
 from pyfm.tasks.register import register_task
 
@@ -326,11 +327,6 @@ def validate_config(config: SIBMFConfig) -> None:
             "Non-local operators detected (vec_onelink), but "
             "shift_gauge_name is not set."
         )
-
-
-def _index_suffix(index: int | None) -> str:
-    """``'_n<k>'`` stem-suffix fragment; ``''`` for an absent axis."""
-    return "" if index is None else f"_n{index}"
 
 
 def _with_tokens(outfile: Outfile, tokens: str) -> Outfile:

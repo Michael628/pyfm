@@ -56,6 +56,7 @@ except ImportError:
     import numpy as xp
 
 from pyfm.domain import MassDict, Outfile
+from pyfm.domain.blockkeys import index_suffix as _index_suffix
 
 SCALAR_GAMMA = "G1_G1"
 
@@ -119,11 +120,6 @@ def load_block(path: str, gamma: str) -> xp.ndarray:
             raise ValueError(f"dataset {ds!r}/a2aMatrix not found in {path!r}")
         d = f[ds]["a2aMatrix"][()]
     return xp.asarray((d["re"] + 1j * d["im"]).astype(np.complex128))
-
-
-def _index_suffix(index: int | None) -> str:
-    """``'_n<k>'`` stem-suffix fragment; ``''`` for an absent axis."""
-    return "" if index is None else f"_n{index}"
 
 
 class SIBBlockAccessor:

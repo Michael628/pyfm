@@ -47,6 +47,20 @@ from pydantic.dataclasses import dataclass
 
 from pyfm import utils
 from pyfm.domain import CompositeConfig, Gamma, MassDict, OpList, Outfile, SimpleConfig
+from pyfm.domain.blockkeys import (
+    EM_FAMILY_JA,
+    EM_FAMILY_J1L,
+    ZERO_MOM as _ZERO_MOM,
+    aslash_file_key as _aslash_file_key,
+    em_components as _em_components,
+    em_file_key,
+    em_index_suffix as _em_index_suffix,
+    expand_momenta as _expand_momenta,
+    mass_token as _mass_token,
+    mom_token as _mom_token,
+    vec_file_key as _vec_file_key,
+    VEC_FAMILY_TOKEN as _VEC_FAMILY_TOKEN,
+)
 from pyfm.tasks.hadrons.types import HadronsInput
 from pyfm.tasks.register import register_task
 
@@ -76,93 +90,12 @@ _H_LEG_PAIRS = ("lh", "nh")
 # pairs.
 _PURE_HIGH_LEG_PAIRS = frozenset({"nh"})
 
-# The zero-momentum elem the EM insertion families are pinned to (D3:
-# momentum lives on the non-ASlash legs only).
-_ZERO_MOM = "0 0 0"
-
-# Output-stem family tokens for the vec Γ families (the sib s/vl/vo
-# nicknames); EM families use EM_FAMILY_JA/EM_FAMILY_J1L directly.
-_VEC_FAMILY_TOKEN = {
-    Gamma.SCALAR_LOCAL: "s",
-    Gamma.VEC_LOCAL: "vl",
-    Gamma.VEC_ONELINK: "vo",
-}
-
-# EM module-family identifiers (module-family concepts like
-# _SIB_FAMILIES, NOT Gamma members): ja = local A_slash J·A, j1l =
-# per-component J_kA_k one-link. The token rides output stems ({family})
-# and module names (mf_ja_* / mf_j1l_*).
-EM_FAMILY_JA = "ja"
-EM_FAMILY_J1L = "j1l"
-
-
-def _expand_momenta(momentum) -> t.List[str]:
-    """±p conjugate expansion of the configured momentum list.
-
-    Each configured p yields ``+p`` then ``-p`` (in order), rendered as
-    space-separated component strings and deduplicated
-    first-occurrence (a ``[0, 0, 0]`` entry collapses to the single
-    ``"0 0 0"``; ``int(-0) == 0`` in Python so ``"-0"`` never renders).
-    The list feeds the vec family's ``mom`` option and the catalog
-    momentum axis.
-    """
-    elems: t.List[str] = []
-    for p in momentum:
-        for sign in (1, -1):
-            tok = " ".join(str(sign * int(c)) for c in p)
-            if tok not in elems:
-                elems.append(tok)
-    return elems
-
-
-def _mom_token(mom: str) -> str:
-    """Filename token of one momentum elem (``"1 0 0"`` -> ``"1_0_0"``)."""
-    return mom.replace(" ", "_")
-
-
-def _em_index_suffix(index: int | None) -> str:
-    """``'_em<k>'`` stem-suffix fragment; ``''`` for the vec families."""
-    return "" if index is None else f"_em{index}"
-
-
-def _mass_token(mass_label: str | None) -> str:
-    """``'_m<label>'`` stem token; ``''`` for the reference pairs."""
-    return f"_m{mass_label}" if mass_label else ""
-
-
-def _vec_file_key(gamma_name: str, mom: str) -> str:
-    """vec file_key: ``{GammaName}_{p1_p2_p3}`` — the upstream per-
-    gamma×momentum file grammar (one HDF5 per pair, g-major mu axis)."""
-    return f"{gamma_name}_{_mom_token(mom)}"
-
-
-def _aslash_file_key(seed: str, sample: int, mom: str) -> str:
-    """ja file_key: ``{seed}_{a}_{p}`` — a is the sample index within the
-    module (always 0 for the split_em nEmFields=1 worlds; the world is
-    identified by the per-sample seed baked into the key)."""
-    return f"{seed}_{sample}_{_mom_token(mom)}"
-
-
-def _onelink_file_key(seed: str, sample: int, component: int, mom: str) -> str:
-    """j1l file_key: ``{seed}_{j}_{k}_{p}`` — j sample (0), k = J_kA_k
-    component 0..3 (one file channel per component)."""
-    return f"{seed}_{sample}_{component}_{_mom_token(mom)}"
-
-
-def _em_components(family: str) -> t.List[t.Optional[int]]:
-    """Per-file channel axes of an EM family: ja writes one channel (the
-    summed a index); j1l writes four J_kA_k components."""
-    return list(range(4)) if family == EM_FAMILY_J1L else [None]
-
 
 def _em_file_key(
     config: QEDMFConfig, family: str, world: int, component: int | None
 ) -> str:
     """World+channel-composed file_key of one EM block file."""
-    seed = config.em_seeds(family)[world]
-    if family == EM_FAMILY_JA:
-        return _aslash_file_key(seed, 0, _ZERO_MOM)
-    return _onelink_file_key(seed, 0, component, _ZERO_MOM)
+    return em_file_key(family, config.em_seeds(family)[world], component)
 
 
 @dataclass(frozen=True)

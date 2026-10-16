@@ -3,6 +3,7 @@ from enum import auto
 
 from pyfm.domain import Outfile, MassDict, SerializableEnum, CompositeConfig, SimpleConfig
 from pyfm.domain.ops import Gamma, OpList
+from pyfm.domain.blockkeys import ZERO_MOM, expand_momenta, mom_token
 from pydantic.dataclasses import dataclass
 
 
@@ -25,8 +26,7 @@ def get_comm():
 class ContractType(SerializableEnum):
     TWOPOINT = auto()
     SIB = auto()
-    PHOTEX = auto()
-    SELFEN = auto()
+    QED = auto()
 
     @property
     def npoint(self) -> int:
@@ -35,6 +35,8 @@ class ContractType(SerializableEnum):
                 return 2
             case ContractType.SIB:
                 return 3
+            case ContractType.QED:
+                return 4
             case _:
                 raise ValueError(f"npoint not defined for {self.name}")
 
@@ -232,6 +234,148 @@ class SIBContractConfig(CompositeConfig):
     """
 
     diagrams: t.Dict[str, SIBDiagramConfig]
+    time: int
+    overwrite: bool = True
+    hardware: str = "cpu"
+
+    @property
+    def comm_size(self) -> int:
+        comm = get_comm()
+        if comm:
+            return comm.Get_size()
+        return 1
+
+    @property
+    def rank(self) -> int:
+        comm = get_comm()
+        if comm:
+            return comm.Get_rank()
+        return 0
+
+
+QED_TERM_LABELS = (
+    "llll",
+    "nlll", "lnll", "llnl", "llln",
+    "nnll", "nlnl", "nlln", "lnnl", "lnln", "llnn",
+    "nnnl", "nnln", "nlnn", "lnnn",
+    "nnnn",
+)
+"""The sixteen QED four-point terms, id'd by their junction letters.
+
+Each term id concatenates the junction types (J12, J23, J34, J41) between
+the four fields of the ring (M1@t1 ... M4@t4, cyclic): ``l`` = eig<->eig
+junction (plain index contraction), ``n`` = noise junction (eta rows x
+pure-high h/p columns, the column block pinned to the eta-side field's
+time row). The two EM-insertion fields of the ring share ONE photon world
+per raw output (the photon line forces same-world insertions; the world
+average reconstructs the photon propagator).
+
+World-selection normalizers (applied at aggregation, not in the kernel):
+a term with k noise junctions sums (N)_k fermion-noise world selections
+(pairwise-distinct across its junctions) and n_em photon worlds — factor
+1/((N)_k · n_em); empty selections (k > N) contribute nothing (factor 0).
+"""
+
+
+@dataclass(frozen=True)
+class QEDDiagramConfig(SimpleConfig):
+    """One QED four-point diagram: V·J·V·J or V·J·J·V per outer GammaName.
+
+    ``ordering`` is the cyclic vertex sequence (``"vec"``/``"em"`` entries,
+    exactly two of each, first entry ``"vec"`` — the canonical start);
+    ``em`` names the two EM insertion families in ring order (each ``ja``
+    or ``j1l``; j1l vertices sum their four J_kA_k component files inline,
+    D2). ``operations`` selects the vec Gamma families and correlator
+    masses exactly as in ``hadrons_qed_mf``. ``blocks``/``tab``/``evalfile``
+    are the PRODUCER's own file labels (shared ``files:`` entries): blocks
+    carry the ``{family}/{leg_pair}/{mass}/{em_index}`` stem tokens with
+    the ``{file_key}`` ext (cfg_qed_h5), tab the ``{gamma}`` ext
+    (cfg_gamma_h5). ``noise`` is the fermion-noise world count (producer
+    ``qed.batch.noise`` — all N worlds live INSIDE each block file's matrix
+    axes; the accessor slices them); ``n_em`` the photon-world count;
+    ``em_seeds`` the pre-expanded per-world seed strings (``{seed}_n{i}``,
+    baked into EM file keys; series/cfg resolve at input generation, D10).
+    ``momentum`` is the CONFIGURED list (pre-expansion): outputs are per
+    configured P with the conjugate elem on the opposite vec vertex (D3).
+    ``outfile`` targets the raw per-(gamma, mass, momentum, em-world)
+    correlator files and must carry the ``{gamma}/{mass}/{momentum}/{em}``
+    tokens (the 16 terms ride inside as frame labels, D4).
+    """
+
+    contraction_type: ContractType
+    ordering: t.Tuple[str, ...]
+    em: t.Tuple[str, str]
+    operations: OpList
+    mass: MassDict
+    blocks: Outfile
+    tab: Outfile
+    evalfile: Outfile
+    outfile: Outfile
+    noise: int
+    n_em: int
+    em_seeds: t.Tuple[str, ...]
+    momentum: t.Tuple[t.Tuple[int, ...], ...] = ()
+    defl_mass: str = "l"
+    symmetric: bool = False
+
+    @property
+    def op_list(self) -> t.List[OpList.Op]:
+        return self.operations.op_list
+
+    @property
+    def npoint(self) -> int:
+        return self.contraction_type.npoint
+
+    @property
+    def correlator_masses(self) -> t.List[str]:
+        """Mass labels this diagram contracts, in first-occurrence order."""
+        seen: t.List[str] = []
+        for op in self.op_list:
+            for m in op.mass:
+                if m not in seen:
+                    seen.append(m)
+        return seen
+
+    @property
+    def em_positions(self) -> t.Tuple[int, ...]:
+        """Ring positions (0-based) of the two EM vertices."""
+        return tuple(i for i, v in enumerate(self.ordering) if v == "em")
+
+    @property
+    def mom_pairs(self) -> t.List[t.Tuple[str, str]]:
+        """(vec_elem, conj_elem) file-key momenta per configured momentum.
+
+        Momentum conservation with zero-momentum EM insertions pins
+        p(vec_1) + p(vec_2) = 0 (D3): the first vec vertex carries the
+        configured elem, the second its conjugate; a self-conjugate
+        configuration collapses to one elem.
+        """
+        if not self.momentum:
+            return [(ZERO_MOM, ZERO_MOM)]
+        return [
+            (pair[0], pair[-1])
+            for pair in (expand_momenta([p]) for p in self.momentum)
+        ]
+
+    @property
+    def output_momenta(self) -> t.List[str]:
+        """Configured momenta as filename tokens — the raw output axis (D3)."""
+        if not self.momentum:
+            return [mom_token(ZERO_MOM)]
+        return [
+            mom_token(" ".join(str(int(c)) for c in p)) for p in self.momentum
+        ]
+
+
+@dataclass(frozen=True)
+class QEDContractConfig(CompositeConfig):
+    """Config tree for the ``contract_qed`` task (sibling of ``contract_sib``).
+
+    A genuinely new class (the registry's reverse map keys by class object;
+    reuse would steal a sibling's registration — the sib/qed_mf lesson).
+    """
+
+    diagrams: t.Dict[str, QEDDiagramConfig]
     time: int
     overwrite: bool = True
     hardware: str = "cpu"

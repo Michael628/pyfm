@@ -1,0 +1,209 @@
+# Parameters for the connected QED-HVP four-point calculation,
+# V(t1)·J(t2)·V(t3)·J(t4) (and the V·J·J·V ordering), on the l3248 ensemble.
+#
+# Follow-on to params_l3248.yaml: gauge links (ILDG) and the 1000-eig
+# eigenpack + evals are produced there and loaded here from the same
+# `files:` paths. Two steps:
+#   qed_mf       -> hadrons_qed_mf: stochastic-photon meson-field blocks
+#                   (vec ±p / ja / j1l families, split_em worlds) + tab
+#   contract_qed -> contract_qed:   the sixteen L/H junction terms per
+#                   (gamma, mass, momentum, em-world)
+# then `aggregate` applies 1/((N)_k · n_em) per term and folds em+term
+# into the connected C4.
+shared_params:
+  home: PYFM_WORKSPACE_TOPDIR/l{ens} # Location of work directory
+  mass:
+    u: 0.001524
+    l: 0.002426
+    d: 0.003328
+  logging_level: DEBUG
+  ens: '3248f211b580m002426m06730m8447'
+  space: 32
+  time: 48
+  runid: "QED-series-{series}-{eigs}-eigs-{noise}-noise"
+  eigs: 1000 # must match the eigenpack written by params_l3248.yaml
+  lattice: [32, 32, 32, 48]
+
+hadrons_params:
+  overwrite: false # resume: only missing/undersized block and tab files are recomputed
+
+contract_params:
+  hardware: "cpu"
+  diagram_params:
+    # The three improved-current pairings (the seed sharing across ja/j1l
+    # exists precisely so mixed-family correlators see identical photons)
+    # plus the V·J·J·V ordering. j1l vertices sum their four J_kA_k
+    # component files inline. Correlator masses must be a subset of the
+    # producer's qed.operations.mass.
+    qed_ja_ja:
+      contraction_type: qed
+      ordering: [vec, em, vec, em]
+      em: [ja, ja]
+      operations:
+        gamma: [vec_local]
+        mass: ["l", "u"]
+      defl_mass: l # must match qed_mf's defl_mass
+      blocks: qed_blocks # the producer's own file labels (see 'files:')
+      tab: qed_meson_tab
+      evalfile: eval
+      outfile: contract_qed
+    qed_ja_j1l:
+      contraction_type: qed
+      ordering: [vec, em, vec, em]
+      em: [ja, j1l]
+      operations:
+        gamma: [vec_local]
+        mass: ["l", "u"]
+      defl_mass: l
+      blocks: qed_blocks
+      tab: qed_meson_tab
+      evalfile: eval
+      outfile: contract_qed
+    qed_j1l_j1l:
+      contraction_type: qed
+      ordering: [vec, em, vec, em]
+      em: [j1l, j1l]
+      operations:
+        gamma: [vec_local]
+        mass: ["l", "u"]
+      defl_mass: l
+      blocks: qed_blocks
+      tab: qed_meson_tab
+      evalfile: eval
+      outfile: contract_qed
+    qed_selfen:
+      contraction_type: qed
+      ordering: [vec, em, em, vec] # V·J·J·V (the legacy selfen shape)
+      em: [ja, ja]
+      operations:
+        gamma: [vec_local]
+        mass: ["l", "u"]
+      defl_mass: l
+      blocks: qed_blocks
+      tab: qed_meson_tab
+      evalfile: eval
+      outfile: contract_qed
+
+nanny:
+  todo_file: todo # Filename for listing jobs to be completed for each configuration
+  max_queue: 200 # Will not submit more jobs if max_queue jobs are in the queue
+  wait: 5 # Wait interval between job submissions
+  check_interval: 30 # Wait interval between checks for job completion
+
+submit:
+  scheduler: PYFM_WORKSPACE_SCHEDULER
+  # scheduler: INTERACTIVE
+  job_name_pfx: QED
+  resources:
+    ppn: 4 # Number of processes per node
+    max_cases: 1
+    qed_mf: # TODO: tune for 32^3x48 (eigenpack + photon worlds + h solves)
+      nodes: 1
+      geom: [1, 1, 2, 2] # Product should equal nodes*ppn
+    contract_qed: # TODO: tune (16 terms x (48,48,48,48) accumulators)
+      ppn: 1
+      nodes: 1
+      geom: [1, 1, 1, 1]
+
+job_setup:
+  qed_mf:
+    run: grid.PYFM_WORKSPACE_SCHEDULER
+    io: "qed-mf-e{eigs}-n{noise}"
+    wall_time: "12:00:00" # TODO: tune
+    job_type: hadrons
+    task_type: qed_mf
+    params:
+      # Fermion-noise world count N: ALL worlds live inside each block
+      # file's matrix axes (3N left / 3N*nt right). contract_qed needs
+      # N >= 2 (cross-noise junction terms).
+      noise: 2
+    tasks:
+      gauge:
+        action_type: load # thin + fat/long ILDG links from params_l3248.yaml
+      epack:
+        load: true # eigenpack from params_l3248.yaml
+        save_evals: true # contract_qed reads the evals to reweight
+        save_eigs: false
+      qed:
+        operations:
+          gamma:
+            - scalar_local
+            - vec_local
+            - vec_onelink # one-link: uses the gauge_apbc shift gauge
+          mass: # h solves and lh/nh blocks run per mass
+            - "l"
+            - "u"
+        defl_mass: l # the single eigenpack shift all low-mode blocks build from
+        momentum: # vec-family momenta; ±p expanded by the producer
+          - [1, 0, 0]
+        em: # the stochastic photon block; n_em per-family photon worlds
+          gauge: feynman
+          zm_scheme: qedL
+          improvement: ""
+          n_em: 4
+          seed: "qed_{series}_{cfg}" # shared across ja/j1l per world
+        aslash: true # ja: local A_slash J·A family
+        onelink: true # j1l: per-component J_kA_k family
+        solver:
+          solver: mpcg
+          residual: 1e-8
+        output:
+          file: qed_blocks
+          tab: qed_meson_tab
+  contract_qed:
+    run: contract.PYFM_WORKSPACE_SCHEDULER
+    job_type: contract
+    task_type: qed
+    params:
+      noise: 2 # must match qed_mf's qed.batch.noise
+      n_em: 4 # must match qed_mf's photon-world count
+      em_seed: "qed_{series}_{cfg}" # must match qed_mf's seed template
+      momentum: # must match qed_mf's configured list
+        - [1, 0, 0]
+    tasks:
+      diagrams:
+        - qed_ja_ja
+        - qed_ja_j1l
+        - qed_j1l_j1l
+        - qed_selfen
+    io: "contract-qed-e{eigs}-n{noise}"
+    wall_time: "8:00:00" # TODO: tune
+
+files: # labels and corresponding locations of all input and output files used in the jobs above
+  fat_links:
+    filestem: lat/scidac/fat{ens}{series}.ildg
+    good_size: 905900000
+  long_links:
+    filestem: lat/scidac/lng{ens}{series}.ildg
+    good_size: 905900000
+  ildg_links:
+    filestem: lat/scidac/l{ens}{series}.ildg
+    good_size: 452900000
+  eig:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 37751000000
+  eigdir:
+    filestem: eigen/eig{ens}nv{eigs}{series}
+    good_size: 4076866904
+  eval:
+    filestem: eigen/eval/eval{ens}nv{eigs}{series}
+    good_size: 11000
+  # One label serves both steps. {family} is the vec nickname (s/vl/vo) or
+  # ja/j1l; {leg_pair} in ll/nl/lh/nh; {mass} renders '' (ll, nl) or
+  # '_m<label>' (lh, nh); {em_index} renders '' (vec) or '_em<k>' photon
+  # worlds; the ext's {file_key} is the per-gamma×momentum (vec) or
+  # seed-based (EM) file key. good_size is the smallest block: nh with
+  # noise=2, complex64 [48, 6, 288].
+  qed_blocks:
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}/qed/{family}_{leg_pair}{mass}_{series}{em_index}
+    good_size: 400000
+  # Single <l|eta> overlap table, complex64 [48, 2000, 6] (all noise worlds
+  # in one file) = 4.6 MB.
+  qed_meson_tab:
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}/qed/tab_{series}
+    good_size: 4000000
+  # One file per (gamma, mass, momentum, em-world) holding all sixteen
+  # terms, each [48, 48, 48, 48] complex128: 16 × 85 MB ≈ 1.36 GB/file.
+  contract_qed:
+    filestem: PYFM_WORKSPACE_DATASUBDIRe{eigs}n{noise}/correlators/qed4pt/m{mass}/{gamma}/c4_{gamma}_m{mass}_P{momentum}_em{em}_{series}
+    good_size: 1300000000

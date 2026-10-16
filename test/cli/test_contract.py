@@ -132,3 +132,80 @@ class TestSibDispatch:
             )
             assert result.exit_code != 0
             assert "not supported" in result.output
+
+
+class TestQedDispatch:
+    @pytest.fixture()
+    def qed_params(self):
+        return {
+            "diagrams": {
+                "qed_ja_ja": {
+                    "contraction_type": "QED",
+                    "ordering": ["vec", "em", "vec", "em"],
+                    "em": ["ja", "ja"],
+                    "operations": {"vec_local": {"mass": ["l"]}},
+                }
+            },
+            "time": 4,
+            "logging_level": "INFO",
+            "runid": "t",
+        }
+
+    def test_sniff_detects_qed(self, qed_params):
+        from pyfm.cli.contract import _sniff_qed
+
+        assert _sniff_qed(qed_params) is True
+        assert _sniff_qed({"diagrams": {}}) is False
+        assert _sniff_qed({}) is False
+        assert (
+            _sniff_qed(
+                {
+                    "diagrams": {
+                        "hvp_vl": {"contraction_type": "SIB"},
+                    }
+                }
+            )
+            is False
+        )
+        assert (
+            _sniff_qed(
+                {
+                    "diagrams": {
+                        "pion": {"contraction_type": "TWOPOINT"},
+                    }
+                }
+            )
+            is False
+        )
+
+    def test_qed_params_build_qed_config(self, runner, qed_params):
+        with (
+            patch("pyfm.utils.io.load_param", return_value=qed_params),
+            patch("pyfm.utils.set_logging_level", return_value=MagicMock()),
+            patch("pyfm.core.builder.build_config") as mock_bc,
+            patch("pyfm.a2a.execute") as mock_execute,
+        ):
+            cfg = _fake_config()
+            cfg.time = 4
+            cfg.diagrams = {"qed_ja_ja": MagicMock()}
+            mock_bc.return_value = cfg
+            mock_execute.return_value = {}
+            result = runner.invoke(cli, ["contract", "run", "-p", "params.yaml"])
+            assert result.exit_code == 0, result.output
+            args, _kwargs = mock_bc.call_args
+            from pyfm.a2a.types import QEDContractConfig
+
+            assert args[0] is QEDContractConfig
+            mock_execute.assert_called_once()
+
+    def test_time_average_rejected_for_qed(self, runner, qed_params):
+        with (
+            patch("pyfm.utils.io.load_param", return_value=qed_params),
+            patch("pyfm.utils.set_logging_level", return_value=MagicMock()),
+            patch("pyfm.core.builder.build_config"),
+        ):
+            result = runner.invoke(
+                cli, ["contract", "run", "-p", "params.yaml", "--time-average"]
+            )
+            assert result.exit_code != 0
+            assert "not supported" in result.output

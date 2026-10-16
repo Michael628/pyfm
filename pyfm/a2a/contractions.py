@@ -4,7 +4,6 @@ import itertools
 import typing as t
 
 import opt_einsum as oe
-import pandas as pd
 
 try:
     import cupy as xp
@@ -15,10 +14,14 @@ from pyfm import utils
 from pyfm.a2a.types import (
     ContractConfig,
     DiagramConfig,
+    QEDContractConfig,
+    QEDDiagramConfig,
+    QED_TERM_LABELS,
     SIBContractConfig,
     SIBDiagramConfig,
     SIB_TERM_LABELS,
 )
+from pyfm.domain.blockkeys import VEC_FAMILY_TOKEN, mom_token
 from pyfm.a2a.mesonloader import iter_meson_fields, clear_meson_cache
 from pyfm.a2a.time_operations import convert_to_numpy
 
@@ -400,57 +403,222 @@ def _sib_terms(
 
 def qed_conn_4pt(
     contraction: t.Tuple[str],
-    diagram_config: DiagramConfig,
-    contract_config: ContractConfig,
-) -> pd.DataFrame:
-    """Execute 4-point QED contraction."""
-    corr = pd.DataFrame()
+    diagram_config: QEDDiagramConfig,
+    contract_config: QEDContractConfig,
+):
+    """Execute the QED connected four-point contraction (QED-corrected HVP).
 
-    times = generate_time_sets(diagram_config, contract_config)
+    Computes all sixteen L/H junction terms (``QED_TERM_LABELS``) per
+    (outer GammaName, correlator mass, configured momentum P, photon
+    world) from the ``hadrons_qed_mf`` block surface via
+    ``pyfm.a2a.qed_derive.QEDBlockAccessor``. The diagram's ``ordering``
+    places the two vec vertices (first at P, second at its conjugate,
+    D3) and the two EM insertion vertices (families from ``em``; j1l
+    components summed inline by the accessor, D2); both EM vertices
+    share the photon world (the photon line forces same-world
+    insertions). Fermion-noise world selection: a term with k noise
+    junctions sums ordered selections of k pairwise-distinct worlds
+    (empty for k > noise — the term is identically zero).
+
+    Outputs are RAW per-term (T,T,T,T) world sums — no normalization
+    (D7): aggregation applies 1/((N)_k · n_em) per term then folds em
+    and term axes (D5). Terms are accumulated ONE AT A TIME (D14) —
+    peak memory is ~2 term buffers, not 16. Returns
+    ``{(gamma_name, mass_token, mom_token, em_label): {term: ndarray}}``
+    with numpy arrays on rank 0 (entries absent on other ranks).
+
+    ``contraction`` is accepted for signature parity with the other
+    kernels; the QED scheme carries its noise structure in-matrix.
+    """
+    from pyfm.a2a.qed_derive import QEDBlockAccessor
+
+    if diagram_config.symmetric:
+        raise ValueError(
+            "Symmetric optimization is not implemented for QED four-point "
+            "contractions."
+        )
 
     logger = utils.get_logger()
-    for gamma in diagram_config.gammas:
-        for i in range(diagram_config.n_em):
-            emlabel = f"{diagram_config.emseedstring}_{i}"
-            if subdiagram == diagram_config.contraction_type.PHOTEX:
-                ops = [gamma, emlabel, gamma, emlabel]
-            elif subdiagram == diagram_config.contraction_type.SELFEN:
-                ops = [gamma, emlabel, emlabel, gamma]
-            else:
-                raise ValueError("Invalid qed diagram.")
-            mesonfiles = tuple(
-                m_path.format(
-                    w_index=contraction[i],
-                    v_index=contraction[i + 1],
-                    gamma=g,
-                )
-                for i, g, m_path in zip([0, 2, 4, 6], ops, diagram_config.mesonfiles)
-            )
 
-            cij = xp.zeros((contract_config.time,) * 4, dtype=xp.complex128)
+    accessor = QEDBlockAccessor(
+        blocks=diagram_config.blocks,
+        tab=diagram_config.tab,
+        evalfile=diagram_config.evalfile,
+        mass=diagram_config.mass,
+        defl_mass=diagram_config.defl_mass,
+        noise=diagram_config.noise,
+        em_seeds=diagram_config.em_seeds,
+    )
 
-            for (t1, m1), (t2, m2), (t3, m3), (t4, m4) in iter_meson_fields(
-                diagram_config, mesonfiles, times, contraction
-            ):
-                logger.info(f"Contracting ({gamma},{emlabel}): {t1}, {t2}, {t3}, {t4}")
-                cij[t1, t2, t3, t4] = contract(
-                    m1, m2, m3, m4, open_indices=[0, 1, 2, 3]
-                )
+    times = generate_time_sets(diagram_config, contract_config)
+    block_quads = list(zip(*[list(t) for t in times])) or [
+        (slice(0, contract_config.time),) * 4
+    ]
 
-                if diagram_config.symmetric:
-                    raise Exception("Symmetric 4dim optimization not implemented.")
-
-            logger.debug("Contraction completed.")
-
-            if contract_config.comm_size > 1:
-                temp = None
-                if contract_config.rank == 0:
-                    temp = xp.empty_like(cij)
-                _reduce_sum_to_root(cij, temp)
-
-                if contract_config.rank == 0:
-                    corr[gamma] = convert_to_numpy(temp)
-            else:
-                corr[gamma] = convert_to_numpy(cij)
-
+    corr: t.Dict[t.Tuple[str, str, str, str], t.Dict[str, xp.ndarray]] = {}
+    for op in diagram_config.op_list:
+        fam_token = VEC_FAMILY_TOKEN[op.gamma]
+        for gamma in op.gamma.gamma_list:
+            for mass_label in op.mass:
+                mass_tok = diagram_config.mass.to_string(mass_label, True)
+                for mom_elem, conj_elem in diagram_config.mom_pairs:
+                    p_tok = mom_token(mom_elem)
+                    for em_world in range(diagram_config.n_em):
+                        fields = _ring_fields(
+                            diagram_config, fam_token, gamma,
+                            (mom_elem, conj_elem), em_world,
+                        )
+                        key = (gamma, mass_tok, p_tok, str(em_world))
+                        logger.info(
+                            f"Contracting QED 4pt: {gamma} at mass "
+                            f"{mass_label}, P={p_tok}, em world {em_world}"
+                        )
+                        terms: t.Dict[str, xp.ndarray] = {}
+                        for term in QED_TERM_LABELS:
+                            arr = _qed_accumulate_term(
+                                accessor, fields, term, mass_label,
+                                block_quads, contract_config.time,
+                            )
+                            if contract_config.comm_size > 1:
+                                temp = None
+                                if contract_config.rank == 0:
+                                    temp = xp.empty_like(arr)
+                                _reduce_sum_to_root(arr, temp)
+                                if contract_config.rank == 0:
+                                    terms[term] = convert_to_numpy(temp)
+                            else:
+                                terms[term] = convert_to_numpy(arr)
+                            del arr
+                        corr[key] = terms
     return corr
+
+
+def _ring_fields(
+    diagram_config: QEDDiagramConfig,
+    fam_token: str,
+    gamma: str,
+    mom_pair: t.Tuple[str, str],
+    em_world: int,
+) -> t.List[t.Dict]:
+    """The four ring fields in position order (block-fetch specs).
+
+    First vec position carries the configured elem, second its conjugate
+    (D3); the two EM vertices carry the diagram's families in ring order
+    and share the photon world.
+    """
+    fields: t.List[t.Dict] = []
+    vec_i = 0
+    em_i = 0
+    for vertex in diagram_config.ordering:
+        if vertex == "vec":
+            fields.append(
+                {
+                    "family": fam_token,
+                    "gamma": gamma,
+                    "mom": mom_pair[vec_i],
+                    "em_world": None,
+                }
+            )
+            vec_i += 1
+        else:
+            fields.append(
+                {
+                    "family": diagram_config.em[em_i],
+                    "gamma": None,
+                    "mom": None,
+                    "em_world": em_world,
+                }
+            )
+            em_i += 1
+    return fields
+
+
+def _qed_accumulate_term(
+    accessor, fields, term, mass_label, block_quads, time: int
+) -> xp.ndarray:
+    """One junction term: raw world-summed (T,T,T,T) on this rank."""
+    cij = xp.zeros((time,) * 4, dtype=xp.complex128)
+    n = accessor.noise
+    n_junctions = [j for j, ch in enumerate(term) if ch == "n"]
+    for worlds in itertools.permutations(range(n), len(n_junctions)):
+        world_of = dict(zip(n_junctions, worlds))
+        for quad in block_quads:
+            _qed_term_block(
+                cij, accessor, fields, term, world_of, mass_label, quad
+            )
+    return cij
+
+
+def _qed_term_block(cij, accessor, fields, term, world_of, mass_label, quad):
+    """Accumulate one (world-tuple, time-block) contribution of one term.
+
+    Field positions: M1@t1 ... M4@t4 (cyclic); junctions J12, J23, J34,
+    J41 with letters from ``term``. 'l' junctions contract eig×eig
+    (2*n_eig); 'n' junctions contract the pure-high h columns of the
+    left field (pinned to the right field's time row, 3 colors) against
+    the right field's eta rows. A field is time-PINNED iff its LEFT
+    junction is 'n' (its eta rows live at that time); free fields
+    contribute their full time slice. The einsum is built generically
+    from the four (time, row, col) operand specs.
+    """
+    time_letters = "uvwx"
+    junction_letters = "abcd"
+    pinned = [i for i in range(4) if term[(i - 1) % 4] == "n"]
+
+    def fetch(i: int, tvals):
+        """Operand matrix and its einsum spec for field i."""
+        left_j, right_j = (i - 1) % 4, i
+        row, col = junction_letters[left_j], junction_letters[right_j]
+        tl = ""
+        if term[left_j] == "n":
+            t_i = tvals[i]
+            if term[right_j] == "n":
+                blk = accessor.pure_nh(
+                    fields[i]["family"], fields[i]["gamma"],
+                    world_of[left_j], world_of[right_j], mass_label,
+                    mom=fields[i]["mom"], em_world=fields[i]["em_world"],
+                )[t_i]
+                blk = accessor.cols(blk, tvals[(i + 1) % 4])
+            else:
+                blk = accessor.nl(
+                    fields[i]["family"], fields[i]["gamma"],
+                    world_of[left_j], mass_label,
+                    mom=fields[i]["mom"], em_world=fields[i]["em_world"],
+                )[t_i]
+        else:
+            if term[right_j] == "n":
+                blk = accessor.pure_lh(
+                    fields[i]["family"], fields[i]["gamma"],
+                    world_of[right_j], mass_label,
+                    mom=fields[i]["mom"], em_world=fields[i]["em_world"],
+                )[quad[i]]
+                blk = accessor.cols(blk, tvals[(i + 1) % 4])
+            else:
+                blk = accessor.ll(
+                    fields[i]["family"], fields[i]["gamma"], mass_label,
+                    mom=fields[i]["mom"], em_world=fields[i]["em_world"],
+                )[quad[i]]
+            tl = time_letters[i]
+        return f"{tl}{row}{col}", blk
+
+    def accumulate(tvals):
+        specs, operands, out_letters = [], [], ""
+        for i in range(4):
+            spec, blk = fetch(i, tvals)
+            specs.append(spec)
+            operands.append(blk)
+            if spec[0] in time_letters:
+                out_letters += spec[0]
+        val = oe.contract(",".join(specs) + "->" + out_letters, *operands)
+        idx = tuple(
+            tvals[i] if term[(i - 1) % 4] == "n" else quad[i]
+            for i in range(4)
+        )
+        cij[idx] += val
+
+    ranges = [range(quad[i].start, quad[i].stop) for i in pinned]
+    for combo in itertools.product(*ranges):
+        tvals = [None] * 4
+        for i, t in zip(pinned, combo):
+            tvals[i] = t
+        accumulate(tvals)

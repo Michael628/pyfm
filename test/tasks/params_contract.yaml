@@ -133,6 +133,34 @@ contract_params:
       tab: sib_meson_tab
       evalfile: eval
       outfile: contract_sib
+    qed_ja_ja:
+      contraction_type: qed
+      ordering: [vec, em, vec, em]
+      em: [ja, ja]
+      operations:
+        gamma:
+          - vec_local
+        mass:
+          - "l"
+      defl_mass: l
+      blocks: qed_blocks
+      tab: qed_meson_tab
+      evalfile: eval
+      outfile: contract_qed
+    qed_selfen:
+      contraction_type: qed
+      ordering: [vec, em, em, vec]
+      em: [ja, j1l]
+      operations:
+        gamma:
+          - vec_local
+        mass:
+          - "l"
+      defl_mass: l
+      blocks: qed_blocks
+      tab: qed_meson_tab
+      evalfile: eval
+      outfile: contract_qed
 
 submit:
   scheduler: SLURM
@@ -144,6 +172,9 @@ submit:
       nodes: 1
       geom: [1, 1, 1, 2]
     contract_sib:
+      nodes: 1
+      geom: [1, 1, 1, 2]
+    contract_qed:
       nodes: 1
       geom: [1, 1, 1, 2]
 
@@ -179,6 +210,22 @@ job_setup:
     params:
       eigs: 100
       noise: 2
+  contract_qed:
+    run: contract.sh
+    job_type: contract
+    task_type: qed
+    tasks:
+      diagrams:
+        - qed_ja_ja
+        - qed_selfen
+    io: "contract-qed"
+    wall_time: "8:00:00"
+    params:
+      eigs: 100
+      noise: 2
+      n_em: 2
+      em_seed: "qed_{series}_{cfg}"
+      momentum: [[1, 0, 0]]
 
 
 files:
@@ -200,4 +247,13 @@ files:
     good_size: 1286000
   sib_meson_tab:
     filestem: e{eigs}n{noise}/sib/tab_{series}{n_index}
+    good_size: 4400
+  contract_qed:
+    filestem: e{eigs}n{noise}/correlators/qed4pt/m{mass}/{gamma}/c4_{gamma}_m{mass}_P{momentum}_em{em}_{series}
+    good_size: 400
+  qed_blocks:
+    filestem: e{eigs}n{noise}/qed/{family}_{leg_pair}{mass}_{series}{em_index}
+    good_size: 1286000
+  qed_meson_tab:
+    filestem: e{eigs}n{noise}/qed/tab_{series}
     good_size: 4400

@@ -45,10 +45,7 @@ def execute(
         ContractType.SIB: lambda: sib_conn_3pt(
             contraction, diagram_config, contract_config
         ),
-        ContractType.PHOTEX: lambda: qed_conn_4pt(
-            contraction, diagram_config, contract_config
-        ),
-        ContractType.SELFEN: lambda: qed_conn_4pt(
+        ContractType.QED: lambda: qed_conn_4pt(
             contraction, diagram_config, contract_config
         ),
     }
