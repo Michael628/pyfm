@@ -29,6 +29,12 @@ tagged retroactively on a commit reached through `develop`.
 Tracks HadronsMILC `cceb0cd`, Grid `4ccaeaf`, Hadrons `3a09801`
 (develop heads at the v0.3.0 back-merge; update as integration moves).
 
+### CLI
+- `nanny submit -i/--input` now accepts multiple input files (repeat the flag,
+  e.g. `-i a.xml -i b.xml`); all files are joined space-separated into the
+  `INPUTLIST` environment variable, matching the format `make_inputs` already
+  sets for nanny-loop submissions. A single `-i FILE` still works as before.
+
 ## [0.3.0] - 2026-10-10
 
 Pairs with HadronsMILC `v0.3.0` (`4a19a15`), which pins Grid `d67dd20` and

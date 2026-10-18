@@ -54,6 +54,37 @@ def test_nanny_submit_required_args(runner, fake_yaml_params):
         mock_submit.assert_called_once_with(fake_nanny_cfg, fake_job_cfg, 1)
 
 
+def test_nanny_submit_multiple_inputs_join_inputlist(runner, fake_yaml_params):
+    fake_nanny_cfg = MagicMock()
+    fake_job_cfg = MagicMock()
+    with (
+        patch("pyfm.cli.nanny.utils") as mock_utils,
+        patch("pyfm.cli.nanny.get_nanny_config", return_value=fake_nanny_cfg),
+        patch("pyfm.cli.nanny.get_job_config", return_value=fake_job_cfg),
+        patch("pyfm.cli.nanny.submit_job") as mock_submit,
+        patch("pyfm.cli.nanny.os.environ", {}) as mock_env,
+    ):
+        mock_utils.io.load_param.return_value = fake_yaml_params
+        result = runner.invoke(
+            cli,
+            [
+                "nanny",
+                "submit",
+                "-p",
+                "params.yaml",
+                "-i",
+                "/path/to/a.xml",
+                "-i",
+                "/path/to/b.xml",
+                "-j",
+                "hadrons_lmi",
+            ],
+        )
+        assert result.exit_code == 0
+        assert mock_env["INPUTLIST"] == "/path/to/a.xml /path/to/b.xml"
+        mock_submit.assert_called_once_with(fake_nanny_cfg, fake_job_cfg, 1)
+
+
 def test_nanny_submit_missing_input_fails(runner):
     result = runner.invoke(cli, ["nanny", "submit", "-j", "hadrons_lmi"])
     assert result.exit_code != 0
