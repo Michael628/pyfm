@@ -558,3 +558,113 @@ class TestCompareOutputs:
         report = compare_outputs(a, b)
         rows = report[report["dset"] == "ranLL"]
         assert (rows["status"] == "missing_file").all()
+
+
+class TestBuildInputParamsSplitMode:
+    """Split-grid schedule hoist: world-grid producers of tagged-consumer
+    inputs (per-source noise, guess producers, gamma_map_element bridges)
+    precede the first tagged module so Hadrons' single pre-scatter pass
+    covers them; non-split emission stays interleaved."""
+
+    def _split_config(self, **overrides):
+        kwargs = dict(
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            split_mpi_layout="1 1 1 2",
+            subgrid_ranks=2,
+        )
+        kwargs.update(overrides)
+        return make_config(**kwargs)
+
+    @staticmethod
+    def _first_tagged(result):
+        return min(
+            result.schedule.index(name)
+            for name, module in result.modules.items()
+            if module.get("subgrid") is not None
+        )
+
+    def test_hoisted_inputs_precede_first_tagged_module(self):
+        result = strategy.build_input_params(self._split_config())
+        sched = result.schedule
+        first_tagged = self._first_tagged(result)
+        tagged_outputs = {
+            name
+            for name, module in result.modules.items()
+            if module.get("subgrid") is not None
+        }
+        hoisted = [
+            name
+            for name, module in result.modules.items()
+            if module["id"]["type"]
+            in ("MSource::StagRandomWall", "MFermion::StagLMAMesonFieldProp")
+            or (
+                module["id"]["type"] == "MUtilities::GammaMapElement"
+                and module["options"]["map"] not in tagged_outputs
+            )
+        ]
+        assert hoisted
+        assert all(sched.index(name) < first_tagged for name in hoisted)
+
+    def test_hoist_preserves_internal_dependency_order(self):
+        result = strategy.build_input_params(self._split_config())
+        sched = result.schedule
+        tagged_outputs = {
+            name
+            for name, module in result.modules.items()
+            if module.get("subgrid") is not None
+        }
+        producer_idx = [
+            sched.index(name)
+            for name, module in result.modules.items()
+            if module["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
+        ]
+        for name, module in result.modules.items():
+            if module["id"]["type"] == "MUtilities::GammaMapElement":
+                if module["options"]["map"] in tagged_outputs:
+                    # ama-antiquark bridges stay in the sorted block,
+                    # behind their tagged producer
+                    assert sched.index(name) > sched.index(module["options"]["map"])
+                else:
+                    # ranLL-map bridges are hoisted after every producer
+                    assert sched.index(name) > max(producer_idx)
+                    assert sched.index(name) > sched.index(module["options"]["map"])
+        assert sched.index("noise_fv") < sched.index("noise_t0")
+        assert sched.index("mfload_mass_l_G1_G1") < max(producer_idx)
+
+    def test_ama_modules_tagged_by_slice_residue(self):
+        result = strategy.build_input_params(self._split_config())
+        for t in range(4):
+            quark = result.modules[f"quark_ama_pion_local_mass_l_t{t}"]
+            assert quark["subgrid"] == t % 2
+
+    def test_non_split_schedule_keeps_interleave(self):
+        config = make_config(
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD)
+        )
+        result = strategy.build_input_params(config)
+        sched = result.schedule
+        assert all(
+            module.get("subgrid") is None for module in result.modules.values()
+        )
+        # ama t0 and t0's bridge sort inside the per-slice interleave,
+        # before t3's producer — the split hoist inverts exactly this
+        assert sched.index("quark_ama_pion_local_mass_l_t0") < sched.index(
+            "quark_ranLL_pion_local_mass_l_t3"
+        )
+        assert sched.index("quark_ranLL_pion_local_mass_l_t0_elem") < sched.index(
+            "quark_ranLL_pion_local_mass_l_t3"
+        )
+
+    def test_resume_gate_unchanged_under_split(self, monkeypatch):
+        catalog = pd.DataFrame(
+            {"tsource": ["0", "1", "2", "3"], "exists": [True, False, True, True]}
+        )
+        monkeypatch.setattr(strategy, "create_outfile_catalog", lambda config: catalog)
+        config = self._split_config(output_config=make_output(overwrite=False))
+        result = strategy.build_input_params(config)
+        producers = [
+            n
+            for n, m in result.modules.items()
+            if m["id"]["type"] == "MFermion::StagLMAMesonFieldProp"
+        ]
+        assert producers == ["quark_ranLL_pion_local_mass_l_t1"]
