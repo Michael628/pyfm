@@ -246,6 +246,38 @@ def build_lma_meson_field_chain(
     )
 
 
+def split_refs_into_phases(
+    run_refs: t.List[SourceRef], n_phases: int, subgrid_ranks: int
+) -> t.List[t.List[SourceRef]]:
+    """Split ``run_refs`` in order into ``n_phases`` chunks, sized in
+    multiples of ``subgrid_ranks`` where possible (R5) so every subcomm
+    stays busy in each phase.
+
+    Bias-mode interleaving is handled for free: chunks derive from the
+    draw-ordered ``run_refs`` list, BEFORE any t0-primary sort — the t0
+    sort happens within each phase's tagged block only.
+    """
+    n = len(run_refs)
+    max_phases = max(1, -(-n // subgrid_ranks))   # ceil; >= 1 even for n == 0
+    if n_phases > max_phases:
+        raise ValueError(
+            f"subgrid_phases ({n_phases}) exceeds the number of full "
+            f"subgrid_ranks groups in {n} source ref(s) "
+            f"(ceil(n/subgrid_ranks) = {max_phases}); every phase needs at "
+            "least one refs-worth of work."
+        )
+    chunks: t.List[t.List[SourceRef]] = [[] for _ in range(n_phases)]
+    remaining, idx = n, 0
+    for k in range(n_phases):
+        left = n_phases - k
+        target = -(-remaining // left)                       # ceil(rem/left)
+        target = min(-(-target // subgrid_ranks) * subgrid_ranks, remaining)
+        chunks[k] = run_refs[idx : idx + target]
+        idx += target
+        remaining -= target
+    return chunks
+
+
 def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
     """Per-entry emission (design doc order): SpinTaste + sink →
     full-volume noise → cache writer → (stop for build_only) → per-source
@@ -316,6 +348,116 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
 
     # 4. Stop here for build_only: no quarks, solvers or correlators.
     if cache_build_only:
+        return HadronsInput(modules=modules, schedule=schedule)
+
+    # ---- phased split mode (R5): global producers once, then one
+    # [hoist + sorted tagged] block per phase. Each phase's hoisted
+    # producers (noise, meson-field guesses, bridges) precede that phase's
+    # tagged block, so Hadrons' per-phase pre-scatter sees every input
+    # (the Q7 contract). Phase tags: R6 — emitted only when != 0.
+    if config.subgrid_ranks is not None and config.subgrid_phases is not None:
+        # global mass loop (no per-ref pieces): loaders, ranLL solver,
+        # CG solvers — consumed via rebuild/scatter from any phase
+        for mass_label in config.masses:
+            action = config.action_name.format(mass=mass_label)
+            if config.low_modes_config.method is not LowModeMethod.NONE:
+                low_modes = config.low_modes_name.format(mass=mass_label)
+                if config.use_meson_field:
+                    loaders, _ = build_lma_meson_field_chain(
+                        config,
+                        mass_label=mass_label,
+                        action=action,
+                        low_modes=low_modes,
+                        gammas=needed.get(mass_label, []),
+                        spintaste_names=spintaste_names,
+                        refs=[],
+                    )
+                    modules |= loaders.modules       # producers empty (refs=[])
+                    schedule += loaders.schedule
+                else:
+                    name = twopoint.solver_module_name(config, "ranLL", mass_label)
+                    modules[name] = hadmods.lma_solver(
+                        name=name, action=action, low_modes=low_modes,
+                    )
+                    schedule.append(name)
+            if config.cg_config is not None:
+                cg_solver_labels: t.List[str] = [
+                    s for s in config.get_solver_labels(skip_cross=True) if "ama" in s
+                ]
+                for resid, sl in zip(map(str, config.cg_config.residual), cg_solver_labels):
+                    name = twopoint.solver_module_name(config, sl, mass_label)
+                    match config.cg_config.solver:
+                        case "rb":
+                            modules[name] = hadmods.rb_cg(name=name, action=action, residual=resid)
+                        case "cg":
+                            modules[name] = hadmods.cg(name=name, action=action, residual=resid)
+                        case "mpcg":
+                            inner_action = f"i{action}"
+                            modules[name] = hadmods.mixed_precision_cg(
+                                name=name, outer_action=action,
+                                inner_action=inner_action, residual=resid,
+                            )
+                        case _:
+                            raise ValueError(
+                                f"Unknown high-mode CG solver: {config.cg_config.solver}"
+                            )
+                    schedule.append(name)
+
+        phase_chunks = split_refs_into_phases(
+            run_refs, config.subgrid_phases, config.subgrid_ranks
+        )
+        for k, chunk in enumerate(phase_chunks):
+            if not chunk:
+                continue
+            hoist: t.List[str] = []
+            quark_schedule_k: t.List[str] = []
+            # this phase's per-source noise (hoisted, untagged)
+            for ref in chunk:
+                name = twopoint.noise_rw_name(config, ref)
+                modules[name] = hadmods.noise_rw(
+                    name=name,
+                    nsrc=str(config.sources_config.noise),
+                    t0=str(ref.t0),
+                    tstep=str(config.sources_config.time),
+                    noise=config.noise_name if config.use_meson_field else "",
+                )
+                hoist.append(name)
+            # this phase's meson-field guess producers (hoisted, untagged)
+            if config.use_meson_field:
+                for mass_label in config.masses:
+                    _, producers = build_lma_meson_field_chain(
+                        config,
+                        mass_label=mass_label,
+                        action=config.action_name.format(mass=mass_label),
+                        low_modes=config.low_modes_name.format(mass=mass_label),
+                        gammas=needed.get(mass_label, []),
+                        spintaste_names=spintaste_names,
+                        refs=chunk,
+                    )
+                    modules |= producers.modules
+                    hoist += producers.schedule
+            # this phase's quarks + contractions (tagged, phase k)
+            quark_inputs = twopoint.build_quarks(config, chunk, spintaste_names, phase=k)
+            modules |= quark_inputs.modules
+            quark_schedule_k += quark_inputs.schedule
+            contract_inputs = twopoint.build_contractions(
+                config, chunk, spintaste_names, phase=k
+            )
+            modules |= contract_inputs.modules
+            hoist_set = set(hoist)
+            for name in contract_inputs.schedule:
+                module = contract_inputs.modules[name]
+                if (
+                    module["id"]["type"] == "MUtilities::GammaMapElement"
+                    and module["options"]["map"] in hoist_set
+                ):
+                    hoist.append(name)
+                else:
+                    quark_schedule_k.append(name)
+            schedule += hoist
+            # t0-primary sort happens WITHIN the phase (bias-mode grouping
+            # already fixed by the chunking above)
+            schedule += sort_schedule(config, quark_schedule_k)
         return HadronsInput(modules=modules, schedule=schedule)
 
     # 5. Per-source noise. In split-grid mode these feed TAGGED ama quarks

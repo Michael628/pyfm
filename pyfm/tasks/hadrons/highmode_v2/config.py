@@ -397,6 +397,7 @@ class LMAHighModeConfig(CompositeConfig):
     output_config: OutputConfig | None = None
     split_mpi_layout: str | None = None
     subgrid_ranks: int | None = None
+    subgrid_phases: int | None = None
 
     def module_name(self, base: str) -> str:
         """Entry-owned module name: ``{label}_{base}`` (``''`` keeps ``base``)."""
@@ -706,6 +707,19 @@ def validate_config(config: LMAHighModeConfig) -> None:
         raise ValueError(
             f"subgrid_ranks must be a positive integer; got {config.subgrid_ranks}."
         )
+
+    if config.subgrid_phases is not None:
+        if config.subgrid_phases < 1:
+            raise ValueError(
+                f"subgrid_phases must be a positive integer; got "
+                f"{config.subgrid_phases}."
+            )
+        if config.subgrid_ranks is None:
+            raise ValueError(
+                "subgrid_phases requires split-grid: set split_mpi_layout "
+                "and subgrid_ranks too (phases partition the split-grid "
+                "source refs)."
+            )
 
     effective = config.effective_solve_cross_terms
     configured = (

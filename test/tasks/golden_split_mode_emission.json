@@ -1,0 +1,497 @@
+{
+ "modules": {
+  "corr_ama_pion_local_mass_l_t0": {
+   "id": {
+    "name": "corr_ama_pion_local_mass_l_t0",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ama_mass_002426_0",
+    "sink": "quark_ama_pion_local_mass_l_t0_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ama_pion_local_mass_l_t0",
+    "sourceShift": "noise_t0_shift"
+   },
+   "subgrid": 0
+  },
+  "corr_ama_pion_local_mass_l_t1": {
+   "id": {
+    "name": "corr_ama_pion_local_mass_l_t1",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ama_mass_002426_1",
+    "sink": "quark_ama_pion_local_mass_l_t1_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ama_pion_local_mass_l_t1",
+    "sourceShift": "noise_t1_shift"
+   },
+   "subgrid": 1
+  },
+  "corr_ama_pion_local_mass_l_t2": {
+   "id": {
+    "name": "corr_ama_pion_local_mass_l_t2",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ama_mass_002426_2",
+    "sink": "quark_ama_pion_local_mass_l_t2_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ama_pion_local_mass_l_t2",
+    "sourceShift": "noise_t2_shift"
+   },
+   "subgrid": 0
+  },
+  "corr_ama_pion_local_mass_l_t3": {
+   "id": {
+    "name": "corr_ama_pion_local_mass_l_t3",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ama_mass_002426_3",
+    "sink": "quark_ama_pion_local_mass_l_t3_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ama_pion_local_mass_l_t3",
+    "sourceShift": "noise_t3_shift"
+   },
+   "subgrid": 1
+  },
+  "corr_ranLL_pion_local_mass_l_t0": {
+   "id": {
+    "name": "corr_ranLL_pion_local_mass_l_t0",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ranLL_mass_002426_0",
+    "sink": "quark_ranLL_pion_local_mass_l_t0_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ranLL_pion_local_mass_l_t0",
+    "sourceShift": "noise_t0_shift"
+   }
+  },
+  "corr_ranLL_pion_local_mass_l_t1": {
+   "id": {
+    "name": "corr_ranLL_pion_local_mass_l_t1",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ranLL_mass_002426_1",
+    "sink": "quark_ranLL_pion_local_mass_l_t1_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ranLL_pion_local_mass_l_t1",
+    "sourceShift": "noise_t1_shift"
+   }
+  },
+  "corr_ranLL_pion_local_mass_l_t2": {
+   "id": {
+    "name": "corr_ranLL_pion_local_mass_l_t2",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ranLL_mass_002426_2",
+    "sink": "quark_ranLL_pion_local_mass_l_t2_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ranLL_pion_local_mass_l_t2",
+    "sourceShift": "noise_t2_shift"
+   }
+  },
+  "corr_ranLL_pion_local_mass_l_t3": {
+   "id": {
+    "name": "corr_ranLL_pion_local_mass_l_t3",
+    "type": "MContraction::StagMeson"
+   },
+   "options": {
+    "output": "corr/corr_pion_local_ranLL_mass_002426_3",
+    "sink": "quark_ranLL_pion_local_mass_l_t3_elem",
+    "sinkFunc": "sink",
+    "sinkGammas": "spintaste_pion_local",
+    "source": "quark_ranLL_pion_local_mass_l_t3",
+    "sourceShift": "noise_t3_shift"
+   }
+  },
+  "mfload_mass_l_G1_G1": {
+   "id": {
+    "name": "mfload_mass_l_G1_G1",
+    "type": "MIO::LoadMesonField"
+   },
+   "options": {
+    "dataset": "G1_G1_0_0_0",
+    "file": "mesonfield/mf_002426.@traj@/G1_G1_0_0_0.h5",
+    "lowModes": "",
+    "side": ""
+   }
+  },
+  "noise_fv": {
+   "id": {
+    "name": "noise_fv",
+    "type": "MNoise::StagFullVolumeSpinColorDiagonal"
+   },
+   "options": {
+    "nsrc": "1"
+   }
+  },
+  "noise_t0": {
+   "id": {
+    "name": "noise_t0",
+    "type": "MSource::StagRandomWall"
+   },
+   "options": {
+    "colorDiag": "true",
+    "nSrc": "1",
+    "noise": "noise_fv",
+    "t0": "0",
+    "tStep": "4"
+   }
+  },
+  "noise_t1": {
+   "id": {
+    "name": "noise_t1",
+    "type": "MSource::StagRandomWall"
+   },
+   "options": {
+    "colorDiag": "true",
+    "nSrc": "1",
+    "noise": "noise_fv",
+    "t0": "1",
+    "tStep": "4"
+   }
+  },
+  "noise_t2": {
+   "id": {
+    "name": "noise_t2",
+    "type": "MSource::StagRandomWall"
+   },
+   "options": {
+    "colorDiag": "true",
+    "nSrc": "1",
+    "noise": "noise_fv",
+    "t0": "2",
+    "tStep": "4"
+   }
+  },
+  "noise_t3": {
+   "id": {
+    "name": "noise_t3",
+    "type": "MSource::StagRandomWall"
+   },
+   "options": {
+    "colorDiag": "true",
+    "nSrc": "1",
+    "noise": "noise_fv",
+    "t0": "3",
+    "tStep": "4"
+   }
+  },
+  "quark_ama_pion_local_mass_l_t0": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t0",
+    "type": "MFermion::StagGaugeProp"
+   },
+   "options": {
+    "gammas": "spintaste_pion_local",
+    "guess": "quark_ranLL_pion_local_mass_l_t0",
+    "solver": "stag_ama_mass_l",
+    "source": "noise_t0",
+    "sourceLabel": ""
+   },
+   "subgrid": 0
+  },
+  "quark_ama_pion_local_mass_l_t0_elem": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t0_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ama_pion_local_mass_l_t0"
+   }
+  },
+  "quark_ama_pion_local_mass_l_t1": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t1",
+    "type": "MFermion::StagGaugeProp"
+   },
+   "options": {
+    "gammas": "spintaste_pion_local",
+    "guess": "quark_ranLL_pion_local_mass_l_t1",
+    "solver": "stag_ama_mass_l",
+    "source": "noise_t1",
+    "sourceLabel": ""
+   },
+   "subgrid": 1
+  },
+  "quark_ama_pion_local_mass_l_t1_elem": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t1_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ama_pion_local_mass_l_t1"
+   }
+  },
+  "quark_ama_pion_local_mass_l_t2": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t2",
+    "type": "MFermion::StagGaugeProp"
+   },
+   "options": {
+    "gammas": "spintaste_pion_local",
+    "guess": "quark_ranLL_pion_local_mass_l_t2",
+    "solver": "stag_ama_mass_l",
+    "source": "noise_t2",
+    "sourceLabel": ""
+   },
+   "subgrid": 0
+  },
+  "quark_ama_pion_local_mass_l_t2_elem": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t2_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ama_pion_local_mass_l_t2"
+   }
+  },
+  "quark_ama_pion_local_mass_l_t3": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t3",
+    "type": "MFermion::StagGaugeProp"
+   },
+   "options": {
+    "gammas": "spintaste_pion_local",
+    "guess": "quark_ranLL_pion_local_mass_l_t3",
+    "solver": "stag_ama_mass_l",
+    "source": "noise_t3",
+    "sourceLabel": ""
+   },
+   "subgrid": 1
+  },
+  "quark_ama_pion_local_mass_l_t3_elem": {
+   "id": {
+    "name": "quark_ama_pion_local_mass_l_t3_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ama_pion_local_mass_l_t3"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t0": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t0",
+    "type": "MFermion::StagLMAMesonFieldProp"
+   },
+   "options": {
+    "a2a_batch": "",
+    "action": "stag_mass_l",
+    "eigStart": "0",
+    "gammas": "spintaste_pion_local",
+    "labels": "G5_G5",
+    "lowModes": "evecs_mass_l",
+    "mesonField": "mfload_mass_l_G1_G1",
+    "nEigs": "-1",
+    "nNoise": "1",
+    "negFirst": "",
+    "noise": "noise_fv_vec",
+    "noiseIndex": "0",
+    "pairScale": "",
+    "tA": "0",
+    "tB": "0",
+    "tStep": "1"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t0_elem": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t0_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ranLL_pion_local_mass_l_t0"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t1": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t1",
+    "type": "MFermion::StagLMAMesonFieldProp"
+   },
+   "options": {
+    "a2a_batch": "",
+    "action": "stag_mass_l",
+    "eigStart": "0",
+    "gammas": "spintaste_pion_local",
+    "labels": "G5_G5",
+    "lowModes": "evecs_mass_l",
+    "mesonField": "mfload_mass_l_G1_G1",
+    "nEigs": "-1",
+    "nNoise": "1",
+    "negFirst": "",
+    "noise": "noise_fv_vec",
+    "noiseIndex": "0",
+    "pairScale": "",
+    "tA": "1",
+    "tB": "1",
+    "tStep": "1"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t1_elem": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t1_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ranLL_pion_local_mass_l_t1"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t2": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t2",
+    "type": "MFermion::StagLMAMesonFieldProp"
+   },
+   "options": {
+    "a2a_batch": "",
+    "action": "stag_mass_l",
+    "eigStart": "0",
+    "gammas": "spintaste_pion_local",
+    "labels": "G5_G5",
+    "lowModes": "evecs_mass_l",
+    "mesonField": "mfload_mass_l_G1_G1",
+    "nEigs": "-1",
+    "nNoise": "1",
+    "negFirst": "",
+    "noise": "noise_fv_vec",
+    "noiseIndex": "0",
+    "pairScale": "",
+    "tA": "2",
+    "tB": "2",
+    "tStep": "1"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t2_elem": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t2_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ranLL_pion_local_mass_l_t2"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t3": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t3",
+    "type": "MFermion::StagLMAMesonFieldProp"
+   },
+   "options": {
+    "a2a_batch": "",
+    "action": "stag_mass_l",
+    "eigStart": "0",
+    "gammas": "spintaste_pion_local",
+    "labels": "G5_G5",
+    "lowModes": "evecs_mass_l",
+    "mesonField": "mfload_mass_l_G1_G1",
+    "nEigs": "-1",
+    "nNoise": "1",
+    "negFirst": "",
+    "noise": "noise_fv_vec",
+    "noiseIndex": "0",
+    "pairScale": "",
+    "tA": "3",
+    "tB": "3",
+    "tStep": "1"
+   }
+  },
+  "quark_ranLL_pion_local_mass_l_t3_elem": {
+   "id": {
+    "name": "quark_ranLL_pion_local_mass_l_t3_elem",
+    "type": "MUtilities::GammaMapElement"
+   },
+   "options": {
+    "label": "G5_G5",
+    "map": "quark_ranLL_pion_local_mass_l_t3"
+   }
+  },
+  "sink": {
+   "id": {
+    "name": "sink",
+    "type": "MSink::ScalarPoint"
+   },
+   "options": {
+    "mom": "0 0 0"
+   }
+  },
+  "spintaste_pion_local": {
+   "id": {
+    "name": "spintaste_pion_local",
+    "type": "MFermion::SpinTaste"
+   },
+   "options": {
+    "labels": "",
+    "spinTaste": {
+     "applyG5": "true",
+     "gammas": "(G5 G5)",
+     "gauge": ""
+    }
+   }
+  },
+  "stag_ama_mass_l": {
+   "id": {
+    "name": "stag_ama_mass_l",
+    "type": "MSolver::StagMixedPrecisionCG"
+   },
+   "options": {
+    "innerAction": "istag_mass_l",
+    "isEven": "false",
+    "maxInnerIteration": "10000",
+    "maxOuterIteration": "10000",
+    "outerAction": "stag_mass_l",
+    "residual": "1e-08"
+   }
+  }
+ },
+ "schedule": [
+  "spintaste_pion_local",
+  "sink",
+  "noise_fv",
+  "mfload_mass_l_G1_G1",
+  "stag_ama_mass_l",
+  "noise_t0",
+  "noise_t1",
+  "noise_t2",
+  "noise_t3",
+  "quark_ranLL_pion_local_mass_l_t0",
+  "quark_ranLL_pion_local_mass_l_t1",
+  "quark_ranLL_pion_local_mass_l_t2",
+  "quark_ranLL_pion_local_mass_l_t3",
+  "quark_ranLL_pion_local_mass_l_t0_elem",
+  "quark_ranLL_pion_local_mass_l_t1_elem",
+  "quark_ranLL_pion_local_mass_l_t2_elem",
+  "quark_ranLL_pion_local_mass_l_t3_elem",
+  "corr_ranLL_pion_local_mass_l_t0",
+  "quark_ama_pion_local_mass_l_t0",
+  "quark_ama_pion_local_mass_l_t0_elem",
+  "corr_ama_pion_local_mass_l_t0",
+  "corr_ranLL_pion_local_mass_l_t1",
+  "quark_ama_pion_local_mass_l_t1",
+  "quark_ama_pion_local_mass_l_t1_elem",
+  "corr_ama_pion_local_mass_l_t1",
+  "corr_ranLL_pion_local_mass_l_t2",
+  "quark_ama_pion_local_mass_l_t2",
+  "quark_ama_pion_local_mass_l_t2_elem",
+  "corr_ama_pion_local_mass_l_t2",
+  "corr_ranLL_pion_local_mass_l_t3",
+  "quark_ama_pion_local_mass_l_t3",
+  "quark_ama_pion_local_mass_l_t3_elem",
+  "corr_ama_pion_local_mass_l_t3"
+ ]
+}

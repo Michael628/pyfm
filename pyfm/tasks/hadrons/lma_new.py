@@ -64,6 +64,31 @@ class LMANewConfig(CompositeConfig):
             )
         return layouts[0]
 
+    @property
+    def subgrid_phases(self) -> int | None:
+        """Agreed per-phase count across high-modes entries (or ``None``).
+
+        Entries must agree: per-entry phase indices are offset by entry
+        position (entry i's phase k is emitted as i*N + k) so the merged
+        program's tagged-module phase sequence stays monotonic under
+        Hadrons' validation — a shared N is load-bearing (D-phase-offset).
+        Mirrors ``split_mpi_layout``'s conflict detection.
+        """
+        phases = [
+            hm.subgrid_phases
+            for hm in self.high_modes_config.values()
+            if hm.subgrid_phases is not None
+        ]
+        if not phases:
+            return None
+        if any(p != phases[0] for p in phases[1:]):
+            raise ValueError(
+                "Conflicting subgrid_phases values across high_modes_config "
+                f"entries: {phases!r}; entries must agree (per-entry phase "
+                "indices are offset by entry position)."
+            )
+        return phases[0]
+
 
 def normalize_params(params: t.Dict) -> t.Dict:
     """Normalize LMANewConfig input: canonicalize the task blocks.
@@ -274,6 +299,7 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         else []
         for hm in config.high_modes_config.values()
     ]
+    phase_offset = 0
     if any(entry_sp_masses):
         sp_gauge = gauge.build_sp_gauge(config.gauge_config)
         _merge_modules(modules, sp_gauge.modules)
@@ -290,6 +316,14 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         schedule += actions.schedule
 
         hm_input = highmode_v2.build_input_params(hm)
+        if hm.subgrid_phases is not None and phase_offset:
+            # D-phase-offset: keep the merged program's tagged-module phase
+            # sequence monotonic under Hadrons' validation — entry i's
+            # phase k is emitted as i*N + k
+            for module in hm_input.modules.values():
+                if "splitPhase" in module:
+                    module["splitPhase"] += phase_offset
+        phase_offset += hm.subgrid_phases or 0
         _merge_modules(modules, hm_input.modules)
         schedule += hm_input.schedule
 
