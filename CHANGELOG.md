@@ -37,8 +37,9 @@ Tracks HadronsMILC `cceb0cd`, Grid `4ccaeaf`, Hadrons `3a09801`
 
 ## [0.3.0] - 2026-10-10
 
-Pairs with HadronsMILC `v0.3.0` (`4a19a15`), which pins Grid `d67dd20` and
-Hadrons `3a09801` (both tagged `hadronsmilc/v0.3.0`).
+Pairs with HadronsMILC `v0.3.0` (`4a19a15`), which pins Grid `d67dd20` (tagged
+`hadronsmilc/v0.3.0`) and Hadrons `3a09801` (unchanged since
+`hadronsmilc/v0.2.0`; Hadrons shipped no v0.3.0 tag).
 
 ### Interface
 - Requires HadronsMILC 0.3. New module types emitted: `MFermion::SpinTaste`,
