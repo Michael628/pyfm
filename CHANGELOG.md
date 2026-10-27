@@ -26,6 +26,39 @@ tagged retroactively on a commit reached through `develop`.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-27
+
+Pairs with HadronsMILC `v0.4.0` (`d1131d7`), which pins Grid `8b53f2c` and Hadrons `69d0771` (both tagged `hadronsmilc/v0.4.0`).
+
+### Interface
+- Requires HadronsMILC 0.4. `MFermion::StagGaugeProp` and
+  `MContraction::StagMeson` gain an optional `splitPhase` option, emitted only
+  in phased split-grid schedules and parsed by the pinned Hadrons (split-phase
+  module tagging).
+- New `highmode_v2` key `subgrid_phases` (task `hadrons_lma_new`): partitions
+  the split-grid source refs into N phases, each emitted as its own block of
+  hoisted world-grid producers followed by the sorted tagged modules, so every
+  phase's producers exist at Hadrons' per-phase pre-scatter. Chunks are sized
+  in multiples of `subgrid_ranks` where possible and keep draw order for bias
+  interleaving. Requires `split_mpi_layout` and `subgrid_ranks`; all
+  `high_modes` entries must agree on N (entry i's phase k is emitted as
+  `i*N + k`). `hadrons_lmi` rejects the key. Emission is byte-identical when
+  it is unset.
+
+### Fixed
+- Split-grid `highmode_v2` runs hoist every world-grid producer of a
+  tagged-consumer input (per-source noise, meson-field guess producers and the
+  `GammaMapElement` bridges on them) ahead of the sorted quark/contraction
+  block, so all of them exist at Hadrons' pre-scatter pass and no world
+  collective is needed mid-phase. Non-split emission is unchanged.
+- `<grid><provenance>` `pyfmVersion` is read from the checkout's
+  `pyproject.toml` before the installed dist metadata, so an editable develop
+  install no longer reports the previous release's version.
+
+### Build
+- Aurora (`systems/aurora/configure-params.sh`): Grid configure drops
+  `-fsycl-device-lib=all` from `LDFLAGS` and `-fno-exceptions` from `CXXFLAGS`.
+
 ### CLI
 - `nanny submit -i/--input` now accepts multiple input files (repeat the flag,
   e.g. `-i a.xml -i b.xml`); all files are joined space-separated into the
