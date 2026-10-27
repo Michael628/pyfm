@@ -26,9 +26,6 @@ tagged retroactively on a commit reached through `develop`.
 
 ## [Unreleased]
 
-Tracks HadronsMILC `cceb0cd`, Grid `4ccaeaf`, Hadrons `3a09801`
-(develop heads at the v0.3.0 back-merge; update as integration moves).
-
 ### CLI
 - `nanny submit -i/--input` now accepts multiple input files (repeat the flag,
   e.g. `-i a.xml -i b.xml`); all files are joined space-separated into the
