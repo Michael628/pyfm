@@ -10,7 +10,7 @@ from pathlib import Path
 
 # MAJOR.MINOR of the HadronsMILC release whose XML contract pyfm emits.
 # pyfm and HadronsMILC share MAJOR.MINOR: keep equal to pyproject.toml's version.
-HADRONS_MILC_COMPAT = "0.3"
+HADRONS_MILC_COMPAT = "0.4"
 
 UNKNOWN = "unknown"
 
