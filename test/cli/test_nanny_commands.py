@@ -83,6 +83,27 @@ class TestNannySubmit:
             assert mock_env["INPUTLIST"] == "todo.txt"
             mock_submit.assert_called_once_with(fake_nanny_cfg, fake_job_cfg, 1)
 
+    def test_submit_multiple_inputs_join_inputlist(self, runner):
+        fake_params = {"key": "val"}
+        fake_nanny_cfg = MagicMock()
+        fake_job_cfg = MagicMock()
+
+        with (
+            patch("pyfm.cli.nanny.utils") as mock_utils,
+            patch("pyfm.cli.nanny.get_nanny_config", return_value=fake_nanny_cfg),
+            patch("pyfm.cli.nanny.get_job_config", return_value=fake_job_cfg),
+            patch("pyfm.cli.nanny.submit_job") as mock_submit,
+            patch("pyfm.cli.nanny.os.environ", {}) as mock_env,
+        ):
+            mock_utils.io.load_param.return_value = fake_params
+            result = runner.invoke(
+                cli,
+                ["nanny", "submit", "-p", "p.yaml", "-i", "a.xml", "-i", "b.xml", "-i", "c.xml", "-j", "step1"],
+            )
+            assert result.exit_code == 0
+            assert mock_env["INPUTLIST"] == "a.xml b.xml c.xml"
+            mock_submit.assert_called_once_with(fake_nanny_cfg, fake_job_cfg, 1)
+
     def test_submit_custom_logging_level(self, runner):
         with (
             patch("pyfm.cli.nanny.utils") as mock_utils,

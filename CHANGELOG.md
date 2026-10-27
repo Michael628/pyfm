@@ -26,10 +26,17 @@ tagged retroactively on a commit reached through `develop`.
 
 ## [Unreleased]
 
+### CLI
+- `nanny submit -i/--input` now accepts multiple input files (repeat the flag,
+  e.g. `-i a.xml -i b.xml`); all files are joined space-separated into the
+  `INPUTLIST` environment variable, matching the format `make_inputs` already
+  sets for nanny-loop submissions. A single `-i FILE` still works as before.
+
 ## [0.3.0] - 2026-10-10
 
-Pairs with HadronsMILC `v0.3.0`, which pins Grid and Hadrons (both tagged
-`hadronsmilc/v0.3.0`; exact commits in that release's `DEPENDENCIES`).
+Pairs with HadronsMILC `v0.3.0` (`4a19a15`), which pins Grid `d67dd20` (tagged
+`hadronsmilc/v0.3.0`) and Hadrons `3a09801` (unchanged since
+`hadronsmilc/v0.2.0`; Hadrons shipped no v0.3.0 tag).
 
 ### Interface
 - Requires HadronsMILC 0.3. New module types emitted: `MFermion::SpinTaste`,

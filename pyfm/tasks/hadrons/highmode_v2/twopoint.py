@@ -316,6 +316,7 @@ def build_quarks(
     config: LMAHighModeConfig,
     run_refs: t.List[SourceRef],
     spintaste_names: t.Dict[Gamma, str],
+    phase: int = 0,
 ) -> HadronsInput:
     """Canonical-schema quark emission.
 
@@ -347,8 +348,11 @@ def build_quarks(
 
             if config.subgrid_ranks is not None and "ama" in op.solver:
                 subgrid = ref.t0 % config.subgrid_ranks
+                # R6: emit <splitPhase> only when != 0 (absent = phase 0)
+                split_phase = phase if phase != 0 else None
             else:
                 subgrid = None
+                split_phase = None
 
             modules[quark] = hadmods.quark_prop_v2(
                 name=quark,
@@ -357,6 +361,7 @@ def build_quarks(
                 guess=guess,
                 gammas=spintaste_names[op.gamma],
                 subgrid=subgrid,
+                split_phase=split_phase,
             )
 
     return HadronsInput(modules=modules, schedule=list(modules.keys()))
@@ -366,6 +371,7 @@ def build_contractions(
     config: LMAHighModeConfig,
     run_refs: t.List[SourceRef],
     spintaste_names: t.Dict[Gamma, str],
+    phase: int = 0,
 ) -> HadronsInput:
     """Canonical-schema contraction emission.
 
@@ -419,8 +425,10 @@ def build_contractions(
                 or "ama" in con_set.antiquark.solver
             ):
                 subgrid = ref.t0 % config.subgrid_ranks
+                split_phase = phase if phase != 0 else None
             else:
                 subgrid = None
+                split_phase = None
 
             name = config.module_name(
                 f"corr_{solver_label}_{glabel}_{mass_label}_{ref.label}"
@@ -434,5 +442,6 @@ def build_contractions(
                 sink_gammas=spintaste_names[op.gamma],
                 output=output,
                 subgrid=subgrid,
+                split_phase=split_phase,
             )
     return HadronsInput(modules=modules, schedule=list(modules.keys()))

@@ -255,6 +255,7 @@ def quark_prop_v2(
     gammas: str,
     source_label: str = "",
     subgrid: int | None = None,
+    split_phase: int | None = None,
 ) -> t.Dict:
     """Wrap ``MFermion::StagGaugeProp`` (canonical, SpinTaste-module-driven).
 
@@ -281,6 +282,8 @@ def quark_prop_v2(
     }
     if subgrid is not None:
         module["subgrid"] = subgrid
+    if split_phase is not None:
+        module["splitPhase"] = split_phase
     return module
 
 
@@ -293,6 +296,7 @@ def prop_contract_v2(
     sink_gammas: str,
     output: str,
     subgrid: int | None = None,
+    split_phase: int | None = None,
 ) -> t.Dict:
     """Wrap ``MContraction::StagMeson`` (canonical, SpinTaste-module-driven).
 
@@ -321,6 +325,8 @@ def prop_contract_v2(
     }
     if subgrid is not None:
         module["subgrid"] = subgrid
+    if split_phase is not None:
+        module["splitPhase"] = split_phase
     return module
 
 

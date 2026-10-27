@@ -195,3 +195,36 @@ class TestLmaMesonFieldPropV2:
             "noise": "noise_fv_vec",
             "a2a_batch": "",
         }
+
+
+class TestSplitPhaseEmission:
+    """builders emit a top-level splitPhase key only when set (R6)."""
+
+    def test_quark_prop_v2_split_phase(self):
+        module = hadmods.quark_prop_v2(
+            name="q", source="s", solver="v", guess="", gammas="g",
+            subgrid=1, split_phase=2,
+        )
+        assert module["splitPhase"] == 2
+        assert module["subgrid"] == 1
+
+    def test_quark_prop_v2_no_split_phase_by_default(self):
+        module = hadmods.quark_prop_v2(
+            name="q", source="s", solver="v", guess="", gammas="g", subgrid=1,
+        )
+        assert "splitPhase" not in module
+
+    def test_prop_contract_v2_split_phase(self):
+        module = hadmods.prop_contract_v2(
+            name="c", source="q", sink="e", sink_fn="sink",
+            source_shift="sh", sink_gammas="sg", output="o",
+            subgrid=0, split_phase=3,
+        )
+        assert module["splitPhase"] == 3
+
+    def test_prop_contract_v2_no_split_phase_by_default(self):
+        module = hadmods.prop_contract_v2(
+            name="c", source="q", sink="e", sink_fn="sink",
+            source_shift="sh", sink_gammas="sg", output="o", subgrid=0,
+        )
+        assert "splitPhase" not in module

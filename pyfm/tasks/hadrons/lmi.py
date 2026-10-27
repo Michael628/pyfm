@@ -95,6 +95,19 @@ def normalize_params(params: t.Dict) -> t.Dict:
         if raw is not None and not isinstance(raw, list):
             canonical[key] = entries
 
+    # subgrid_phases is highmode_v2-only: fail fast with a pointer at the
+    # right task instead of an unknown-field error downstream
+    hm_entries = incoming.get("high_modes") or []
+    if isinstance(hm_entries, dict):
+        hm_entries = [hm_entries]
+    for entry in hm_entries:
+        if entry.get("subgrid_phases") is not None:
+            raise ValueError(
+                "subgrid_phases is not supported by hadrons_lmi yet; use "
+                "hadrons_lma_new (highmode_v2), which emits per-phase "
+                "split-grid schedules."
+            )
+
     if canonical:
         params = params | {"_preprocessor": incoming | canonical}
     return params | skip_flags

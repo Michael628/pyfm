@@ -52,16 +52,24 @@ def run(param_file, job, logging_level):
 
 @nanny.command()
 @param_file_option()
-@click.option("-i", "--input", "input_file", type=click.Path(dir_okay=False), required=True, help="Input file list to submit.")
+@click.option(
+    "-i",
+    "--input",
+    "input_files",
+    type=click.Path(dir_okay=False),
+    multiple=True,
+    required=True,
+    help="Input file(s) to submit; repeat the flag for each file.",
+)
 @job_option(required=True, help="Job step name to submit.")
 @logging_level_option()
-def submit(param_file, input_file, job, logging_level):
+def submit(param_file, input_files, job, logging_level):
     """Submit a single job to the HPC scheduler."""
     utils.set_logging_level(logging_level)
     yaml_params = utils.io.load_param(param_file)
     nanny_config = get_nanny_config(yaml_params)
     job_config = get_job_config(job, yaml_params)
-    os.environ["INPUTLIST"] = input_file
+    os.environ["INPUTLIST"] = " ".join(input_files)
     submit_job(nanny_config, job_config, 1)
 
 
