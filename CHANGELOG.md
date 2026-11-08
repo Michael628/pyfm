@@ -26,8 +26,7 @@ tagged retroactively on a commit reached through `develop`.
 
 ## [Unreleased]
 
-Tracks HadronsMILC `e2eacb4`, Grid `8094416`, Hadrons `e9f0326`
-(develop heads at the v0.4.0 back-merge; update as integration moves).
+Tracks HadronsMILC `aa1a054`, Grid `8094416`, Hadrons `ec43323` (develop heads at the v0.4.1 back-merge; update as integration moves).
 
 ## [0.4.0] - 2026-10-27
 
