@@ -266,4 +266,16 @@ files:
   sib_meson_tab:
     filestem: e{eigs}n{noise}/sib/tab_{series}
     good_size: 4400
+  corr_modes:
+    filestem: corr/corr_{gamma_label}_{dset}_m{mass}_t{tsource}
+    good_size: 1
+  corr_hh_modes:
+    filestem: corr_hh/corr_{gamma_label}_{dset}_m{mass}_t{tsource}
+    good_size: 1
+  corr_bias_modes:
+    filestem: corr_bias/corr_{gamma_label}_{dset}_m{mass}_t{tsource}
+    good_size: 1
+  mf_meson:
+    filestem: e{eigs}n{noise}dt{dt}/lma-meson/m{mass}/mf_{series}
+    good_size: 1286000
 

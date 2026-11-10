@@ -4,11 +4,9 @@ entry catalog."""
 
 import pandas as pd
 import pytest
-from types import SimpleNamespace
 
 from pyfm.domain import Gamma, MassDict, OpList, Outfile
-from pyfm.tasks.hadrons.types import HadronsInput, SourceRef
-from pyfm.tasks.hadrons.lma_new import LMANewConfig
+from pyfm.tasks.hadrons.types import HadronsInput, SolveCrossTerms
 from pyfm.tasks.hadrons import lmi
 from pyfm.tasks.hadrons.highmode_v2 import (
     build_aggregator_params,
@@ -16,6 +14,7 @@ from pyfm.tasks.hadrons.highmode_v2 import (
     strategy,
     twopoint,
 )
+from pyfm.tasks.hadrons.highmode_v2.phases import RefPlacement
 from pyfm.tasks.hadrons.highmode_v2.config import (
     BiasedSourceConfig,
     CacheMode,
@@ -27,7 +26,6 @@ from pyfm.tasks.hadrons.highmode_v2.config import (
     MesonFieldConfig,
     OutputConfig,
     SourcesConfig,
-    validate_config,
 )
 
 BASE = {"formatting": {}, "logging_level": "INFO", "runid": "test"}
@@ -673,169 +671,6 @@ class TestBuildInputParamsSplitMode:
         ]
         assert producers == ["quark_ranLL_pion_local_mass_l_t1"]
 
-
-class TestSubgridPhasesConfig:
-    """subgrid_phases config plumbing: field default, validation, the
-    lma_new aggregate agreement, and the lmi (legacy) fail-fast guard."""
-
-    def test_field_defaults_to_none(self):
-        assert make_config().subgrid_phases is None
-
-    def test_positive_int_accepted(self):
-        cfg = make_config(
-            split_mpi_layout="1 1 1 2", subgrid_ranks=2, subgrid_phases=3
-        )
-        assert cfg.subgrid_phases == 3
-        validate_config(cfg)  # no raise
-
-    def test_non_positive_rejected(self):
-        cfg = make_config(
-            split_mpi_layout="1 1 1 2", subgrid_ranks=2, subgrid_phases=0
-        )
-        with pytest.raises(ValueError, match="subgrid_phases must be a positive"):
-            validate_config(cfg)
-
-    def test_requires_split_grid(self):
-        cfg = make_config(subgrid_phases=3)
-        with pytest.raises(ValueError, match="subgrid_phases requires split-grid"):
-            validate_config(cfg)
-
-    def test_lma_new_phase_agreement(self):
-        stub = SimpleNamespace(
-            high_modes_config={
-                "a": make_config(subgrid_phases=2),
-                "b": make_config(subgrid_phases=2),
-            }
-        )
-        assert LMANewConfig.subgrid_phases.fget(stub) == 2
-
-    def test_lma_new_phase_conflict(self):
-        stub = SimpleNamespace(
-            high_modes_config={
-                "a": make_config(subgrid_phases=2),
-                "b": make_config(subgrid_phases=3),
-            }
-        )
-        with pytest.raises(ValueError, match="Conflicting subgrid_phases"):
-            LMANewConfig.subgrid_phases.fget(stub)
-
-    def test_lmi_rejects_subgrid_phases(self):
-        params = {
-            "_preprocessor": {"high_modes": {"subgrid_phases": 2, "mass": {}}}
-        }
-        with pytest.raises(ValueError, match="not supported by hadrons_lmi"):
-            lmi.normalize_params(params)
-
-    def test_lmi_accepts_without_subgrid_phases(self):
-        params = {"_preprocessor": {"high_modes": {"mass": {}}}}
-        out = lmi.normalize_params(params)
-        assert out["skip_high_modes"] is False
-
-
-def _load_split_mode_golden() -> dict:
-    """Golden emission captured from the pre-Phase-9 builder (HEAD, before
-    the phased split-mode branch landed): build_input_params on the
-    split-mode-only config (subgrid_ranks set, subgrid_phases unset)."""
-    import json
-    from pathlib import Path
-
-    fixture = Path(__file__).parent / "golden_split_mode_emission.json"
-    with fixture.open() as f:
-        return json.load(f)
-
-
-class TestSubgridPhasesChunking:
-    """R5 chunking math: in-order chunks, multiples of subgrid_ranks where
-    possible, N > ceil(n/r) rejected."""
-
-    @staticmethod
-    def _refs(n, t0s=None):
-        times = t0s if t0s is not None else list(range(n))
-        return [SourceRef(label=f"t{t}", axis=str(t), t0=t) for t in times]
-
-    def test_sizes_multiples_of_ranks(self):
-        chunks = strategy.split_refs_into_phases(self._refs(10), 3, 2)
-        assert [len(c) for c in chunks] == [4, 4, 2]
-
-    def test_even_split(self):
-        chunks = strategy.split_refs_into_phases(self._refs(6), 3, 2)
-        assert [len(c) for c in chunks] == [2, 2, 2]
-
-    def test_in_order_partition(self):
-        refs = self._refs(6)
-        chunks = strategy.split_refs_into_phases(refs, 2, 2)
-        flat = [r for c in chunks for r in c]
-        assert flat == refs
-        assert all(
-            chunks[0][i].t0 < chunks[1][j].t0
-            for i in range(2)
-            for j in range(2)
-        )
-
-    def test_too_many_phases_rejected(self):
-        with pytest.raises(ValueError, match="subgrid_phases .* exceeds"):
-            strategy.split_refs_into_phases(self._refs(4), 3, 2)
-
-    def test_bias_draw_order_preserved(self):
-        # duplicate t0s (with-replacement draws) stay distinct sources in
-        # draw order — chunking groups BEFORE any t0 sort
-        refs = self._refs(4, t0s=[3, 0, 3, 1])
-        chunks = strategy.split_refs_into_phases(refs, 2, 2)
-        assert [r.t0 for r in chunks[0]] == [3, 0]
-        assert [r.t0 for r in chunks[1]] == [3, 1]
-
-
-class TestSubgridPhasesEmission:
-    """Per-phase emission: hoist precedes the phase's tagged block, phase
-    tags monotonic and != 0 only, byte-identity when the knob is absent."""
-
-    def _phased_config(self, **overrides):
-        kwargs = dict(
-            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
-            split_mpi_layout="1 1 1 2",
-            subgrid_ranks=2,
-            subgrid_phases=2,
-        )
-        kwargs.update(overrides)
-        return make_config(**kwargs)
-
-    @staticmethod
-    def _tagged_names(result):
-        return [
-            n for n in result.schedule
-            if result.modules[n].get("subgrid") is not None
-        ]
-
-    def test_phases_monotonic_and_sparse_tags(self):
-        result = strategy.build_input_params(self._phased_config())
-        tagged = self._tagged_names(result)
-        phases = [result.modules[n].get("splitPhase", 0) for n in tagged]
-        assert phases == sorted(phases)
-        assert set(phases) == {0, 1}
-        # R6: phase-0 tagged modules carry NO splitPhase key
-        for n in tagged:
-            if result.modules[n].get("splitPhase", 0) == 0:
-                assert "splitPhase" not in result.modules[n]
-
-    def test_phase_hoist_precedes_phase_tagged(self):
-        cfg = self._phased_config()   # 4 dt refs t0=0..3, r=2, N=2 -> [t0,t1],[t2,t3]
-        result = strategy.build_input_params(cfg)
-        sched = result.schedule
-        for phase, chunk_labels in ((0, ("t0", "t1")), (1, ("t2", "t3"))):
-            tagged = [
-                n for n in sched
-                if result.modules[n].get("subgrid") is not None
-                and result.modules[n].get("splitPhase", 0) == phase
-            ]
-            assert tagged
-            first_tagged = sched.index(tagged[0])
-            for label in chunk_labels:
-                # noise_rw_name = module_name(f"noise_{ref.label}") = noise_t{t0}
-                # (label is "" in make_config)
-                noise = f"noise_{label}"
-                assert noise in result.modules
-                assert sched.index(noise) < first_tagged
-
     def test_absent_knob_emits_no_phase_tags(self):
         cfg = make_config(
             low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
@@ -861,7 +696,261 @@ class TestSubgridPhasesEmission:
         assert result.modules == golden["modules"]
         assert result.schedule == golden["schedule"]
 
-    def test_too_many_phases_raises_at_build(self):
-        cfg = self._phased_config(subgrid_phases=3)  # 4 refs, r=2 -> max 2
-        with pytest.raises(ValueError, match="subgrid_phases .* exceeds"):
-            strategy.build_input_params(cfg)
+
+class TestSplitProgramEmission:
+    """The unified split assembler: hoist incl. corr_ranLL (fault 2),
+    phases outer / entries inner, the pack's last reader in the last
+    phase's hoist."""
+
+    @staticmethod
+    def _split_result(**overrides):
+        cfg = make_config(
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            split_mpi_layout="1 1 1 2",
+            subgrid_ranks=2,
+            **overrides,
+        )
+        return cfg, strategy.build_input_params(cfg)
+
+    @staticmethod
+    def _tagged_idx(result, phase=None):
+        return [
+            i
+            for i, n in enumerate(result.schedule)
+            if result.modules[n].get("subgrid") is not None
+            and (phase is None or result.modules[n].get("splitPhase", 0) == phase)
+        ]
+
+    def test_corr_ranll_hoisted_before_range(self):
+        # fault 2: the untagged world contractions precede the first
+        # tagged module instead of sorting inside the range
+        _, result = self._split_result()
+        first_tagged = self._tagged_idx(result)[0]
+        corr = next(n for n in result.schedule if n.startswith("corr_ranLL_"))
+        assert result.schedule.index(corr) < first_tagged
+
+    def test_nothing_untagged_inside_a_phase(self):
+        _, result = self._split_result()
+        span = self._tagged_idx(result, 0)
+        for i in range(span[0], span[-1] + 1):
+            assert result.modules[result.schedule[i]].get("subgrid") is not None
+
+    def test_hoist_order_walls_producers_bridges_corr(self):
+        _, result = self._split_result()
+        first_tagged = self._tagged_idx(result)[0]
+        hoist = result.schedule[:first_tagged]
+        walls = [i for i, n in enumerate(hoist) if n.startswith("noise_t")]
+        producers = [
+            i
+            for i, n in enumerate(hoist)
+            if n.startswith("quark_ranLL_") and not n.endswith("_elem")
+        ]
+        bridges = [i for i, n in enumerate(hoist) if n.endswith("_elem")]
+        corr = [i for i, n in enumerate(hoist) if n.startswith("corr_ranLL_")]
+        assert walls and producers and bridges and corr
+        assert max(walls) < min(producers)
+        assert max(producers) < min(bridges)
+        assert max(bridges) < min(corr)
+
+    def test_fused_48_pack_reader_precedes_last_phase(self):
+        # 24 two-source refs, sizes 8/16 -> [8, 8, 8, 8, 16] sources; the
+        # eigenpack's last reader (a producer referencing evecs_mass_l)
+        # sits after every earlier phase's tagged block and before the
+        # last phase's first tagged step
+        cfg = make_config(
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            split_mpi_layout="1 1 1 1",
+            subgrid_ranks=4,
+            sources_config=make_sources(
+                time=48,
+                noise=2,
+                grid_config=GridSourceConfig(**sub_kwargs(tstart=0, tstop=46, dt=2)),
+            ),
+        )
+        _, placements, n_phases = strategy.pooled_placement(
+            [cfg], 4, phase_size=8, last_size=16
+        )
+        assert n_phases == 5
+        result = strategy.build_split_program([cfg], placements, n_phases)
+        sched = result.schedule
+        tagged = self._tagged_idx(result)
+        last_phase = max(result.modules[sched[i]].get("splitPhase", 0) for i in tagged)
+        first_last = self._tagged_idx(result, last_phase)[0]
+        prev_last = self._tagged_idx(result, last_phase - 1)[-1]
+        readers = [
+            i
+            for i, n in enumerate(sched)
+            if "evecs_mass_l" in str(result.modules[n]["options"])
+        ]
+        assert readers
+        assert prev_last < max(readers) < first_last
+
+    def test_phases_outer_entries_inner(self):
+        # two labeled entries, manually placed: A spans phases 0-1, B in
+        # phase 1 only — phase 1's hoist carries BOTH entries' walls
+        # before any phase-1 tag, and A's tagged block precedes B's
+        cfg_a = make_config(
+            label="a",
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            split_mpi_layout="1 1 1 2",
+            subgrid_ranks=2,
+        )
+        cfg_b = make_config(
+            label="b",
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            split_mpi_layout="1 1 1 2",
+            subgrid_ranks=2,
+        )
+        refs_a = cfg_a.sources_config.source_refs
+        refs_b = cfg_b.sources_config.source_refs[:2]
+        place_a = {
+            refs_a[0]: RefPlacement(0, 0),
+            refs_a[1]: RefPlacement(0, 1),
+            refs_a[2]: RefPlacement(1, 0),
+            refs_a[3]: RefPlacement(1, 1),
+        }
+        place_b = {refs_b[0]: RefPlacement(1, 0), refs_b[1]: RefPlacement(1, 1)}
+        result = strategy.build_split_program([cfg_a, cfg_b], [place_a, place_b], 2)
+        sched = result.schedule
+        first_p1 = self._tagged_idx(result, 1)[0]
+        assert sched.index("b_noise_t0") < first_p1
+        assert sched.index("a_noise_t2") < first_p1
+        assert sched.index("a_quark_ama_pion_local_mass_l_t2") < sched.index(
+            "b_quark_ama_pion_local_mass_l_t0"
+        )
+        for phase in (0, 1):
+            span = self._tagged_idx(result, phase)
+            for i in range(span[0], span[-1] + 1):
+                assert result.modules[sched[i]].get("subgrid") is not None, sched[i]
+
+
+class TestCrossReorder:
+    """Cross contractions anchor after their first diagonal reader (O's
+    reorder, sink_first=True); TIERED falls back to the ama producer;
+    always on, split or not."""
+
+    @staticmethod
+    def _all_config(**overrides):
+        kwargs = dict(
+            operations=OpList.from_dict(
+                {"pion_local": {"mass": ["l"]}, "vec_local": {"mass": ["l"]}}
+            ),
+            cg_config=CgConfig(**sub_kwargs(residual=[1e-4, 1e-8])),
+            output_config=make_output(solve_cross_terms=SolveCrossTerms.ALL),
+        )
+        kwargs.update(overrides)
+        return make_config(**kwargs)
+
+    def test_identity_without_crosses(self):
+        config = make_config()  # DIAGONAL
+        result = strategy.build_input_params(config)
+        assert (
+            strategy.reorder_cross_contractions(
+                result.schedule, result.modules, config
+            )
+            == result.schedule
+        )
+
+    def test_ama_ranll_follows_its_diagonal(self):
+        # ama_ranLL_X after corr_ama_X — its one diagonal reader — and
+        # so before the next rung's solves
+        result = strategy.build_input_params(self._all_config())
+        sched = result.schedule
+        for g in ("pion_local", "vec_local"):
+            diag = f"corr_ama_0.0001_{g}_mass_l_t0"
+            cross = f"corr_ama_0.0001_ranLL_{g}_mass_l_t0"
+            nxt = f"quark_ama_1e-08_{g}_mass_l_t0"
+            assert sched.index(diag) < sched.index(cross) < sched.index(nxt)
+
+    def test_ranll_ama_follows_the_pion_elements_first_reader(self):
+        # every ranLL_ama rung sinks on the pion elem; its first diagonal
+        # reader is corr_ama_{eps}_pion_local, so both gammas' crosses
+        # precede corr_ama_{eps}_vec_local (they moved; plain
+        # sort_schedule ranks crosses last)
+        result = strategy.build_input_params(self._all_config())
+        sched = result.schedule
+        anchor = "corr_ama_0.0001_pion_local_mass_l_t0"
+        vec_diag = "corr_ama_0.0001_vec_local_mass_l_t0"
+        for cross in (
+            "corr_ranLL_ama_0.0001_pion_local_mass_l_t0",
+            "corr_ranLL_ama_0.0001_vec_local_mass_l_t0",
+        ):
+            assert sched.index(anchor) < sched.index(cross) < sched.index(vec_diag)
+
+    def test_tiered_falls_back_to_the_ama_producer(self):
+        # TIERED drops the HH diagonal: the crosses anchor just after
+        # their ama input's producer (the pion elem bridge), with nothing
+        # in between
+        config = make_config(
+            operations=OpList.from_dict(
+                {"pion_local": {"mass": ["l"]}, "vec_local": {"mass": ["l"]}}
+            ),
+            output_config=make_output(solve_cross_terms=SolveCrossTerms.TIERED),
+        )
+        result = strategy.build_input_params(config)
+        sched = result.schedule
+        elem = "quark_ama_pion_local_mass_l_t0_elem"
+        crosses = [
+            "corr_ranLL_ama_pion_local_mass_l_t0",
+            "corr_ranLL_ama_vec_local_mass_l_t0",
+        ]
+        i = sched.index(elem)
+        assert sorted(sched[i + 1 : i + 3]) == sorted(crosses)
+
+    def test_split_crosses_keep_their_ref_placement(self):
+        config = self._all_config(
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            split_mpi_layout="1 1 1 2",
+            subgrid_ranks=2,
+        )
+        result = strategy.build_input_params(config)
+        mods = result.modules
+        crosses = [
+            n
+            for n in result.schedule
+            if mods[n]["id"]["type"] == "MContraction::StagMeson"
+            and ("_ranLL_ama_" in n or "_ama_ranLL" in n)
+        ]
+        assert crosses
+        for cross in crosses:
+            cm = mods[cross]
+            field = (
+                cm["options"]["source"]
+                if "quark_ama" in cm["options"]["source"]
+                else cm["options"]["sink"]
+            )
+            assert result.schedule.index(field) < result.schedule.index(cross)
+            am = mods[field]
+            assert (cm.get("subgrid"), cm.get("splitPhase")) == (
+                am.get("subgrid"),
+                am.get("splitPhase"),
+            )
+
+
+class TestSubgridPhasesConfig:
+    """subgrid_phases plumbing: the lmi (legacy) fail-fast guard only —
+    the knob itself is program-level on LMANewConfig (test_lma_new.py)."""
+
+    def test_lmi_rejects_subgrid_phases(self):
+        params = {
+            "_preprocessor": {"high_modes": {"subgrid_phases": 2, "mass": {}}}
+        }
+        with pytest.raises(ValueError, match="not supported by hadrons_lmi"):
+            lmi.normalize_params(params)
+
+    def test_lmi_accepts_without_subgrid_phases(self):
+        params = {"_preprocessor": {"high_modes": {"mass": {}}}}
+        out = lmi.normalize_params(params)
+        assert out["skip_high_modes"] is False
+
+
+def _load_split_mode_golden() -> dict:
+    """Golden emission captured from the unified split assembler (pooled
+    single-phase program: hoisted walls/producers/bridges + corr_ranLL,
+    greedy placement, tagged ama-elem bridges)."""
+    import json
+    from pathlib import Path
+
+    fixture = Path(__file__).parent / "golden_split_mode_emission.json"
+    with fixture.open() as f:
+        return json.load(f)

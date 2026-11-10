@@ -12,6 +12,7 @@ from pyfm.tasks.register import register_task
 
 from . import gauge, meson, epack, meson_v2, highmode_v2
 from .highmode_v2.config import LMAHighModeConfig
+from .highmode_v2.phases import validate_phase_sizes
 
 # Label given to an unkeyed ``tasks.high_modes`` entry. Non-empty so the
 # entry's cache writer (``{label}_mf_*``) never aliases the ``meson:``
@@ -42,6 +43,14 @@ class LMANewConfig(CompositeConfig):
     meson_config: t.List[meson.MesonConfig] = Field(default_factory=list)
     high_modes_config: t.Dict[str, LMAHighModeConfig] = Field(default_factory=dict)
 
+    # Program-level split phasing, shared by every entry: a phase count
+    # (``subgrid_phases``) XOR explicit phase sizes counted in sources (a
+    # ref counts its entry's ``noise``). ``subgrid_last_phase_size``
+    # defaults to ``subgrid_phase_size`` and only applies beside it.
+    subgrid_phases: int | None = None
+    subgrid_phase_size: int | None = None
+    subgrid_last_phase_size: int | None = None
+
     @property
     def split_mpi_layout(self) -> str | None:
         """Re-expose the split-grid MPI layout from the high-modes entries.
@@ -65,29 +74,29 @@ class LMANewConfig(CompositeConfig):
         return layouts[0]
 
     @property
-    def subgrid_phases(self) -> int | None:
-        """Agreed per-phase count across high-modes entries (or ``None``).
+    def subgrid_ranks(self) -> int | None:
+        """Agreed subgrid count across high-modes entries (or ``None``).
 
-        Entries must agree: per-entry phase indices are offset by entry
-        position (entry i's phase k is emitted as i*N + k) so the merged
-        program's tagged-module phase sequence stays monotonic under
-        Hadrons' validation — a shared N is load-bearing (D-phase-offset).
-        Mirrors ``split_mpi_layout``'s conflict detection.
+        Entries must agree: one ``<split>`` per XML job means one subgrid
+        geometry, and the program-level phasing knobs and the pooled
+        planner key off a single ``subgrid_ranks``. Mirrors
+        ``split_mpi_layout``'s conflict detection; ``None`` when no entry
+        opts in.
         """
-        phases = [
-            hm.subgrid_phases
+        ranks = [
+            hm.subgrid_ranks
             for hm in self.high_modes_config.values()
-            if hm.subgrid_phases is not None
+            if hm.subgrid_ranks is not None
         ]
-        if not phases:
+        if not ranks:
             return None
-        if any(p != phases[0] for p in phases[1:]):
+        if any(r != ranks[0] for r in ranks[1:]):
             raise ValueError(
-                "Conflicting subgrid_phases values across high_modes_config "
-                f"entries: {phases!r}; entries must agree (per-entry phase "
-                "indices are offset by entry position)."
+                "Conflicting subgrid_ranks values across high_modes_config "
+                f"entries: {ranks!r}; a job admits exactly one subgrid "
+                "geometry."
             )
-        return phases[0]
+        return ranks[0]
 
 
 def normalize_params(params: t.Dict) -> t.Dict:
@@ -165,6 +174,20 @@ def route_params(params: t.Dict) -> t.Dict:
 
     preprocessor_params = params.pop("_preprocessor", {})
 
+    # Program-level phasing knobs are plain LMANewConfig fields, not
+    # config sections: pop them before the ``{k}_config`` loop below
+    # (which would otherwise KeyError treating them as section keys).
+    _PROGRAM_KNOBS = (
+        "subgrid_phases",
+        "subgrid_phase_size",
+        "subgrid_last_phase_size",
+    )
+    program_knobs = {
+        key: preprocessor_params.pop(key)
+        for key in _PROGRAM_KNOBS
+        if key in preprocessor_params
+    }
+
     meson_defaults = dict(
         action_name=ACTION_NAME,
         shift_gauge_name=SHIFT_GAUGE_NAME,
@@ -176,6 +199,17 @@ def route_params(params: t.Dict) -> t.Dict:
         meson_entries = [meson_entries]
 
     hm_entries = preprocessor_params.get("high_modes", {})
+
+    # The phasing knobs are program-level: an entry carrying the retired
+    # per-entry key gets a pointer, not an unknown-field error.
+    for label, entry in hm_entries.items():
+        if entry.get("subgrid_phases") is not None:
+            raise ValueError(
+                f"high_modes entry {label!r} carries subgrid_phases; the "
+                "phasing knobs are program-level — set subgrid_phases (a "
+                "count) or subgrid_phase_size on tasks.hadrons_lma_new, "
+                "not on an entry."
+            )
 
     child_preprocessor = dict(
         gauge_config=dict(action_name=ACTION_NAME),
@@ -209,7 +243,7 @@ def route_params(params: t.Dict) -> t.Dict:
                 params["nbias"] = biased["n"]
         return params
 
-    return params | {
+    return params | program_knobs | {
         # Per-key DICT params: label (+ derived tokens) as plain scalars (D6).
         "high_modes_config": {
             label: entry_params(label, entry) for label, entry in hm_entries.items()
@@ -293,19 +327,31 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
     # solver-scoped (an entry's masses join the sp set only when that
     # entry itself solves mixed-precision); build_only entries contribute
     # none (they have no cg block).
+    hms = list(config.high_modes_config.values())
     entry_sp_masses = [
         hm.masses
         if hm.cg_config is not None and hm.cg_config.solver == "mpcg"
         else []
-        for hm in config.high_modes_config.values()
+        for hm in hms
     ]
-    phase_offset = 0
     if any(entry_sp_masses):
         sp_gauge = gauge.build_sp_gauge(config.gauge_config)
         _merge_modules(modules, sp_gauge.modules)
         schedule += sp_gauge.schedule
 
-    for hm, sp_masses in zip(config.high_modes_config.values(), entry_sp_masses):
+    # Split entries with refs to run are emitted TOGETHER, after the
+    # per-entry sections, as one pooled split program (phases outer,
+    # entries inner); build_only split entries emit no tagged modules
+    # and stay per-entry.
+    emitting_split = [
+        hm
+        for hm in hms
+        if hm.subgrid_ranks is not None
+        and not highmode_v2.is_cache_build_only(hm)
+    ]
+    pooled_ids = {id(hm) for hm in emitting_split}
+
+    for hm, sp_masses in zip(hms, entry_sp_masses):
         # Unconditional — build_only entries need their dp actions too:
         # the writer's EigenPackCBPairs modules reference stag_mass_<mass>
         # (sp_masses is [] for them: no cg block, nothing solver-scoped).
@@ -315,17 +361,25 @@ def build_input_params(config: LMANewConfig) -> HadronsInput:
         _merge_modules(modules, actions.modules)
         schedule += actions.schedule
 
+        if id(hm) in pooled_ids:
+            continue  # emitted below as part of the pooled split program
         hm_input = highmode_v2.build_input_params(hm)
-        if hm.subgrid_phases is not None and phase_offset:
-            # D-phase-offset: keep the merged program's tagged-module phase
-            # sequence monotonic under Hadrons' validation — entry i's
-            # phase k is emitted as i*N + k
-            for module in hm_input.modules.values():
-                if "splitPhase" in module:
-                    module["splitPhase"] += phase_offset
-        phase_offset += hm.subgrid_phases or 0
         _merge_modules(modules, hm_input.modules)
         schedule += hm_input.schedule
+
+    if emitting_split:
+        _, placements, n_phases = highmode_v2.pooled_placement(
+            emitting_split,
+            config.subgrid_ranks,
+            n_phases=config.subgrid_phases,
+            phase_size=config.subgrid_phase_size,
+            last_size=config.subgrid_last_phase_size,
+        )
+        split_input = highmode_v2.build_split_program(
+            emitting_split, placements, n_phases
+        )
+        _merge_modules(modules, split_input.modules)
+        schedule += split_input.schedule
 
     # Deduplicate schedule: keep first occurrence of each module name
     deduplicated_schedule = list(dict.fromkeys(schedule))
@@ -406,15 +460,62 @@ def compare_outputs(
 def validate_config(config: LMANewConfig) -> None:
     """Validate LMANewConfig after construction.
 
-    Cross-entry checks only — per-entry state was validated when each
+    Cross-entry checks — per-entry state was validated when each
     ``LMAHighModeConfig`` was built: (1) conflicting ``split_mpi_layout``
-    across entries (one ``<split>`` per XML job — enforced by the property,
-    touched here so the misconfiguration surfaces at build time);
-    (2) a warning when two entries bind the same output files label
-    (their correlators share a filestem namespace — bind a distinct files
-    entry per keyed entry).
+    across entries (one ``<split>`` per XML job) and conflicting
+    ``subgrid_ranks`` (one subgrid geometry a program), enforced by the
+    properties and touched here so the misconfigurations surface at
+    build time; (2) the program-level phasing knobs: ``subgrid_phases``
+    (a count) XOR ``subgrid_phase_size``, ``subgrid_last_phase_size``
+    only beside the size and both positive multiples of the agreed
+    ``subgrid_ranks`` — and, when any knob is set, every entry split
+    (pooled phasing cannot place an unsplit entry's refs); (3) a warning
+    when two entries bind the same output files label.
     """
     _ = config.split_mpi_layout
+    _ = config.subgrid_ranks
+
+    count = config.subgrid_phases
+    size = config.subgrid_phase_size
+    last = config.subgrid_last_phase_size
+
+    if count is not None and size is not None:
+        raise ValueError(
+            "subgrid_phases and subgrid_phase_size are mutually "
+            f"exclusive; got subgrid_phases={count}, "
+            f"subgrid_phase_size={size}."
+        )
+    if last is not None and size is None:
+        raise ValueError(
+            "subgrid_last_phase_size requires subgrid_phase_size (it "
+            "defaults to subgrid_phase_size when absent)."
+        )
+    if count is not None and count < 1:
+        raise ValueError(
+            f"subgrid_phases must be a positive integer; got {count}."
+        )
+
+    if count is not None or size is not None:
+        if not config.high_modes_config:
+            raise ValueError(
+                "The subgrid phasing knobs require high_modes entries to "
+                "phase."
+            )
+        unsplit = [
+            label
+            for label, hm in config.high_modes_config.items()
+            if hm.subgrid_ranks is None
+        ]
+        if unsplit:
+            raise ValueError(
+                "The subgrid phasing knobs require every high_modes entry "
+                "to be split (split_mpi_layout + subgrid_ranks); unsplit "
+                f"entries: {sorted(unsplit)}."
+            )
+        if size is not None:
+            validate_phase_sizes(
+                size, last if last is not None else size, config.subgrid_ranks
+            )
 
     stems = [
         hm.output_config.file.filestem
@@ -428,6 +529,13 @@ def validate_config(config: LMANewConfig) -> None:
                 "is shared with another entry; their outputs share a filestem "
                 "namespace. Bind a distinct files entry per keyed entry."
             )
+
+
+# Note: subgrid_phases counts larger than the pooled run refs are
+# NOT rejected here — the pooled ref count is only known at emission
+# (entry_run_refs' resume gate). plan_phase_counts raises "exceeds
+# the pooled source refs" at build_input_params time; that deferred
+# failure is intentional.
 
 
 # Register LMANewConfig with lma_new-owned hooks throughout (ADR Decision 1,

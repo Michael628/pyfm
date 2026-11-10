@@ -28,10 +28,16 @@ from pyfm.tasks.hadrons.types import HadronsInput, SourceRef
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.tasks.hadrons import meson, meson_v2
 from pyfm.tasks.hadrons.highmode_v2 import twopoint
+from pyfm.tasks.hadrons.highmode_v2.phases import (
+    PooledRef,
+    RefPlacement,
+    plan_program,
+)
 from pyfm.tasks.hadrons.highmode_v2.config import (
     CacheMode,
     LMAHighModeConfig,
     LowModeMethod,
+    PreconMode,
 )
 
 
@@ -130,6 +136,99 @@ def sort_schedule(config: LMAHighModeConfig, module_names: t.List[str]) -> t.Lis
     sorted_modules = sorted(sorted_modules, key=tslice_order)
 
     return sorted_modules
+
+
+def reorder_cross_contractions(
+    schedule: t.List[str],
+    modules: t.Dict[str, t.Dict],
+    config: LMAHighModeConfig,
+) -> t.List[str]:
+    """Anchor each cross contraction just after its first diagonal reader.
+
+    ``sort_schedule`` ranks a source's cross contractions after its whole
+    ladder, keeping every ama quark of the source live on its subgrid at
+    once. Each cross moves to just after the first module in the block
+    that reads its ama-side field — the ``source`` option for
+    ``ama_ranLL``-shaped labels (the ama quark), the ``sink`` option (the
+    antiquark elem) for ``ranLL_ama``-shaped ones — which is the first
+    diagonal contraction reading that field (O's ``reorder`` with
+    ``sink_first=True``); with no diagonal reader (TIERED drops the HH
+    diagonal), just after the module named by that field (its producer:
+    the ama quark or the elem bridge). Crosses on one anchor keep their
+    prior order; everything else is untouched; tags never change. Always
+    on — split or not: the order changes no result, only how many ama
+    fields are live at once.
+    """
+    base_labels = config.get_solver_labels(skip_cross=True)
+    cross_labels = [l for l in config.get_solver_labels() if l not in base_labels]
+    if not cross_labels:
+        return list(schedule)
+
+    def is_cross(name: str) -> bool:
+        return any(label in name for label in cross_labels)
+
+    crosses = {
+        name
+        for name in schedule
+        if is_cross(name)
+        and modules[name]["id"]["type"] == "MContraction::StagMeson"
+    }
+    if not crosses:
+        return list(schedule)
+
+    pure = [name for name in schedule if name not in crosses]
+
+    def ama_field(module: t.Dict) -> str:
+        # solver labels are quark-first: an ama quark side puts the ama
+        # field on `source`; otherwise (ranLL_ama) it is the antiquark
+        # elem on `sink`
+        source = module["options"]["source"]
+        return source if "quark_ama" in source else module["options"]["sink"]
+
+    def reads(module: t.Dict, field: str) -> bool:
+        options = module["options"]
+        return field in (options.get("source"), options.get("sink"))
+
+    anchored: t.Dict[str, t.List[str]] = {}
+    for name in schedule:                     # prior order within an anchor
+        if name not in crosses:
+            continue
+        module = modules[name]
+        field = ama_field(module)
+        anchor = next(
+            (
+                other
+                for other in pure
+                if modules[other]["id"]["type"] == "MContraction::StagMeson"
+                and not is_cross(other)
+                and reads(modules[other], field)
+            ),
+            None,
+        )
+        if anchor is None:
+            # TIERED: no diagonal reads the field — anchor at its own
+            # producer (the ama quark / the elem bridge)
+            anchor = field if field in pure else None
+        if anchor is not None:
+            anchored.setdefault(anchor, []).append(name)
+        # anchor None (field not in the block): the cross keeps its
+        # sorted position (emitted in place below)
+    placed: t.Set[str] = set()
+    for anchored_crosses in anchored.values():
+        placed.update(anchored_crosses)
+    out: t.List[str] = []
+    for name in schedule:                     # original order throughout
+        if name in placed:
+            continue                          # emitted after its anchor
+        out.append(name)
+        for cross in anchored.pop(name, []):
+            cx, ax = modules[cross], modules[name]
+            assert (cx.get("subgrid"), cx.get("splitPhase")) == (
+                ax.get("subgrid"),
+                ax.get("splitPhase"),
+            ), cross
+            out.append(cross)
+    return out
 
 
 def _cache_writer_config(config: LMAHighModeConfig) -> meson.MesonConfig:
@@ -246,118 +345,129 @@ def build_lma_meson_field_chain(
     )
 
 
-def split_refs_into_phases(
-    run_refs: t.List[SourceRef], n_phases: int, subgrid_ranks: int
-) -> t.List[t.List[SourceRef]]:
-    """Split ``run_refs`` in order into ``n_phases`` chunks, sized in
-    multiples of ``subgrid_ranks`` where possible (R5) so every subcomm
-    stays busy in each phase.
-
-    Bias-mode interleaving is handled for free: chunks derive from the
-    draw-ordered ``run_refs`` list, BEFORE any t0-primary sort — the t0
-    sort happens within each phase's tagged block only.
-    """
-    n = len(run_refs)
-    max_phases = max(1, -(-n // subgrid_ranks))   # ceil; >= 1 even for n == 0
-    if n_phases > max_phases:
-        raise ValueError(
-            f"subgrid_phases ({n_phases}) exceeds the number of full "
-            f"subgrid_ranks groups in {n} source ref(s) "
-            f"(ceil(n/subgrid_ranks) = {max_phases}); every phase needs at "
-            "least one refs-worth of work."
-        )
-    chunks: t.List[t.List[SourceRef]] = [[] for _ in range(n_phases)]
-    remaining, idx = n, 0
-    for k in range(n_phases):
-        left = n_phases - k
-        target = -(-remaining // left)                       # ceil(rem/left)
-        target = min(-(-target // subgrid_ranks) * subgrid_ranks, remaining)
-        chunks[k] = run_refs[idx : idx + target]
-        idx += target
-        remaining -= target
-    return chunks
-
-
-def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
-    """Per-entry emission (design doc order): SpinTaste + sink →
-    full-volume noise → cache writer → (stop for build_only) → per-source
-    noise → mass loop (meson-field chains / ranLL solver / CG solvers) →
-    quarks + contractions, sorted.
-
-    Split-grid mode (``subgrid_ranks`` set): every world-grid producer of
-    a tagged-consumer input — per-source noise, the meson-field guess
-    producers, and the ``gamma_map_element`` bridges — is hoisted ahead
-    of the sorted quark/contraction block (dependency order preserved:
-    noise → producers → bridges), so all tagged-consumer inputs exist at
-    Hadrons' single pre-scatter pass and no per-step world-collective
-    scatter is needed mid-split-phase. Without ``subgrid_ranks`` the
-    emission is byte-identical to the non-split interleave.
-
-    The resume gate keys on the entry's correlator catalog (output files);
-    ``build_only`` entries have no output block and skip the gate (all
-    source refs, unused — emission stops after the cache writer).
-    """
-    modules = {}
-    schedule = []
-
+def is_cache_build_only(config: LMAHighModeConfig) -> bool:
+    """Whether the entry is a cache ``build_only`` writer (no refs run)."""
     mf = config.low_modes_config.meson_field_config
-    cache_build_only = mf is not None and mf.cache is CacheMode.BUILD_ONLY
+    return mf is not None and mf.cache is CacheMode.BUILD_ONLY
 
+
+def entry_run_refs(config: LMAHighModeConfig) -> t.List[SourceRef]:
+    """The entry's run refs after the resume gate.
+
+    With ``output.overwrite`` off, only sources whose correlator files
+    are missing run (catalog-driven); otherwise every source ref. Total:
+    entries without an output block return every ref (their emission
+    never consumes them — the build_only stop comes first).
+    """
     if config.output_config is not None and not config.output_config.overwrite:
         df = create_outfile_catalog(config)
         if df.empty:
-            run_refs = []
-        else:
-            missing_files = df[df["exists"] == False]
-            run_refs = [
-                ref
-                for ref in config.sources_config.source_refs
-                if any(missing_files["tsource"] == ref.axis)
-            ]
-    else:
-        run_refs = config.sources_config.source_refs
+            return []
+        missing_files = df[df["exists"] == False]
+        return [
+            ref
+            for ref in config.sources_config.source_refs
+            if any(missing_files["tsource"] == ref.axis)
+        ]
+    return config.sources_config.source_refs
 
-    needed: t.Dict[str, t.List[Gamma]] = {}
-    if config.use_meson_field:
-        needed = needed_ranll_gammas(config)
 
-    # 1. SpinTaste modules, sink.
-    spintaste_modules, spintaste_names = twopoint.build_spintaste_modules(config)
-    modules |= spintaste_modules
-    schedule += list(spintaste_modules.keys())
+def pooled_placement(
+    entries: t.Sequence[LMAHighModeConfig],
+    subgrid_ranks: int,
+    n_phases: int | None = None,
+    phase_size: int | None = None,
+    last_size: int | None = None,
+) -> t.Tuple[
+    t.List[t.List[SourceRef]], t.List[t.Mapping[SourceRef, RefPlacement]], int
+]:
+    """Pool every entry's run refs in entry order and phase them once.
 
-    sink_module = twopoint.sink_name(config)
-    modules[sink_module] = hadmods.sink(name=sink_module, mom="0 0 0")
-    schedule.append(sink_module)
-
-    # 2. Full-volume noise (meson_field only) — the writer's and the
-    # producers' noise dependency.
-    if config.use_meson_field and config.masses:
-        modules[config.noise_name] = hadmods.full_volume_noise(
-            name=config.noise_name, nsrc=str(config.sources_config.noise)
+    A ref counts its entry's ``noise`` sources and weighs ``noise ×
+    rungs`` (the CHAIN ladder's length, 1 otherwise). Returns
+    ``(refs_per_entry, placements_per_entry, n_phases)``: each entry's
+    post-gate refs, its ref -> placement slice of the pooled plan, and
+    the phase count. No knob set -> one implicit phase (a single split
+    range).
+    """
+    if n_phases is None and phase_size is None:
+        n_phases = 1
+    refs_per_entry = [entry_run_refs(hm) for hm in entries]
+    pool: t.List[PooledRef] = []
+    for i, (hm, refs) in enumerate(zip(entries, refs_per_entry)):
+        noise = hm.sources_config.noise
+        rungs = (
+            len(hm.cg_config.residual)
+            if hm.cg_config is not None and hm.cg_config.precon is PreconMode.CHAIN
+            else 1
         )
-        schedule.append(config.noise_name)
+        pool.extend(PooledRef(i, ref, noise, noise * rungs) for ref in refs)
+    plan = plan_program(
+        pool,
+        subgrid_ranks=subgrid_ranks,
+        n_phases=n_phases,
+        phase_size=phase_size,
+        last_size=last_size,
+    )
+    placements = [
+        {ref: plan.placement[(i, ref)] for ref in refs}
+        for i, refs in enumerate(refs_per_entry)
+    ]
+    return refs_per_entry, placements, len(plan.phases)
 
-    # 3. Cache writer (build_and_load / build_only), after the noise it reads.
-    if mf is not None and mf.cache is not CacheMode.LOAD:
-        writer_input = meson_v2.build_input_params(
-            _cache_writer_config(config), prefix=config.module_name("")
-        )
-        modules |= writer_input.modules
-        schedule += writer_input.schedule
 
-    # 4. Stop here for build_only: no quarks, solvers or correlators.
-    if cache_build_only:
-        return HadronsInput(modules=modules, schedule=schedule)
+def build_split_program(
+    entries: t.Sequence[LMAHighModeConfig],
+    placements: t.Sequence[t.Mapping[SourceRef, RefPlacement]],
+    n_phases: int,
+) -> HadronsInput:
+    """Pooled split-grid emission: phases outer, entries inner.
 
-    # ---- phased split mode (R5): global producers once, then one
-    # [hoist + sorted tagged] block per phase. Each phase's hoisted
-    # producers (noise, meson-field guesses, bridges) precede that phase's
-    # tagged block, so Hadrons' per-phase pre-scatter sees every input
-    # (the Q7 contract). Phase tags: R6 — emitted only when != 0.
-    if config.subgrid_ranks is not None and config.subgrid_phases is not None:
-        # global mass loop (no per-ref pieces): loaders, ranLL solver,
-        # CG solvers — consumed via rebuild/scatter from any phase
+    ``entries`` are the program's split entries in order (never cache
+    ``build_only`` ones — they emit no tagged modules); ``placements[i]``
+    maps entry i's run refs to their ``(phase, subgrid)`` (the pooled
+    planner's slices). Per entry the global, ref-free modules are emitted
+    once, in program order (SpinTaste + sink, full-volume noise, cache
+    writer, meson-field loaders, ranLL solver, CG solvers); then per
+    phase: EVERY entry's hoist for its refs in that phase — walls,
+    meson-field guess producers, bridges on hoisted maps, and the
+    untagged world-grid contractions whose named inputs are hoisted or
+    global (``corr_ranLL`` — fault 2) — followed by each entry's sorted
+    tagged block. Nothing untagged sits between a phase's first and last
+    tagged module, so no world-collective step serializes the subgrids
+    mid-phase; the eigenpack's last reader is the last phase's hoist, so
+    Hadrons frees the pack before that phase's solves.
+    """
+    modules: t.Dict[str, t.Dict] = {}
+    schedule: t.List[str] = []
+
+    context = []
+    for config, placement in zip(entries, placements):
+        needed: t.Dict[str, t.List[Gamma]] = {}
+        if config.use_meson_field:
+            needed = needed_ranll_gammas(config)
+        spintaste_modules, spintaste_names = twopoint.build_spintaste_modules(config)
+        modules |= spintaste_modules
+        schedule += list(spintaste_modules.keys())
+
+        sink_module = twopoint.sink_name(config)
+        modules[sink_module] = hadmods.sink(name=sink_module, mom="0 0 0")
+        schedule.append(sink_module)
+
+        mf = config.low_modes_config.meson_field_config
+        if config.use_meson_field and config.masses:
+            modules[config.noise_name] = hadmods.full_volume_noise(
+                name=config.noise_name, nsrc=str(config.sources_config.noise)
+            )
+            schedule.append(config.noise_name)
+
+        if mf is not None and mf.cache is not CacheMode.LOAD:
+            writer_input = meson_v2.build_input_params(
+                _cache_writer_config(config), prefix=config.module_name("")
+            )
+            modules |= writer_input.modules
+            schedule += writer_input.schedule
+
         for mass_label in config.masses:
             action = config.action_name.format(mass=mass_label)
             if config.low_modes_config.method is not LowModeMethod.NONE:
@@ -403,16 +513,16 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
                             )
                     schedule.append(name)
 
-        phase_chunks = split_refs_into_phases(
-            run_refs, config.subgrid_phases, config.subgrid_ranks
-        )
-        for k, chunk in enumerate(phase_chunks):
+        context.append((config, placement, spintaste_names, needed))
+
+    for phase in range(n_phases):
+        hoist: t.List[str] = []
+        tagged: t.List[str] = []
+        for config, placement, spintaste_names, needed in context:
+            chunk = [ref for ref in placement if placement[ref].phase == phase]
             if not chunk:
                 continue
-            hoist: t.List[str] = []
-            quark_schedule_k: t.List[str] = []
-            # this phase's per-source noise (hoisted, untagged)
-            for ref in chunk:
+            for ref in chunk:                     # walls (hoisted, untagged)
                 name = twopoint.noise_rw_name(config, ref)
                 modules[name] = hadmods.noise_rw(
                     name=name,
@@ -422,8 +532,7 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
                     noise=config.noise_name if config.use_meson_field else "",
                 )
                 hoist.append(name)
-            # this phase's meson-field guess producers (hoisted, untagged)
-            if config.use_meson_field:
+            if config.use_meson_field:            # guess producers (hoisted)
                 for mass_label in config.masses:
                     _, producers = build_lma_meson_field_chain(
                         config,
@@ -436,37 +545,141 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
                     )
                     modules |= producers.modules
                     hoist += producers.schedule
-            # this phase's quarks + contractions (tagged, phase k)
-            quark_inputs = twopoint.build_quarks(config, chunk, spintaste_names, phase=k)
+            entry_placement = {ref: placement[ref] for ref in chunk}
+            quark_inputs = twopoint.build_quarks(
+                config, chunk, spintaste_names, entry_placement
+            )
             modules |= quark_inputs.modules
-            quark_schedule_k += quark_inputs.schedule
             contract_inputs = twopoint.build_contractions(
-                config, chunk, spintaste_names, phase=k
+                config, chunk, spintaste_names, entry_placement
             )
             modules |= contract_inputs.modules
+            # re-bucket: bridges on hoisted maps join the hoist (after the
+            # producers) AND register in hoist_set so the contractions
+            # sinking on them can see them; untagged world contractions
+            # whose named inputs are all hoisted join too (corr_ranLL,
+            # fault 2 — under SOLVE low modes the ranLL quarks stay in
+            # the sorted block, so their contractions do too); everything
+            # else is this entry's tagged block.
             hoist_set = set(hoist)
+            quark_schedule_k = list(quark_inputs.schedule)
+            deferred: t.List[str] = []
             for name in contract_inputs.schedule:
                 module = contract_inputs.modules[name]
+                mtype = module["id"]["type"]
                 if (
-                    module["id"]["type"] == "MUtilities::GammaMapElement"
+                    mtype == "MUtilities::GammaMapElement"
                     and module["options"]["map"] in hoist_set
+                ):
+                    hoist.append(name)
+                    hoist_set.add(name)
+                else:
+                    deferred.append(name)
+            # second pass: untagged world contractions whose named inputs
+            # are all hoisted join too (corr_ranLL, fault 2 — under SOLVE
+            # low modes the ranLL quarks stay in the sorted block, so
+            # their contractions do too); everything else is this entry's
+            # tagged block. Deferring keeps the hoist order walls →
+            # producers → bridges → corr.
+            for name in deferred:
+                module = contract_inputs.modules[name]
+                if (
+                    module["id"]["type"] == "MContraction::StagMeson"
+                    and module.get("subgrid") is None
+                    and module["options"]["source"] in hoist_set
+                    and module["options"]["sink"] in hoist_set
                 ):
                     hoist.append(name)
                 else:
                     quark_schedule_k.append(name)
-            schedule += hoist
-            # t0-primary sort happens WITHIN the phase (bias-mode grouping
-            # already fixed by the chunking above)
-            schedule += sort_schedule(config, quark_schedule_k)
+            tagged += reorder_cross_contractions(
+                sort_schedule(config, quark_schedule_k), modules, config
+            )
+        schedule += hoist
+        schedule += tagged
+    return HadronsInput(modules=modules, schedule=schedule)
+
+
+def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
+    """Per-entry emission (design doc order): SpinTaste + sink →
+    full-volume noise → cache writer → (stop for build_only) → per-source
+    noise → mass loop (meson-field chains / ranLL solver / CG solvers) →
+    quarks + contractions, sorted.
+
+    Split-grid mode (``subgrid_ranks`` set, refs to run, not a cache
+    ``build_only`` entry) delegates to :func:`build_split_program` as a
+    pooled program of one — a single phase, greedy placement over the
+    entry's refs, per-phase hoist (walls, producers, bridges, the
+    untagged world contractions) ahead of the sorted tagged block, so
+    Hadrons' single pre-scatter pass per phase sees every input (the Q7
+    contract). The eigenpack stays resident through every phase but the
+    last, whose hoist carries its last reader; Hadrons' GC frees it
+    there.
+
+    The resume gate keys on the entry's correlator catalog (output files);
+    ``build_only`` entries have no output block and skip the gate (all
+    source refs, unused — emission stops after the cache writer).
+    """
+    run_refs = entry_run_refs(config)
+
+    if (
+        config.subgrid_ranks is not None
+        and run_refs
+        and not is_cache_build_only(config)
+    ):
+        noise = config.sources_config.noise
+        rungs = (
+            len(config.cg_config.residual)
+            if config.cg_config is not None
+            and config.cg_config.precon is PreconMode.CHAIN
+            else 1
+        )
+        pool = [PooledRef(0, ref, noise, noise * rungs) for ref in run_refs]
+        plan = plan_program(pool, subgrid_ranks=config.subgrid_ranks, n_phases=1)
+        placement = {ref: plan.placement[(0, ref)] for ref in run_refs}
+        return build_split_program([config], [placement], len(plan.phases))
+
+    modules = {}
+    schedule = []
+
+    mf = config.low_modes_config.meson_field_config
+    cache_build_only = is_cache_build_only(config)
+
+    needed: t.Dict[str, t.List[Gamma]] = {}
+    if config.use_meson_field:
+        needed = needed_ranll_gammas(config)
+
+    # 1. SpinTaste modules, sink.
+    spintaste_modules, spintaste_names = twopoint.build_spintaste_modules(config)
+    modules |= spintaste_modules
+    schedule += list(spintaste_modules.keys())
+
+    sink_module = twopoint.sink_name(config)
+    modules[sink_module] = hadmods.sink(name=sink_module, mom="0 0 0")
+    schedule.append(sink_module)
+
+    # 2. Full-volume noise (meson_field only) — the writer's and the
+    # producers' noise dependency.
+    if config.use_meson_field and config.masses:
+        modules[config.noise_name] = hadmods.full_volume_noise(
+            name=config.noise_name, nsrc=str(config.sources_config.noise)
+        )
+        schedule.append(config.noise_name)
+
+    # 3. Cache writer (build_and_load / build_only), after the noise it reads.
+    if mf is not None and mf.cache is not CacheMode.LOAD:
+        writer_input = meson_v2.build_input_params(
+            _cache_writer_config(config), prefix=config.module_name("")
+        )
+        modules |= writer_input.modules
+        schedule += writer_input.schedule
+
+    # 4. Stop here for build_only: no quarks, solvers or correlators.
+    if cache_build_only:
         return HadronsInput(modules=modules, schedule=schedule)
 
-    # 5. Per-source noise. In split-grid mode these feed TAGGED ama quarks
-    # (world-grid producers of tagged-consumer inputs): hoist them so their
-    # outputs exist at pre-scatter time and no per-step world-collective
-    # scatter is needed mid-split-phase.
+    # 5. Per-source noise (interleaved — split mode never reaches here).
     quark_schedule = []
-    hoist_schedule: t.List[str] = []
-    split_mode = config.subgrid_ranks is not None
     for ref in run_refs:
         name = twopoint.noise_rw_name(config, ref)
         modules[name] = hadmods.noise_rw(
@@ -476,12 +689,11 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
             tstep=str(config.sources_config.time),
             noise=config.noise_name if config.use_meson_field else "",
         )
-        if split_mode:
-            hoist_schedule.append(name)
-        else:
-            quark_schedule.append(name)
+        quark_schedule.append(name)
 
     # 6. Per mass: low-mode solvers / meson-field chains, then CG solvers.
+    # The meson-field PRODUCERS join quark_schedule — the interleaved
+    # non-split behavior (split mode delegates above and never sorts).
     for mass_label in config.masses:
         action = config.action_name.format(mass=mass_label)  # parent-owned: unprefixed
         if config.low_modes_config.method is not LowModeMethod.NONE:
@@ -499,12 +711,8 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
                 modules |= loaders.modules
                 schedule += loaders.schedule
                 # per-slice producers sort with their slice's consumers
-                # (split mode: hoisted ahead of the tagged block instead)
                 modules |= producers.modules
-                if split_mode:
-                    hoist_schedule += producers.schedule
-                else:
-                    quark_schedule += producers.schedule
+                quark_schedule += producers.schedule
             else:
                 name = twopoint.solver_module_name(config, "ranLL", mass_label)
                 modules[name] = hadmods.lma_solver(
@@ -548,44 +756,18 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
                         )
                 schedule.append(name)
 
-    # 7. Quarks, contractions (sorted as before).
+    # 7. Quarks, contractions (sorted, untagged — split mode delegates above).
     quark_inputs = twopoint.build_quarks(config, run_refs, spintaste_names)
     modules |= quark_inputs.modules
     quark_schedule += quark_inputs.schedule
 
     contract_inputs = twopoint.build_contractions(config, run_refs, spintaste_names)
     modules |= contract_inputs.modules
-    if split_mode:
-        # gamma_map_element bridges publishing bare lattices consumed as
-        # `sink` by TAGGED contractions (StagMeson declares sink an input)
-        # belong in the hoist -- but only those whose map is itself in the
-        # hoist block (world-grid ranLL producer outputs). A bridge on a
-        # tagged module's own output (an ama antiquark element) must stay
-        # in the sorted block behind its tagged producer, and so must a
-        # bridge on any other unhoisted untagged map (e.g. a ranLL solve
-        # under SOLVE low modes) -- hoisting it would place it ahead of
-        # its own producer.
-        hoist_set = set(hoist_schedule)
-        for name in contract_inputs.schedule:
-            module = contract_inputs.modules[name]
-            if (
-                module["id"]["type"] == "MUtilities::GammaMapElement"
-                and module["options"]["map"] in hoist_set
-            ):
-                hoist_schedule.append(name)
-            else:
-                quark_schedule.append(name)
-    else:
-        quark_schedule += contract_inputs.schedule
+    quark_schedule += contract_inputs.schedule
 
-    # Split mode: every world-grid producer of a tagged-consumer input
-    # (per-source noise, guess producers, bridges) precedes the sorted
-    # block, so all of them exist when Hadrons runs its single pre-scatter
-    # pass at the first tagged step. Memory trade: all slices' world-grid
-    # guesses coexist (acceptable: they are no longer rebuilt per subgrid).
-    if split_mode:
-        schedule += hoist_schedule
-    schedule += sort_schedule(config, quark_schedule)
+    schedule += reorder_cross_contractions(
+        sort_schedule(config, quark_schedule), modules, config
+    )
 
     return HadronsInput(modules=modules, schedule=schedule)
 

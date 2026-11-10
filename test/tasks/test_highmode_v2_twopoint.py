@@ -15,6 +15,7 @@ from pyfm.tasks.hadrons.highmode_v2.config import (
     PreconMode,
     SourcesConfig,
 )
+from pyfm.tasks.hadrons.highmode_v2.phases import RefPlacement
 from pyfm.tasks.hadrons.highmode_v2.twopoint import (
     TwoPointOp,
     build_spintaste_modules,
@@ -367,3 +368,77 @@ class TestNameHelpers:
         assert sink_name(config) == "sloppy_sink"
         assert noise_rw_name(config, REF) == "sloppy_noise_t0"
         assert sink_name(make_config()) == "sink"
+
+
+class TestPlacementTags:
+    """Split-grid tags flow from placement; bridges take their map's."""
+
+    REF0 = SourceRef(label="t0", axis="0", t0=0)
+    REF1 = SourceRef(label="t1", axis="1", t0=1)
+    REF5 = SourceRef(label="t5", axis="5", t0=5)
+
+    @staticmethod
+    def _config():
+        # both antiquark flavors so the pion elem and vec quark lookups
+        # below resolve (make_config defaults to vec_local only)
+        return make_config(
+            operations=OpList.from_dict(
+                {"pion_local": {"mass": ["l"]}, "vec_local": {"mass": ["l"]}}
+            )
+        )
+
+    @classmethod
+    def _placement(cls):
+        return {
+            cls.REF0: RefPlacement(0, 0),
+            cls.REF1: RefPlacement(0, 1),
+            cls.REF5: RefPlacement(2, 3),
+        }
+
+    def test_quark_tags_from_placement(self):
+        config = self._config()
+        _, names = build_spintaste_modules(config)
+        result = build_quarks(
+            config, [self.REF0, self.REF1, self.REF5], names, self._placement()
+        )
+        assert result.modules["quark_ama_vec_local_mass_l_t5"]["subgrid"] == 3
+        assert result.modules["quark_ama_vec_local_mass_l_t5"]["splitPhase"] == 2
+        # R6: phase 0 omits splitPhase
+        assert "splitPhase" not in result.modules["quark_ama_vec_local_mass_l_t0"]
+        assert result.modules["quark_ama_vec_local_mass_l_t1"]["subgrid"] == 1
+        # ranLL quarks are never tagged
+        assert "subgrid" not in result.modules["quark_ranLL_vec_local_mass_l_t5"]
+
+    def test_placement_none_emits_untagged(self):
+        config = self._config()
+        _, names = build_spintaste_modules(config)
+        result = build_quarks(config, [self.REF0], names)
+        assert all("subgrid" not in m for m in result.modules.values())
+
+    def test_bridge_takes_maps_placement(self):
+        # fault 1: the ama antiquark's bridge carries the ref's placement;
+        # the ranLL antiquark's bridge stays untagged
+        config = self._config()
+        _, names = build_spintaste_modules(config)
+        result = build_contractions(config, [self.REF5], names, self._placement())
+        ama_elem = result.modules["quark_ama_pion_local_mass_l_t5_elem"]
+        assert ama_elem["subgrid"] == 3
+        assert ama_elem["splitPhase"] == 2
+        ranll_elem = result.modules["quark_ranLL_pion_local_mass_l_t5_elem"]
+        assert "subgrid" not in ranll_elem
+
+    def test_bridge_phase_0_omits_split_phase(self):
+        config = self._config()
+        _, names = build_spintaste_modules(config)
+        result = build_contractions(config, [self.REF0], names, self._placement())
+        assert result.modules["quark_ama_pion_local_mass_l_t0_elem"]["subgrid"] == 0
+        assert "splitPhase" not in result.modules["quark_ama_pion_local_mass_l_t0_elem"]
+
+    def test_contraction_tags_from_placement(self):
+        config = self._config()
+        _, names = build_spintaste_modules(config)
+        result = build_contractions(config, [self.REF5], names, self._placement())
+        corr = result.modules["corr_ama_vec_local_mass_l_t5"]
+        assert corr["subgrid"] == 3 and corr["splitPhase"] == 2
+        # the LL diagonal stays untagged under placement (no ama side)
+        assert "subgrid" not in result.modules["corr_ranLL_vec_local_mass_l_t5"]

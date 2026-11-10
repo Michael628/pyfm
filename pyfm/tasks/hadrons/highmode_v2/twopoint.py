@@ -16,6 +16,7 @@ import typing as t
 
 from pyfm.domain import Gamma, MassDict, OpList
 from pyfm.tasks.hadrons.types import HadronsInput, SourceRef
+from pyfm.tasks.hadrons.highmode_v2.phases import RefPlacement
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.tasks.hadrons.highmode_v2.config import (
     LMAHighModeConfig,
@@ -316,16 +317,16 @@ def build_quarks(
     config: LMAHighModeConfig,
     run_refs: t.List[SourceRef],
     spintaste_names: t.Dict[Gamma, str],
-    phase: int = 0,
+    placement: t.Mapping[SourceRef, RefPlacement] | None = None,
 ) -> HadronsInput:
     """Canonical-schema quark emission.
 
-    Same demand-driven emission (``quark_gen``, meson-field ``ranLL`` skip,
-    split-grid subgrid tagging) as the previous version — every entry-owned
-    name (quark module, per-source noise, solver module, guess reference)
-    is routed through ``config.module_name``, and the solver module name is
-    the user's ``solver_name`` template (label-resolved at build time)
-    filled per solve and then prefixed (D6).
+    Same demand-driven emission (``quark_gen``, meson-field ``ranLL`` skip)
+    as the previous version — every entry-owned name is routed through
+    ``config.module_name`` (D6). Split-grid tags come from ``placement``
+    (one :class:`RefPlacement` per ref; ``None`` emits untagged): every
+    tagged module of a ref takes its ref's subgrid and phase, and R6
+    stands — ``splitPhase`` is emitted only when != 0.
     """
     modules = {}
     for ref in run_refs:
@@ -346,10 +347,11 @@ def build_quarks(
             else:
                 guess = ""
 
-            if config.subgrid_ranks is not None and "ama" in op.solver:
-                subgrid = ref.t0 % config.subgrid_ranks
+            if placement is not None and "ama" in op.solver:
+                place = placement[ref]
+                subgrid = place.subgrid
                 # R6: emit <splitPhase> only when != 0 (absent = phase 0)
-                split_phase = phase if phase != 0 else None
+                split_phase = place.phase if place.phase != 0 else None
             else:
                 subgrid = None
                 split_phase = None
@@ -371,18 +373,18 @@ def build_contractions(
     config: LMAHighModeConfig,
     run_refs: t.List[SourceRef],
     spintaste_names: t.Dict[Gamma, str],
-    phase: int = 0,
+    placement: t.Mapping[SourceRef, RefPlacement] | None = None,
 ) -> HadronsInput:
     """Canonical-schema contraction emission.
 
     Same naming/split-grid logic as the previous version with entry-owned
-    names (contraction module, antiquark element, per-source noise shift)
-    routed through ``config.module_name``. The correlator OUTPUT filestem
-    is deliberately NOT prefixed: output files are user-owned (bind a
-    distinct files label per entry, e.g. ``files.bias_modes``) — only
-    module names act as noise identity (D6). ``sink`` is a
-    ``gamma_map_element`` bridge, not the raw antiquark TGammaMap — see
-    ``hadmods.gamma_map_element`` for the checkKeys bypass rationale.
+    names routed through ``config.module_name`` and output filestems
+    user-owned (D6). ``sink`` is a ``gamma_map_element`` bridge. Split-grid
+    tags come from ``placement``; a bridge on a tagged map (an ama
+    antiquark) carries its map's ``subgrid``/``splitPhase`` — the ref's
+    placement — so it runs only on the subcomm that owns the map (fault 1
+    of the split-emission issue); a bridge on an untagged map (a hoisted
+    world-grid ranLL producer) stays untagged.
     """
     modules = {}
     antiquark_elements: t.Dict[str, str] = {}
@@ -401,11 +403,24 @@ def build_contractions(
             if antiquark not in antiquark_elements:
                 element = f"{antiquark}_elem"
                 antiquark_elements[antiquark] = element
-                modules[element] = hadmods.gamma_map_element(
-                    name=element,
-                    map=antiquark,
-                    label=con_set.antiquark.gamma.gamma_list[0],
-                )
+                # fault 1: a bridge on a tagged map takes its map's
+                # (== its ref's) subgrid and phase; a bridge on an
+                # untagged map stays untagged
+                if placement is not None and "ama" in con_set.antiquark.solver:
+                    place = placement[ref]
+                    modules[element] = hadmods.gamma_map_element(
+                        name=element,
+                        map=antiquark,
+                        label=con_set.antiquark.gamma.gamma_list[0],
+                        subgrid=place.subgrid,
+                        split_phase=place.phase if place.phase != 0 else None,
+                    )
+                else:
+                    modules[element] = hadmods.gamma_map_element(
+                        name=element,
+                        map=antiquark,
+                        label=con_set.antiquark.gamma.gamma_list[0],
+                    )
             antiquark_element = antiquark_elements[antiquark]
 
             mass_output = con_set.mass_label(config.mass)
@@ -420,12 +435,13 @@ def build_contractions(
                 mass=mass_output, dset=solver_label, gamma_label=glabel, tsource=ref.axis
             )
 
-            if config.subgrid_ranks is not None and (
+            if placement is not None and (
                 "ama" in con_set.quark.solver
                 or "ama" in con_set.antiquark.solver
             ):
-                subgrid = ref.t0 % config.subgrid_ranks
-                split_phase = phase if phase != 0 else None
+                place = placement[ref]
+                subgrid = place.subgrid
+                split_phase = place.phase if place.phase != 0 else None
             else:
                 subgrid = None
                 split_phase = None

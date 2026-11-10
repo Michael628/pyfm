@@ -4,6 +4,8 @@ sections."""
 
 import copy
 import dataclasses
+import re
+from collections import Counter
 
 import pytest
 
@@ -315,6 +317,311 @@ class TestValidation:
         with caplog.at_level(logging.WARNING):
             create_task("lma_new", params, "a", "20")
         assert "filestem" in caplog.text
+
+
+class TestProgramSubgridKnobs:
+    """Program-level phasing knobs: routing, validation, entry rejection."""
+
+    @staticmethod
+    def _split_params(hadrons_params):
+        params = copy.deepcopy(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        for label in ("sloppy", "bias"):
+            entries[label]["split_mpi_layout"] = "1 1 1 1"
+            entries[label]["subgrid_ranks"] = 4
+        return params
+
+    def test_knobs_reach_config_fields(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        tasks = params["job_setup"]["lma_new"]["tasks"]
+        tasks["subgrid_phase_size"] = 8
+        tasks["subgrid_last_phase_size"] = 16
+        cfg = create_task("lma_new", params, "a", "20").config
+        assert cfg.subgrid_phase_size == 8
+        assert cfg.subgrid_last_phase_size == 16
+        assert cfg.subgrid_phases is None
+
+    def test_count_knob_reaches_config(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["subgrid_phases"] = 3
+        cfg = create_task("lma_new", params, "a", "20").config
+        assert cfg.subgrid_phases == 3
+
+    def test_exclusive_knobs_rejected(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        tasks = params["job_setup"]["lma_new"]["tasks"]
+        tasks["subgrid_phases"] = 3
+        tasks["subgrid_phase_size"] = 8
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_last_without_size_rejected(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["subgrid_last_phase_size"] = 16
+        with pytest.raises(ValueError, match="requires subgrid_phase_size"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_non_multiple_size_rejected(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["subgrid_phase_size"] = 9
+        with pytest.raises(ValueError, match="subgrid_phase_size"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_default_last_size_is_omitted(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["subgrid_phase_size"] = 8
+        cfg = create_task("lma_new", params, "a", "20").config
+        # the default is applied by the planner (last = phase size), the
+        # field itself stays None
+        assert cfg.subgrid_last_phase_size is None
+
+    def test_knobs_require_every_entry_split(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["subgrid_phase_size"] = 8
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        entries["bias"].pop("split_mpi_layout")
+        entries["bias"].pop("subgrid_ranks")
+        with pytest.raises(ValueError, match="unsplit"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_knobs_without_entries_rejected(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        tasks = params["job_setup"]["lma_new"]["tasks"]
+        tasks["subgrid_phase_size"] = 8
+        tasks["high_modes"]["entries"] = {}
+        with pytest.raises(ValueError, match="require high_modes entries"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_per_entry_subgrid_phases_rejected_with_pointer(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        entries["sloppy"]["subgrid_phases"] = 2
+        with pytest.raises(ValueError, match="program-level"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_subgrid_ranks_conflict_rejected(self, hadrons_params):
+        params = self._split_params(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        entries["bias"]["subgrid_ranks"] = 2  # layouts agree, ranks differ
+        with pytest.raises(ValueError, match="Conflicting subgrid_ranks"):
+            create_task("lma_new", params, "a", "20")
+
+    def test_no_knobs_allows_mixed_entries(self, hadrons_params):
+        # mixed split/unsplit stays legal without phasing knobs
+        params = self._split_params(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        entries["bias"].pop("split_mpi_layout")
+        entries["bias"].pop("subgrid_ranks")
+        result = build_input_params(create_task("lma_new", params, "a", "20").config)
+        assert any(m.get("subgrid") is not None for m in result.modules.values())
+        assert "bias_noise_n0" in result.modules
+
+    def test_lmi_rejects_program_knobs(self, hadrons_params):
+        from pyfm.tasks.hadrons import lmi
+
+        params = copy.deepcopy(hadrons_params)
+        block = params["job_setup"]["lma_new"]["tasks"]
+        block["subgrid_phase_size"] = 8
+        hm = block["high_modes"]
+        entries = hm["entries"] if "entries" in hm else {"mass": hm}
+        lmi_params = {
+            "_preprocessor": {
+                "gauge": {"action_type": "load"},
+                "epack": {"load": True},
+                "high_modes": [{"mass": {}} | {k: v for k, v in entries["sloppy"].items()
+                                                if k not in ("cg", "output", "low_modes")}],
+                "subgrid_phase_size": 8,
+            }
+        }
+        with pytest.raises(ValueError, match="not supported by hadrons_lmi"):
+            lmi.normalize_params(lmi_params)
+
+
+class TestPooledSplitProgram:
+    """lma_new-level pooled phasing: two entries, one phase sequence."""
+
+    @staticmethod
+    def _two_split_entries(hadrons_params):
+        params = copy.deepcopy(hadrons_params)
+        entries = params["job_setup"]["lma_new"]["tasks"]["high_modes"]["entries"]
+        for label in ("sloppy", "bias"):
+            entries[label]["split_mpi_layout"] = "1 1 1 1"
+            entries[label]["subgrid_ranks"] = 4
+        return params
+
+    def test_two_entry_phase_sequence_monotonic(self, hadrons_params):
+        # the retired D-phase-offset emitted 0,0,1,1,0,0,3,3 for two
+        # N=2 entries; the pooled program emits each phase once
+        params = self._two_split_entries(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"]["subgrid_phases"] = 2
+        result = build_input_params(create_task("lma_new", params, "a", "20").config)
+        sched_phases = [
+            result.modules[n].get("splitPhase", 0)
+            for n in result.schedule
+            if result.modules[n].get("subgrid") is not None
+        ]
+        assert sched_phases == sorted(sched_phases)
+        assert set(sched_phases) == {0, 1}
+        # phase 1's hoist carries both entries' walls before its tags
+        first_p1 = min(
+            i
+            for i, n in enumerate(result.schedule)
+            if result.modules[n].get("splitPhase") == 1
+        )
+        assert result.schedule.index("bias_noise_n0") < first_p1
+        assert any(
+            n.startswith("sloppy_noise_t") and result.schedule.index(n) < first_p1
+            for n in result.modules
+        )
+
+
+class TestProductionSplitPrograms:
+    """The handoff's done-when shapes, emitted through lma_new."""
+
+    @staticmethod
+    def _emit(hadrons_params, tasks):
+        params = copy.deepcopy(hadrons_params)
+        params["job_setup"]["lma_new"]["tasks"] = tasks
+        task = create_task("lma_new", params, "a", "20")
+        return build_input_params(task.config), task.config
+
+    @staticmethod
+    def _entry(**overrides):
+        entry = {
+            "operations": {"pion_local": {"mass": ["l"]}},
+            "sources": {
+                "time": 8,
+                "noise": 2,
+                "grid": {"tstart": 0, "tstop": 7, "dt": 1},
+            },
+            "low_modes": {"meson_field": {"file": "mf_meson", "cache": "load"}},
+            "cg": {"solver": "mpcg", "residual": [1.0e-4]},
+            "output": {"file": "corr_modes"},
+            "split_mpi_layout": "1 1 1 1",
+            "subgrid_ranks": 4,
+        }
+        entry.update(overrides)
+        return entry
+
+    @staticmethod
+    def _tasks(**entries):
+        return {
+            "gauge": {"action_type": "load"},
+            "epack": {"load": True, "save_evals": True, "save_eigs": False},
+            "high_modes": {"entries": dict(entries)},
+        }
+
+    def test_ph_b8i_layout(self, hadrons_params):
+        # card PH's ph-b8i shape: 16 full sources (8 slices x noise 2),
+        # subgrid_phase_size 8 -> phases [8, 8]; tags t0 % 4, t0 // 4
+        tasks = self._tasks(hh=self._entry())
+        tasks["subgrid_phase_size"] = 8
+        result, _ = self._emit(hadrons_params, tasks)
+        mods = result.modules
+        tagged = [(n, m) for n, m in mods.items() if m.get("subgrid") is not None]
+        assert tagged
+        for name, module in tagged:
+            t0 = int(re.search(r"_t(\d+)", name).group(1))
+            assert module["subgrid"] == t0 % 4, name
+            assert module.get("splitPhase", 0) == t0 // 4, name
+        assert {m.get("splitPhase", 0) for _, m in tagged} == {0, 1}
+
+    def test_o_phased_tier_layout(self, hadrons_params):
+        # O's phased tier: 6 sloppy refs (weight 1) + 1 chained bias ref
+        # (weight 2) -> ONE phase; the bias source alone on its subgrid,
+        # the sloppy refs two a subgrid on the others; crosses anchored
+        hh = self._entry(
+            sources={
+                "time": 48,
+                "noise": 1,
+                "grid": {"tstart": 0, "tstop": 40, "dt": 8},
+            },
+            cg={"solver": "mpcg", "residual": [1.0e-4], "precon": "each"},
+            output={"file": "corr_hh_modes", "solve_cross_terms": "all"},
+        )
+        hbias = self._entry(
+            sources={
+                "time": 48,
+                "noise": 1,
+                "biased": {"n": 1, "seed": "s", "replace": False},
+            },
+            cg={"solver": "mpcg", "residual": [1.0e-4, 1.0e-8]},
+            output={"file": "corr_bias_modes", "solve_cross_terms": "all"},
+        )
+        tasks = self._tasks(hh=hh, hbias=hbias)
+        tasks["subgrid_phase_size"] = 8
+        result, _ = self._emit(hadrons_params, tasks)
+        mods = result.modules
+        tagged = [m for m in mods.values() if m.get("subgrid") is not None]
+        assert tagged and all(m.get("splitPhase", 0) == 0 for m in tagged)
+        bias_sg = mods["hbias_quark_ama_0.0001_pion_local_mass_l_n0"]["subgrid"]
+        hh_sgs = [
+            mods[f"hh_quark_ama_pion_local_mass_l_t{t}"]["subgrid"]
+            for t in (0, 8, 16, 24, 32, 40)
+        ]
+        assert all(sg != bias_sg for sg in hh_sgs)
+        assert sorted(Counter(hh_sgs).values()) == [2, 2, 2]
+        # each cross contraction follows its anchor (O's reorder);
+        # hh's single residual yields the bare "ama" solver label
+        anchor = "hh_corr_ama_pion_local_mass_l_t0"
+        cross = "hh_corr_ama_ranLL_pion_local_mass_l_t0"
+        assert result.schedule.index(anchor) < result.schedule.index(cross)
+
+    def test_fused_48_program(self, hadrons_params):
+        # 20 slices x noise 2 + 8 chained bias draws x noise 1 = 48
+        # sources at sizes 8/16 -> [8, 8, 8, 8, 16]; the bias refs all in
+        # the last phase, whose hoist holds the eigenpack's last reader
+        hh = self._entry(
+            sources={
+                "time": 48,
+                "noise": 2,
+                "grid": {"tstart": 0, "tstop": 38, "dt": 2},
+            },
+            output={"file": "corr_hh_modes"},
+        )
+        hbias = self._entry(
+            sources={
+                "time": 48,
+                "noise": 1,
+                "biased": {"n": 8, "seed": "s", "replace": False},
+            },
+            cg={"solver": "mpcg", "residual": [1.0e-4, 1.0e-8]},
+            output={"file": "corr_bias_modes"},
+        )
+        tasks = self._tasks(hh=hh, hbias=hbias)
+        tasks["subgrid_phase_size"] = 8
+        tasks["subgrid_last_phase_size"] = 16
+        result, _ = self._emit(hadrons_params, tasks)
+        mods = result.modules
+        sched = result.schedule
+        phases = {
+            m.get("splitPhase", 0)
+            for m in mods.values()
+            if m.get("subgrid") is not None
+        }
+        assert phases == {0, 1, 2, 3, 4}
+        hbias_phases = {
+            m.get("splitPhase", 0)
+            for n, m in mods.items()
+            if n.startswith("hbias_") and m.get("subgrid") is not None
+        }
+        assert hbias_phases == {4}
+        tagged_idx = [
+            i for i, n in enumerate(sched) if mods[n].get("subgrid") is not None
+        ]
+        last_first = min(
+            i for i in tagged_idx if mods[sched[i]].get("splitPhase", 0) == 4
+        )
+        prev_last = max(
+            i for i in tagged_idx if mods[sched[i]].get("splitPhase", 0) == 3
+        )
+        readers = [
+            i
+            for i, n in enumerate(sched)
+            if "evecs_mass_l" in str(mods[n]["options"])
+        ]
+        assert readers
+        assert prev_last < max(readers) < last_first
 
 
 class TestAggregatorAndCompare:

@@ -227,7 +227,13 @@ def spin_taste(
     }
 
 
-def gamma_map_element(name: str, map: str, label: str) -> t.Dict:
+def gamma_map_element(
+    name: str,
+    map: str,
+    label: str,
+    subgrid: int | None = None,
+    split_phase: int | None = None,
+) -> t.Dict:
     """Wrap ``MUtilities::GammaMapElement``.
 
     Bridges one label-keyed ``TGammaMap`` element (``map``, e.g. a
@@ -240,11 +246,22 @@ def gamma_map_element(name: str, map: str, label: str) -> t.Dict:
     entirely — the antiquark propagator is single-valued regardless of
     which sink-gamma component is being contracted, so this is exactly
     the semantics required.
+
+    A bridge on a tagged map carries the map's ``subgrid``/``splitPhase``
+    (emitted only when set, like ``quark_prop_v2``/``prop_contract_v2``):
+    an untagged bridge runs on every rank, and on the subcomm that
+    skipped the producer ``setup``'s ``envGet`` finds no map (fault 1 of
+    the split-emission issue).
     """
-    return {
+    module = {
         "id": {"name": name, "type": "MUtilities::GammaMapElement"},
         "options": {"map": map, "label": label},
     }
+    if subgrid is not None:
+        module["subgrid"] = subgrid
+    if split_phase is not None:
+        module["splitPhase"] = split_phase
+    return module
 
 
 def quark_prop_v2(

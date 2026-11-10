@@ -28,6 +28,41 @@ tagged retroactively on a commit reached through `develop`.
 
 Tracks HadronsMILC `aa1a054`, Grid `8094416`, Hadrons `ec43323` (develop heads at the v0.4.1 back-merge; update as integration moves).
 
+### Interface
+- `hadrons_lma_new` program-level split phasing: new task-level keys
+  `subgrid_phases` (a count), `subgrid_phase_size` and
+  `subgrid_last_phase_size` (counted in sources — a ref counts its entry's
+  `noise`; both positive multiples of `subgrid_ranks`, the last defaulting
+  to the resident size, and mutually exclusive with the count). The
+  per-entry `subgrid_phases` key is gone: entries carrying it are rejected
+  with a pointer at the program level, and entries must agree on
+  `split_mpi_layout` and `subgrid_ranks`. Phasing pools every split
+  entry's run refs in entry order and back-packs phases from the end —
+  the short phase first (48 sources at 8/16 is [8, 8, 8, 8, 16]; a pool
+  that fits the last phase is that phase alone). Placement within a phase
+  is greedy by weight (noise × rungs, ties to the lowest subgrid index),
+  replacing `t0 % subgrid_ranks`.
+- `MUtilities::GammaMapElement` gains optional `subgrid`/`splitPhase`
+  options (module-option surface addition; pairs with the pinned
+  HadronsMILC per-step scope gate).
+
+### Changed
+- Split-grid emission fixes (the split-emission issue's faults 1 and 2):
+  bridges on tagged maps carry their map's `subgrid`/`splitPhase` — an
+  untagged bridge ran on every rank and failed `envGet` on the subcomms
+  that skipped the producer; the untagged `corr_ranLL_*` contractions
+  join each phase's hoist (before the split range unphased) instead of
+  serializing the subgrids inside it; cross contractions
+  (`solve_cross_terms` all/tiered) re-anchor just after the first
+  diagonal contraction reading their ama input (its producer under
+  tiered) — always, split or not; order changes no result.
+- `lma_new`'s cross-entry phase offset is removed: pooled phasing emits
+  each phase once across all entries (two entries with a phase-count
+  knob previously reused phase indices).
+- The split-mode golden fixture is re-captured (bridges tagged,
+  `corr_ranLL` hoisted, greedy placement). Non-split DIAGONAL programs
+  without cross terms are byte-identical.
+
 ## [0.4.0] - 2026-10-27
 
 Pairs with HadronsMILC `v0.4.0` (`d1131d7`), which pins Grid `8b53f2c` and Hadrons `69d0771` (both tagged `hadronsmilc/v0.4.0`).

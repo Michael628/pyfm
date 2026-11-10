@@ -108,6 +108,14 @@ def normalize_params(params: t.Dict) -> t.Dict:
                 "split-grid schedules."
             )
 
+    for key in ("subgrid_phases", "subgrid_phase_size", "subgrid_last_phase_size"):
+        if incoming.get(key) is not None:
+            raise ValueError(
+                f"{key} is not supported by hadrons_lmi yet; use "
+                "hadrons_lma_new (highmode_v2), which emits phased "
+                "split-grid schedules."
+            )
+
     if canonical:
         params = params | {"_preprocessor": incoming | canonical}
     return params | skip_flags

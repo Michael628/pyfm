@@ -211,7 +211,8 @@
    "options": {
     "label": "G5_G5",
     "map": "quark_ama_pion_local_mass_l_t0"
-   }
+   },
+   "subgrid": 0
   },
   "quark_ama_pion_local_mass_l_t1": {
    "id": {
@@ -235,7 +236,8 @@
    "options": {
     "label": "G5_G5",
     "map": "quark_ama_pion_local_mass_l_t1"
-   }
+   },
+   "subgrid": 1
   },
   "quark_ama_pion_local_mass_l_t2": {
    "id": {
@@ -259,7 +261,8 @@
    "options": {
     "label": "G5_G5",
     "map": "quark_ama_pion_local_mass_l_t2"
-   }
+   },
+   "subgrid": 0
   },
   "quark_ama_pion_local_mass_l_t3": {
    "id": {
@@ -283,7 +286,8 @@
    "options": {
     "label": "G5_G5",
     "map": "quark_ama_pion_local_mass_l_t3"
-   }
+   },
+   "subgrid": 1
   },
   "quark_ranLL_pion_local_mass_l_t0": {
    "id": {
@@ -478,18 +482,18 @@
   "quark_ranLL_pion_local_mass_l_t2_elem",
   "quark_ranLL_pion_local_mass_l_t3_elem",
   "corr_ranLL_pion_local_mass_l_t0",
+  "corr_ranLL_pion_local_mass_l_t1",
+  "corr_ranLL_pion_local_mass_l_t2",
+  "corr_ranLL_pion_local_mass_l_t3",
   "quark_ama_pion_local_mass_l_t0",
   "quark_ama_pion_local_mass_l_t0_elem",
   "corr_ama_pion_local_mass_l_t0",
-  "corr_ranLL_pion_local_mass_l_t1",
   "quark_ama_pion_local_mass_l_t1",
   "quark_ama_pion_local_mass_l_t1_elem",
   "corr_ama_pion_local_mass_l_t1",
-  "corr_ranLL_pion_local_mass_l_t2",
   "quark_ama_pion_local_mass_l_t2",
   "quark_ama_pion_local_mass_l_t2_elem",
   "corr_ama_pion_local_mass_l_t2",
-  "corr_ranLL_pion_local_mass_l_t3",
   "quark_ama_pion_local_mass_l_t3",
   "quark_ama_pion_local_mass_l_t3_elem",
   "corr_ama_pion_local_mass_l_t3"
