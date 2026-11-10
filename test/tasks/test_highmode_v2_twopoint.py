@@ -442,3 +442,128 @@ class TestPlacementTags:
         assert corr["subgrid"] == 3 and corr["splitPhase"] == 2
         # the LL diagonal stays untagged under placement (no ama side)
         assert "subgrid" not in result.modules["corr_ranLL_vec_local_mass_l_t5"]
+
+
+# --- Slice 4: append (existing imports already cover everything used) ---
+class TestTieredBareTierEmission:
+    """The handoff's bare tier, entry level: the contract-gamma ama solve
+    alone per rung, every operator's ranLL propagator, ranLL + ranLL_ama
+    contractions, vec LHs sinking on the pion ama element."""
+
+    @staticmethod
+    def _tiered_config(**overrides):
+        kwargs = dict(
+            operations=OpList.from_dict(
+                {
+                    "pion_local": {"mass": ["l"]},
+                    "vec_local": {"mass": ["l"]},
+                    "vec_onelink": {"mass": ["l"]},
+                }
+            ),
+            output_config=OutputConfig(
+                **sub_kwargs(
+                    file=Outfile(filestem="corr", ext=".h5", good_size=1),
+                    solve_cross_terms=SolveCrossTerms.TIERED,
+                )
+            ),
+        )
+        kwargs.update(overrides)
+        return make_config(**kwargs)
+
+    def test_only_contract_gamma_ama_quarks_emitted(self):
+        config = self._tiered_config()
+        result = build_quarks(config, [REF], build_spintaste_modules(config)[1])
+        ama = sorted(
+            n for n, m in result.modules.items()
+            if m["id"]["type"] == "MFermion::StagGaugeProp" and "_ama_" in n
+        )
+        assert ama == ["quark_ama_pion_local_mass_l_t0"]
+        ranll = {
+            n[len("quark_ranLL_"):].split("_mass_")[0]
+            for n in result.modules
+            if n.startswith("quark_ranLL_")
+        }
+        assert ranll == {"pion_local", "vec_local", "vec_onelink"}
+
+    def test_contraction_set_is_ll_plus_lh_per_operator(self):
+        config = self._tiered_config()
+        _, names = build_spintaste_modules(config)
+        result = build_contractions(config, [REF], names)
+        got = sorted(
+            n for n, m in result.modules.items()
+            if m["id"]["type"] == "MContraction::StagMeson"
+        )
+        want = sorted(
+            f"corr_{kind}_{g}_mass_l_t0"
+            for g in ("pion_local", "vec_local", "vec_onelink")
+            for kind in ("ranLL", "ranLL_ama")
+        )
+        assert got == want
+
+    def test_vec_lh_sinks_on_pion_ama_element(self):
+        config = self._tiered_config()
+        _, names = build_spintaste_modules(config)
+        result = build_contractions(config, [REF], names)
+        for g in ("vec_local", "vec_onelink"):
+            lh = result.modules[f"corr_ranLL_ama_{g}_mass_l_t0"]
+            assert lh["options"]["source"] == f"quark_ranLL_{g}_mass_l_t0"
+            assert lh["options"]["sink"] == "quark_ama_pion_local_mass_l_t0_elem"
+        elem = result.modules["quark_ama_pion_local_mass_l_t0_elem"]
+        assert elem["id"]["type"] == "MUtilities::GammaMapElement"
+        assert elem["options"]["map"] == "quark_ama_pion_local_mass_l_t0"
+
+    def test_onelink_spintaste_reads_shift_gauge(self):
+        config = self._tiered_config()
+        modules, names = build_spintaste_modules(config)
+        assert modules[names[Gamma.VEC_ONELINK]]["options"]["spinTaste"]["gauge"] == (
+            "gauge_apbc"
+        )
+
+    def test_biased_chain_two_rung_bare_at_both_rungs(self):
+        config = self._tiered_config(
+            low_modes_config=meson_field_low_modes(),
+            sources_config=SourcesConfig(
+                **sub_kwargs(
+                    time=4,
+                    biased_config=BiasedSourceConfig(
+                        **sub_kwargs(n=2, seed="s", replace=False)
+                    ),
+                )
+            ),
+            cg_config=CgConfig(
+                **sub_kwargs(residual=[1e-4, 1e-8], precon=PreconMode.CHAIN)
+            ),
+        )
+        refs = config.sources_config.source_refs
+        _, names = build_spintaste_modules(config)
+        quarks = build_quarks(config, refs, names)
+        ama = sorted(
+            n for n, m in quarks.modules.items()
+            if m["id"]["type"] == "MFermion::StagGaugeProp" and "_ama_" in n
+        )
+        want = sorted(
+            f"quark_ama_{eps}_pion_local_mass_l_{ref.label}"
+            for ref in refs
+            for eps in ("0.0001", "1e-08")
+        )
+        assert ama == want
+        r1 = quarks.modules[f"quark_ama_0.0001_pion_local_mass_l_{refs[0].label}"]
+        assert r1["options"]["guess"] == (
+            f"quark_ranLL_pion_local_mass_l_{refs[0].label}_t{refs[0].t0}"
+        )
+        r2 = quarks.modules[f"quark_ama_1e-08_pion_local_mass_l_{refs[0].label}"]
+        assert r2["options"]["guess"] == (
+            f"quark_ama_0.0001_pion_local_mass_l_{refs[0].label}"
+        )
+        contracts = build_contractions(config, refs, names)
+        lh = sorted(
+            n
+            for n, m in contracts.modules.items()
+            if n.startswith("corr_ranLL_ama_")
+            and "_pion_local_mass_l_" in n
+            and n.endswith(f"_{refs[0].label}")
+        )
+        assert lh == sorted(
+            f"corr_ranLL_ama_{eps}_pion_local_mass_l_{refs[0].label}"
+            for eps in ("0.0001", "1e-08")
+        )

@@ -24,7 +24,7 @@ from pyrsistent import freeze, thaw
 
 from pyfm import utils
 from pyfm.domain import Gamma
-from pyfm.tasks.hadrons.types import HadronsInput, SourceRef
+from pyfm.tasks.hadrons.types import HadronsInput, SourceRef, SolveCrossTerms
 import pyfm.tasks.hadrons.modules as hadmods
 from pyfm.tasks.hadrons import meson, meson_v2
 from pyfm.tasks.hadrons.highmode_v2 import twopoint
@@ -231,6 +231,96 @@ def reorder_cross_contractions(
     return out
 
 
+def gather_qualifying_gammas(config: LMAHighModeConfig) -> t.FrozenSet[Gamma]:
+    """RanLL gammas whose per-slice maps the subgrid gather may move (D3).
+
+    The TIERED special case: under ``solve_cross_terms`` TIERED the entry's
+    only ama solves are the contract gamma's (the LH contractions' antiquark
+    side), and those solves guess their own maps — so every OTHER
+    operator's map has no tagged reader besides the LH contractions that
+    move with it, and it never needs to reach a subgrid. Under any other
+    effective mode nothing qualifies ("in a full program no map qualifies
+    and nothing moves"): a full entry's ama solves guess their own
+    operator's maps.
+    """
+    if config.effective_solve_cross_terms is not SolveCrossTerms.TIERED:
+        return frozenset()
+    contract = {con.antiquark.gamma for _, con in twopoint.contraction_gen(config)}
+    ranll = {op.gamma for op in twopoint.quark_gen(config) if op.solver == "ranLL"}
+    return frozenset(ranll - contract)
+
+
+def _gather_post_schedule(
+    config: LMAHighModeConfig,
+    chunk: t.List[SourceRef],
+    qualifying: t.FrozenSet[Gamma],
+    emitted_names: t.AbstractSet[str],
+    contract_inputs: HadronsInput,
+) -> t.List[str]:
+    """The gather's post-phase schedule for one phase (D6 order): per
+    slice (t0 ascending), per mass, per gamma (``sort_schedule``'s gamma
+    precedence) — the ranLL map, its LL contraction, then each rung's LH
+    contraction in ``get_solver_labels`` order. Membership is decided
+    against the emitted module set, so the list can never name a module
+    the phase did not emit; contractions are identified by their
+    ``source`` (the op-gamma ranLL map name — LL and LH alike carry it on
+    the quark side).
+    """
+    if not qualifying:
+        return []
+    solver_labels = config.get_solver_labels()
+    precedence = ["pion_local", "scalar_local", "vec_local", "vec_onelink"]
+
+    qual_maps = {
+        twopoint.quark_name(config, "ranLL", g.name.lower(), mass_label, ref)
+        for mass_label in config.masses
+        for g in qualifying
+        for ref in chunk
+    }
+    moved: t.Dict[str, t.List[str]] = {}
+    for name in contract_inputs.schedule:
+        module = contract_inputs.modules[name]
+        if (
+            module["id"]["type"] == "MContraction::StagMeson"
+            and module["options"]["source"] in qual_maps
+        ):
+            moved.setdefault(module["options"]["source"], []).append(name)
+
+    def _solver_key(name: str) -> int:
+        # `corr_{solver_label}_{glabel}_mass...` (label-prefixed names:
+        # split after "corr_"): recover the solver label as the LONGEST
+        # get_solver_labels() entry matching on a "_" boundary, so
+        # ranLL_ama_0.0001 outranks bare ranLL.
+        rest = name.split("corr_", 1)[1]
+        best = len(solver_labels)
+        for i, label in enumerate(solver_labels):
+            if (rest == label or rest.startswith(f"{label}_")) and (
+                best == len(solver_labels) or len(label) > len(solver_labels[best])
+            ):
+                best = i
+        return best
+
+    for names in moved.values():
+        names.sort(key=_solver_key)
+
+    def _gamma_key(g: Gamma):
+        glabel = g.name.lower()
+        return (0, precedence.index(glabel), "") if glabel in precedence else (1, 0, glabel)
+
+    post: t.List[str] = []
+    for ref in sorted(chunk, key=lambda r: r.t0):
+        for mass_label in config.masses:
+            for g in sorted(qualifying, key=_gamma_key):
+                map_name = twopoint.quark_name(
+                    config, "ranLL", g.name.lower(), mass_label, ref
+                )
+                if map_name not in emitted_names:
+                    continue  # gamma not demanded for this mass
+                post.append(map_name)
+                post.extend(moved.get(map_name, []))
+    return post
+
+
 def _cache_writer_config(config: LMAHighModeConfig) -> meson.MesonConfig:
     """Synthesize the per-entry LH-cache writer (D9; never appended to
     ``meson_config``). ``apply_g5=True`` reproduces the writer's G5-folding
@@ -292,6 +382,10 @@ def build_lma_meson_field_chain(
     hoists the producers ahead of the first tagged module instead, so
     their outputs exist when Hadrons runs its single pre-scatter pass
     (see the split-mode hoist there).
+
+    subgrid_gather (split mode): qualifying ranLL maps move to
+    just after their phase's last tagged step with their LL and LH
+    contractions, untagged (design D2/D3).
     """
     loader_modules = {}
     loader_schedule = []
@@ -420,6 +514,8 @@ def build_split_program(
     entries: t.Sequence[LMAHighModeConfig],
     placements: t.Sequence[t.Mapping[SourceRef, RefPlacement]],
     n_phases: int,
+    *,
+    subgrid_gather: bool = False,
 ) -> HadronsInput:
     """Pooled split-grid emission: phases outer, entries inner.
 
@@ -437,6 +533,10 @@ def build_split_program(
     tagged module, so no world-collective step serializes the subgrids
     mid-phase; the eigenpack's last reader is the last phase's hoist, so
     Hadrons frees the pack before that phase's solves.
+
+    subgrid_gather (split mode): qualifying ranLL maps move to
+    just after their phase's last tagged step with their LL and LH
+    contractions, untagged (design D2/D3).
     """
     modules: t.Dict[str, t.Dict] = {}
     schedule: t.List[str] = []
@@ -513,12 +613,21 @@ def build_split_program(
                             )
                     schedule.append(name)
 
-        context.append((config, placement, spintaste_names, needed))
+        context.append(
+            (
+                config,
+                placement,
+                spintaste_names,
+                needed,
+                gather_qualifying_gammas(config) if subgrid_gather else frozenset(),
+            )
+        )
 
     for phase in range(n_phases):
         hoist: t.List[str] = []
         tagged: t.List[str] = []
-        for config, placement, spintaste_names, needed in context:
+        post: t.List[str] = []
+        for config, placement, spintaste_names, needed, qualifying in context:
             chunk = [ref for ref in placement if placement[ref].phase == phase]
             if not chunk:
                 continue
@@ -592,15 +701,37 @@ def build_split_program(
                     hoist.append(name)
                 else:
                     quark_schedule_k.append(name)
+            post_k: t.List[str] = []
+            if qualifying:
+                post_k = _gather_post_schedule(
+                    config, chunk, qualifying, set(modules), contract_inputs
+                )
+                if post_k:
+                    post_set = set(post_k)
+                    for name in post_set:
+                        # moved LH contractions were tagged (placement-
+                        # based, post-split-phases); producers and LL
+                        # contractions never were. Strip any tag so the
+                        # moved modules are pure world-grid steps.
+                        modules[name].pop("subgrid", None)
+                        modules[name].pop("splitPhase", None)
+                    hoist[:] = [n for n in hoist if n not in post_set]
+                    quark_schedule_k[:] = [
+                        n for n in quark_schedule_k if n not in post_set
+                    ]
+                    post += post_k        # phase-level: entries in order (D6)
             tagged += reorder_cross_contractions(
                 sort_schedule(config, quark_schedule_k), modules, config
             )
         schedule += hoist
         schedule += tagged
+        schedule += post                  # after the phase's last tagged step
     return HadronsInput(modules=modules, schedule=schedule)
 
 
-def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
+def build_input_params(
+    config: LMAHighModeConfig, *, subgrid_gather: bool = False
+) -> HadronsInput:
     """Per-entry emission (design doc order): SpinTaste + sink →
     full-volume noise → cache writer → (stop for build_only) → per-source
     noise → mass loop (meson-field chains / ranLL solver / CG solvers) →
@@ -637,7 +768,10 @@ def build_input_params(config: LMAHighModeConfig) -> HadronsInput:
         pool = [PooledRef(0, ref, noise, noise * rungs) for ref in run_refs]
         plan = plan_program(pool, subgrid_ranks=config.subgrid_ranks, n_phases=1)
         placement = {ref: plan.placement[(0, ref)] for ref in run_refs}
-        return build_split_program([config], [placement], len(plan.phases))
+        return build_split_program(
+            [config], [placement], len(plan.phases),
+            subgrid_gather=subgrid_gather,
+        )
 
     modules = {}
     schedule = []

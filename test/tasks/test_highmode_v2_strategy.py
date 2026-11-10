@@ -6,8 +6,9 @@ import pandas as pd
 import pytest
 
 from pyfm.domain import Gamma, MassDict, OpList, Outfile
-from pyfm.tasks.hadrons.types import HadronsInput, SolveCrossTerms
+from pyfm.tasks.hadrons.types import HadronsInput, SourceRef, SolveCrossTerms
 from pyfm.tasks.hadrons import lmi
+from pyfm.tasks.hadrons.lma_tiered import _option_leaves
 from pyfm.tasks.hadrons.highmode_v2 import (
     build_aggregator_params,
     compare_outputs,
@@ -25,6 +26,7 @@ from pyfm.tasks.hadrons.highmode_v2.config import (
     LowModesConfig,
     MesonFieldConfig,
     OutputConfig,
+    PreconMode,
     SourcesConfig,
 )
 
@@ -944,6 +946,36 @@ class TestSubgridPhasesConfig:
         assert out["skip_high_modes"] is False
 
 
+def _gathers(result):
+    """GA's gathers() ported (lma-optimum inputs/GA/make_input.py:122): the
+    Hadrons bf1c6bbc gather schedule of an emitted program — {phase:
+    {tagged output an untagged module reads: producer type}} — asserting
+    what Hadrons would: no untagged reader inside its producer's phase,
+    and none before it."""
+    by_name = result.modules
+    spans = {}
+    for i, n in enumerate(result.schedule):
+        m = by_name[n]
+        if m.get("subgrid") is not None:
+            k = m.get("splitPhase", 0)
+            a, _ = spans.get(k, (i, i))
+            spans[k] = (a, i)
+    out = {}
+    for i, n in enumerate(result.schedule):
+        m = by_name[n]
+        if m.get("subgrid") is not None:
+            continue
+        for leaf in _option_leaves(m["options"]):
+            src = by_name.get(leaf)
+            if src is None or src.get("subgrid") is None:
+                continue
+            k = src.get("splitPhase", 0)
+            assert not spans[k][0] <= i <= spans[k][1], (n, leaf, "inside")
+            assert i > spans[k][1], (n, leaf, "before")
+            out.setdefault(k, {})[leaf] = src["id"]["type"]
+    return out
+
+
 def _load_split_mode_golden() -> dict:
     """Golden emission captured from the unified split assembler (pooled
     single-phase program: hoisted walls/producers/bridges + corr_ranLL,
@@ -954,3 +986,207 @@ def _load_split_mode_golden() -> dict:
     fixture = Path(__file__).parent / "golden_split_mode_emission.json"
     with fixture.open() as f:
         return json.load(f)
+
+
+class TestSubgridGatherEmission:
+    """subgrid_gather in the unified assembler: qualification (TIERED
+    special-case), the post-phase triple placement, pion immobility,
+    gather-off identity. Post-split-phases, per-entry `subgrid_phases` is
+    GONE — `make_config(subgrid_phases=2)` is silently DROPPED by the
+    pydantic dataclass (extras ignored), so phased emission is driven
+    directly: `pooled_placement` + `build_split_program` (the
+    `TestSplitProgramEmission.test_phases_outer_entries_inner` pattern)."""
+
+    def _gather_config(self, **overrides):
+        kwargs = dict(
+            operations=OpList.from_dict(
+                {"pion_local": {"mass": ["l"]}, "vec_local": {"mass": ["l"]}}
+            ),
+            low_modes_config=make_low_modes(LowModeMethod.MESON_FIELD),
+            cg_config=CgConfig(**sub_kwargs()),
+            output_config=make_output(solve_cross_terms=SolveCrossTerms.TIERED),
+            split_mpi_layout="1 1 1 2",
+            subgrid_ranks=2,
+        )
+        kwargs.update(overrides)
+        return make_config(**kwargs)
+
+    @staticmethod
+    def _phased_result(cfg, *, phases=2, gather=True):
+        # drive the assembler directly: the phased program the deleted
+        # per-entry subgrid_phases knob used to produce (count path)
+        _, placements, n_phases = strategy.pooled_placement(
+            [cfg], cfg.subgrid_ranks, n_phases=phases
+        )
+        return strategy.build_split_program(
+            [cfg], placements, n_phases, subgrid_gather=gather
+        )
+
+    @staticmethod
+    def _phase_spans(result):
+        spans = {}
+        for i, n in enumerate(result.schedule):
+            m = result.modules[n]
+            if m.get("subgrid") is not None:
+                k = m.get("splitPhase", 0)
+                a, _ = spans.get(k, (i, i))
+                spans[k] = (a, i)
+        return spans
+
+    def test_qualification_tiered_excludes_contract_gamma(self):
+        assert strategy.gather_qualifying_gammas(self._gather_config()) == {
+            Gamma.VEC_LOCAL
+        }
+
+    def test_qualification_empty_without_tiered(self):
+        cfg = self._gather_config(
+            output_config=make_output(solve_cross_terms=SolveCrossTerms.ALL)
+        )
+        assert strategy.gather_qualifying_gammas(cfg) == frozenset()
+
+    def test_gather_moves_triplet_after_phase_untagged(self):
+        cfg = self._gather_config()
+        result = self._phased_result(cfg)
+        sched = result.schedule
+        spans = self._phase_spans(result)
+        for k, t0s in ((0, (0, 1)), (1, (2, 3))):
+            for t0 in t0s:
+                m = f"quark_ranLL_vec_local_mass_l_t{t0}"
+                ll = f"corr_ranLL_vec_local_mass_l_t{t0}"
+                lh = f"corr_ranLL_ama_vec_local_mass_l_t{t0}"
+                for name in (m, ll, lh):
+                    assert name in result.modules
+                    assert result.modules[name].get("subgrid") is None
+                    assert sched.index(name) > spans[k][1]
+                assert sched.index(m) < sched.index(ll) < sched.index(lh)
+                hi = spans[k + 1][0] if k + 1 in spans else len(sched)
+                assert sched.index(lh) < hi
+    # --- Slice 3: append ---
+    def test_unphased_split_gather_single_post(self):
+        # no phasing knob: the per-entry split delegation emits ONE phase
+        # through build_split_program — the post list still lands after
+        # the range
+        cfg = self._gather_config()
+        result = strategy.build_input_params(cfg, subgrid_gather=True)
+        sched = result.schedule
+        last_tagged = max(
+            i for i, n in enumerate(sched)
+            if result.modules[n].get("subgrid") is not None
+        )
+        moved = [
+            f"{p}_vec_local_mass_l_t{t0}"
+            for t0 in range(4)
+            for p in ("quark_ranLL", "corr_ranLL", "corr_ranLL_ama")
+        ]
+        for name in moved:
+            assert result.modules[name].get("subgrid") is None
+            assert sched.index(name) > last_tagged
+        assert sched.index("corr_ranLL_ama_vec_local_mass_l_t0") < sched.index(
+            "quark_ranLL_vec_local_mass_l_t1"
+        )
+
+    def test_pion_map_hoisted_and_lh_tagged_under_gather(self):
+        cfg = self._gather_config()
+        # expected subgrids derived from the planner itself, not the prose
+        # greedy round-robin ≡ t0 % ranks assumption (plan review triage)
+        _, placements, n_phases = strategy.pooled_placement(
+            [cfg], cfg.subgrid_ranks, n_phases=2
+        )
+        subgrid_of = {ref.t0: p.subgrid for ref, p in placements[0].items()}
+        result = strategy.build_split_program(
+            [cfg], placements, n_phases, subgrid_gather=True
+        )
+        sched = result.schedule
+        spans = self._phase_spans(result)
+        for k, t0s in ((0, (0, 1)), (1, (2, 3))):
+            for t0 in t0s:
+                assert sched.index(f"quark_ranLL_pion_local_mass_l_t{t0}") < spans[k][0]
+                lh = result.modules[f"corr_ranLL_ama_pion_local_mass_l_t{t0}"]
+                assert lh["subgrid"] == subgrid_of[t0]
+                assert lh.get("splitPhase", 0) == k
+                ll = result.modules[f"corr_ranLL_pion_local_mass_l_t{t0}"]
+                assert ll.get("subgrid") is None
+
+    def test_gather_off_matches_plain_and_on_differs_only_in_moves(self):
+        cfg = self._gather_config()
+        off = self._phased_result(cfg, gather=False)
+        on = self._phased_result(cfg, gather=True)
+        assert set(off.modules) == set(on.modules)
+        moved = {
+            f"{p}_vec_local_mass_l_t{t0}"
+            for t0 in range(4)
+            for p in ("quark_ranLL", "corr_ranLL", "corr_ranLL_ama")
+        }
+        for name, module in on.modules.items():
+            if name in moved:
+                assert module.get("subgrid") is None and "splitPhase" not in module
+            else:
+                assert module == off.modules[name]
+        assert on.schedule != off.schedule
+
+    def test_full_program_nothing_moves(self):
+        cfg = self._gather_config(
+            output_config=make_output(solve_cross_terms=SolveCrossTerms.ALL)
+        )
+        off = strategy.build_input_params(cfg)
+        on = strategy.build_input_params(cfg, subgrid_gather=True)
+        assert on.modules == off.modules
+        assert on.schedule == off.schedule
+
+    def test_gather_multirung_lh_residual_order(self):
+        cfg = self._gather_config(
+            cg_config=CgConfig(
+                **sub_kwargs(residual=[1e-4, 1e-8], precon=PreconMode.CHAIN)
+            )
+        )
+        result = self._phased_result(cfg)
+        sched = result.schedule
+        spans = self._phase_spans(result)
+        m = sched.index("quark_ranLL_vec_local_mass_l_t0")
+        ll = sched.index("corr_ranLL_vec_local_mass_l_t0")
+        lh1 = sched.index("corr_ranLL_ama_0.0001_vec_local_mass_l_t0")
+        lh2 = sched.index("corr_ranLL_ama_1e-08_vec_local_mass_l_t0")
+        assert spans[0][1] < m < ll < lh1 < lh2
+
+
+class TestGathersSchedule:
+    """Hadrons' view of a gathered program (GA's gathers() ported): each
+    phase gathers exactly its slices' pion ama elements, GammaMapElements
+    only; no vec ranLL map keeps a tagged reader once gathered."""
+
+    def _emission(self, gather):
+        cfg = TestSubgridGatherEmission()._gather_config()
+        return TestSubgridGatherEmission._phased_result(cfg, gather=gather)
+
+    @staticmethod
+    def _tagged_readers(result):
+        return {
+            w
+            for n, m in result.modules.items()
+            if m.get("subgrid") is not None
+            for w in _option_leaves(m["options"])
+        }
+
+    def test_each_phase_gathers_its_slices_pion_ama_elems(self):
+        result = self._emission(True)
+        g = _gathers(result)
+        for k, t0s in ((0, (0, 1)), (1, (2, 3))):
+            assert set(g.get(k, {})) == {
+                f"quark_ama_pion_local_mass_l_t{t0}_elem" for t0 in t0s
+            }
+            assert set(g[k].values()) == {"MUtilities::GammaMapElement"}
+
+    def test_no_vec_map_tagged_reader_when_gathered(self):
+        result = self._emission(True)
+        vec_maps = {
+            n for n in result.modules if n.startswith("quark_ranLL_vec_local_mass_l_")
+        }
+        assert vec_maps
+        assert not vec_maps & self._tagged_readers(result)
+
+    def test_vec_maps_have_tagged_readers_without_gather(self):
+        result = self._emission(False)
+        vec_maps = {
+            n for n in result.modules if n.startswith("quark_ranLL_vec_local_mass_l_")
+        }
+        assert vec_maps <= self._tagged_readers(result)
