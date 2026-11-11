@@ -36,6 +36,7 @@ function grid_configure() {
       --with-fftw=$FFTW_DIR/.. \
       ${ext_flags} \
       CXX=hipcc MPICXX=mpicxx \
+      LIBS="-lrocsolver" \
       CXXFLAGS="-fPIC -I${ROCM_PATH}/include/ -I${MPICH_DIR}/include -L/lib64 " \
       LDFLAGS="-L/lib64 -L${ROCM_PATH}/lib -L${MPICH_DIR}/lib -lmpi -L${CRAY_MPICH_ROOTDIR}/gtl/lib -lmpi_gtl_hsa -lhipblas -lrocblas"
 }

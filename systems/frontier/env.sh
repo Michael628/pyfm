@@ -2,10 +2,14 @@ echo spack
 # . /autofs/nccs-svm1_home1/paboyle/Crusher/Grid/spack/share/spack/setup-env.sh
 . /autofs/nccs-svm1_home1/paboyle/spack/share/spack/setup-env.sh
 
-module load rocm/6.3.1
+module load rocm/7.0.2
 module load cray-fftw
 module load craype-accel-amd-gfx90a
-module load cray-hdf5/1.12.2.11
+module load cray-hdf5/1.14.3.9
+
+# hipcc-built binaries (including configure's conftest) need libamdhip64.so.7
+# from the same ROCm install at load time.
+export LD_LIBRARY_PATH=${ROCM_PATH}/lib:$LD_LIBRARY_PATH
 
 if [ "$PYFM_RUNTIME_ENV" = "true" ]; then
   # QUDA Tuning Directory: Change location as needed
